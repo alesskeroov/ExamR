@@ -41,13 +41,14 @@ ID-lər digər sənədlərdə və roadmap-da istinad üçün istifadə olunur.
 - **QB-4** Sualı silmək.
 
 ### İmtahan (EX)
-- **EX-1** Rejimlər: 30 sual / 50 sual; mənbə — seçilmiş PDF-lər (≥1).
+- **EX-1** Sual sayını istifadəçi seçir (1–200); mənbə — konkret PDF və ya bazadakı bütün PDF-lər.
+- **EX-1a** Cavab rejimi: düzgün cavab **hər sualdan sonra** (`Immediate`; cavab verildikdən sonra dəyişdirilə bilməz) və ya **imtahan bitdikdə** (`AtEnd`; cavablar sona qədər dəyişdirilə bilər).
 - **EX-2** Suallar təsadüfi seçilir, imtahan daxilində təkrar yoxdur (dublikat hash nəzərə alınır).
 - **EX-3** Kifayət qədər sual yoxdursa, imtahan yaradılmır və mövcud say göstərilir.
 - **EX-4** Sual sırası və variant sırası imtahan üçün sabitdir.
 - **EX-5** Cavab dəyişdirilə bilər; hər dəyişiklik dərhal serverdə saxlanılır.
 - **EX-6** Səhifə yenilənəndə imtahan eyni vəziyyətdən davam edir.
-- **EX-7** Vaxt limiti: 30 sual → 45 dəq, 50 sual → 75 dəq. Vaxt bitəndə imtahan avtomatik tamamlanır.
+- **EX-7** Vaxt limiti: 1 sual = 1 dəqiqə (30 → 30 dəq, 50 → 50 dəq; konfiqurasiya edilə bilər). Vaxt bitəndə imtahan avtomatik tamamlanır.
 - **EX-8** İmtahan zamanı düzgün cavablar client-ə göndərilmir.
 - **EX-9** İstifadəçinin eyni anda yalnız bir aktiv imtahanı ola bilər.
 

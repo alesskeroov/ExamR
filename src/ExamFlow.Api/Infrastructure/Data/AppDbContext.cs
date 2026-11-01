@@ -1,5 +1,6 @@
 using ExamFlow.Api.Features.Auth;
 using ExamFlow.Api.Features.Documents;
+using ExamFlow.Api.Features.Exams;
 using ExamFlow.Api.Features.Questions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -13,6 +14,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<UploadedDocument> Documents => Set<UploadedDocument>();
     public DbSet<Question> Questions => Set<Question>();
     public DbSet<AnswerOption> AnswerOptions => Set<AnswerOption>();
+    public DbSet<Exam> Exams => Set<Exam>();
+    public DbSet<ExamQuestion> ExamQuestions => Set<ExamQuestion>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

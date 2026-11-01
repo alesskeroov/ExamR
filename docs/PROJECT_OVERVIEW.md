@@ -7,7 +7,7 @@ ExamFlow PDF fayllarından test suallarını avtomatik çıxaran və həmin sual
 1. İstifadəçi qeydiyyatdan keçir / daxil olur.
 2. PDF yükləyir → sistem arxa planda sualları, variantları və (qalın/rəngli şriftdən) düzgün cavabı çıxarır.
 3. Yükləyən şəxs (və ya Admin) sualları yoxlayır, redaktə edir, düzgün cavabı təsdiqləyir.
-4. İstənilən istifadəçi bir və ya bir neçə PDF seçib 30 və ya 50 suallıq imtahan başladır.
+4. İstənilən istifadəçi konkret PDF və ya bütün PDF-lərdən istədiyi sayda (1–200) sualla imtahan başladır; düzgün cavabları hər sualdan sonra və ya sonda görməyi seçir.
 5. İmtahan vaxt limiti ilə keçirilir, cavablar serverdə saxlanılır.
 6. Backend nəticəni hesablayır, səhvləri və düzgün cavabları göstərir.
 
@@ -21,7 +21,9 @@ ExamFlow PDF fayllarından test suallarını avtomatik çıxaran və həmin sual
 | PDF dili | Azərbaycan dili |
 | İmtahan mənbəyi | İstifadəçinin **seçdiyi PDF-lər** |
 | Unverified suallar | İmtahana düşür, **ballanmır** (faizə təsir etmir) |
-| Vaxt limiti | Rejimə görə sabit (konfiqurasiya edilə bilən) |
+| Vaxt limiti | 1 sual = 1 dəqiqə (konfiqurasiya edilə bilən) |
+| Sual sayı | İstifadəçi seçir (1–200) |
+| Cavab rejimi | Hər sualdan sonra (`Immediate`) və ya sonda (`AtEnd`) |
 | Deploy | Əvvəlcə lokal (lokal SQL Server instance), sonra hosting (SQL Server / Azure SQL) |
 | Database | **Microsoft SQL Server** (PostgreSQL əvəzinə, sonradan dəyişdirilib) |
 | Runtime | **.NET 9** (mövcud SDK; .NET 10 LTS-ə keçid planlaşdırılır) |

@@ -2,6 +2,8 @@ import { createBrowserRouter } from 'react-router'
 import { DashboardPage } from '../features/dashboard/DashboardPage'
 import { UploadPage } from '../features/documents/UploadPage'
 import { ExamHistoryPage } from '../features/exams/ExamHistoryPage'
+import { ExamResultPage } from '../features/exams/ExamResultPage'
+import { ExamSessionPage } from '../features/exams/ExamSessionPage'
 import { ExamSetupPage } from '../features/exams/ExamSetupPage'
 import { QuestionBankPage } from '../features/questions/QuestionBankPage'
 import { AppLayout } from './AppLayout'
@@ -21,7 +23,17 @@ export const router = createBrowserRouter([
       { path: 'questions', element: <QuestionBankPage /> },
       { path: 'exams/new', element: <ExamSetupPage /> },
       { path: 'exams', element: <ExamHistoryPage /> },
+      { path: 'exams/:id/result', element: <ExamResultPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
+  },
+  {
+    // Focused exam screen: no sidebar.
+    path: 'exams/:id',
+    element: (
+      <RequireAuth>
+        <ExamSessionPage />
+      </RequireAuth>
+    ),
   },
 ])

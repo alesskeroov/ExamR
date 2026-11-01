@@ -92,7 +92,8 @@ Constraint-lər:
 |---|---|---|
 | Id | uniqueidentifier PK | |
 | UserId | uniqueidentifier FK → AspNetUsers | `CASCADE` |
-| QuestionCount | smallint | CHECK IN (30, 50) |
+| QuestionCount | smallint | CHECK BETWEEN 1 AND 200 |
+| RevealMode | varchar(20) | `Immediate / AtEnd` |
 | SourceDocumentIds | nvarchar(max), JSON array | `List<Guid>` primitive collection; "yenidən ver" üçün; FK deyil (sənəd silinə bilər) |
 | Status | varchar(20) | `InProgress / Completed` |
 | CompletionReason | varchar(20) null | `Submitted / TimeExpired` |

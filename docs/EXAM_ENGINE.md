@@ -1,21 +1,21 @@
 # Exam Engine
 
-Kod: `ExamFlow.Api/Features/Exams` — `ExamGenerator`, `ExamSessionService`, `ExamGrader`.
+Kod: `ExamFlow.Api/Features/Exams` — `ExamEngine` (seçim, qarışdırma, qiymətləndirmə; DB-siz, unit test olunur), `ExamEndpoints` (HTTP + DB).
 Cədvəllər: [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md#exams). Endpoint-lər: [API_DESIGN.md](API_DESIGN.md#exams).
 
 ## 1. Konfiqurasiya
 
 ```json
 "Exam": {
-  "Modes": { "30": 45, "50": 75 },     // sual sayı → dəqiqə
-  "AnswerGraceSeconds": 5,             // şəbəkə gecikməsi üçün tolerans
-  "MaxSourceDocuments": 20
+  "MaxQuestions": 200,                 // DB check constraint ilə də məhdudlaşır
+  "MinutesPerQuestion": 1,             // 30 sual → 30 dəq, 50 → 50 dəq
+  "AnswerGraceSeconds": 5              // şəbəkə gecikməsi üçün tolerans
 }
 ```
 
 ## 2. İmtahan yaradılması
 
-1. Validasiya: `questionCount ∈ {30, 50}`, `documentIds` 1..20, hamısı mövcud və `Completed`.
+1. Validasiya: `questionCount` 1..200, `documentIds` boş (= bütün PDF-lər) və ya 1..20 mövcud sənəd, `revealMode` `Immediate`/`AtEnd`.
 2. İstifadəçinin vaxtı bitmiş aktiv imtahanı varsa, avtomatik tamamlanır; vaxtı bitməmiş aktiv imtahan varsa → `409` (frontend "Davam et" təklif edir).
 3. **Namizədlər (yalnız ID + hash):**
    ```sql
@@ -44,6 +44,15 @@ Cədvəllər: [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md#exams). Endpoint-lər: [AP
   - tək `UPDATE` sorğusu, `AnsweredAt = now`.
 - **Səhifə yeniləndikdə vəziyyət:** server yeganə həqiqət mənbəyidir. Hər cavab dərhal serverə yazılır; cari sual indeksi URL-dədir (`/exams/{id}?q=12`). Reload → `GET /api/exams/{id}` bütün suallar və seçilmiş cavablarla vəziyyəti tam bərpa edir. Brauzer bağlanıb yenidən açılsa da imtahan Dashboard-dakı "Davam et" ilə açılır. localStorage-a ehtiyac yoxdur.
 
+## 3a. Cavab rejimi (`RevealMode`)
+
+| Rejim | Sessiyada düzgün cavab | Cavabı dəyişmək |
+|---|---|---|
+| `AtEnd` | Heç vaxt (yalnız nəticə səhifəsində) | Sona qədər istənilən vaxt; `null` ilə təmizləmək olar |
+| `Immediate` | Yalnız **cavablanmış** sual üçün: `reveal: { correctOptionId, isGradable }` | Mümkün deyil — ilk cavab qəti (`409`), əks halda düzgün cavabı görüb dəyişmək olardı |
+
+Düzgün cavabı məlum olmayan sualda `reveal.isGradable = false`, `correctOptionId = null`.
+
 ## 4. Taymer
 
 - `ExpiresAt` serverdə saxlanılır; client yalnız göstərir.
@@ -52,7 +61,7 @@ Cədvəllər: [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md#exams). Endpoint-lər: [AP
 - Client heç vaxt finish çağırmasa da (tab bağlanıb): növbəti `GET /exams/{id}`, `GET /exams/active`, `GET /exams` və ya yeni imtahan yaradılması zamanı vaxtı bitmiş imtahan **lazy** olaraq tamamlanır (`CompletionReason = TimeExpired`). Ayrıca background sweeper lazım deyil.
 - Vaxt bitdikdən sonra gələn cavablar `409` ilə rədd edilir.
 
-## 5. Qiymətləndirmə (`ExamGrader`)
+## 5. Qiymətləndirmə (`ExamEngine.Grade`)
 
 Hər `exam_question` üçün:
 
@@ -75,7 +84,7 @@ scorePercent = gradable > 0 ? round(correct / gradable × 100, 2) : null
 
 ## 6. Yenidən imtahan
 
-`POST /api/exams/{id}/retake` → eyni `QuestionCount` və `SourceDocumentIds` ilə §2 axını yenidən işləyir (yeni təsadüfi seçim). Silinmiş sənədlər siyahıdan çıxarılır; heç biri qalmayıbsa `422`.
+Ayrıca endpoint yoxdur: frontend nəticədəki `questionCount`, `documentIds`, `revealMode` ilə `POST /api/exams` çağırır (§2, yeni təsadüfi seçim).
 
 ## 7. Testlər
 

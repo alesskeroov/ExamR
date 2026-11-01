@@ -61,7 +61,7 @@ Qayda: hər feature öz `api.ts` (fetch funksiyaları + query hook-ları) faylı
 
 **Question Bank** — filtr paneli: sənəd (select), status (Hamısı / Unverified / Avtomatik / Təsdiqlənmiş), "Yalnız xəbərdarlıqlılar", axtarış (300 ms debounce). Cədvəl: №, mətn (2 sətir), sənəd, status badge, əməliyyatlar. Redaktə sağdan açılan **Sheet**-də: sual mətni, variantlar (əlavə / sil / yuxarı-aşağı), düzgün cavab radio-su, "Saxla". AutoDetected sual üçün bir kliklə "Təsdiqlə". `canEdit = false` olanda redaktə gizlədilir. Mobil: cədvəl kart siyahısına çevrilir.
 
-**Exam Setup** — iki seçim kartı: "30 sual · 45 dəq", "50 sual · 75 dəq". Sənəd seçimi (checkbox siyahısı, hər birinin sual sayı). Seçimə görə canlı xülasə (`/questions/stats`): "312 unikal sual, 18-i qiymətləndirilməyəcək". Kifayət qədər sual yoxdursa "Başla" deaktivdir və səbəb göstərilir.
+**Exam Setup** — mənbə (Bütün PDF-lər / Konkret PDF + seçim), sual sayı (10/20/30/50 + istənilən rəqəm), cavab rejimi (sonda / hər sualdan sonra). Canlı xülasə (`/api/exams/availability`): mövcud unikal sual, vaxt (1 sual = 1 dəq), ballanmayacaq suallar. Kifayət qədər sual yoxdursa "Başla" deaktivdir və səbəb göstərilir.
 
 **Exam Session** (ExamLayout):
 ```

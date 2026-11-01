@@ -51,7 +51,6 @@ Base path: `/api`. JSON, `camelCase`. Auth: Identity cookie (`HttpOnly`, `SameSi
 | GET | `/api/questions/{id}` | Variantlar daxil |
 | PUT | `/api/questions/{id}` | Tam yeniləmə (mətn + variantlar + düzgün cavab), sahib/Admin |
 | DELETE | `/api/questions/{id}` | Sahib/Admin → `204` |
-| GET | `/api/questions/stats?documentIds=a,b` | İmtahan setup üçün: `{ total, gradable, distinct }` |
 
 ```jsonc
 // PUT /api/questions/{id}  — UpdateQuestionRequest
@@ -74,14 +73,14 @@ Bank siyahısında hər sual `isCorrect` ilə qaytarılır (bank imtahan deyil);
 
 | Method | Route | Təsvir |
 |---|---|---|
-| POST | `/api/exams` | `{ questionCount: 30\|50, documentIds: [] }` → `201` + `ExamSessionDto` |
+| GET | `/api/exams/availability?documentIds=…` | Setup üçün: `{ available, ungraded, maxQuestions, minutesPerQuestion }` (boş = bütün PDF-lər) |
+| POST | `/api/exams` | `{ questionCount: 1–200, documentIds: [] (boş = hamısı), revealMode: "Immediate"\|"AtEnd" }` → `201` + `ExamSessionDto`; `409` aktiv imtahan, `422` kifayət qədər sual yox |
 | GET | `/api/exams` | İstifadəçinin imtahan tarixçəsi (səhifələnmiş, xülasə) |
 | GET | `/api/exams/active` | Aktiv imtahan varsa `{ id }`, yoxdursa `204` |
 | GET | `/api/exams/{id}` | Sessiya vəziyyəti (**düzgün cavab yoxdur**); vaxtı bitibsə avtomatik tamamlanır və `status: Completed` qaytarılır |
 | PUT | `/api/exams/{id}/answers/{examQuestionId}` | `{ selectedOptionId: "…" \| null }` → `204`; vaxt bitibsə `409` |
 | POST | `/api/exams/{id}/finish` | Qiymətləndirir → `ExamResultDto` (idempotent) |
 | GET | `/api/exams/{id}/result` | Yalnız `Completed` imtahan üçün |
-| POST | `/api/exams/{id}/retake` | Eyni `questionCount` + `documentIds` ilə yeni imtahan → `201` |
 
 ```jsonc
 // ExamSessionDto
@@ -108,7 +107,11 @@ Bank siyahısında hər sual `isCorrect` ilə qaytarılır (bank imtahan deyil);
 }
 ```
 
-Bütün sessiya (30–50 sual) bir sorğuda gəlir — sual başına sorğudan qaçmaq və Next/Prev keçidlərini ani etmək üçün (50 sual ≈ 30–60 KB).
+"Yenidən imtahan ver" ayrıca endpoint deyil: frontend nəticədəki `questionCount`, `documentIds`, `revealMode` ilə `POST /api/exams` çağırır.
+
+**Cavab rejimi:** `Immediate` rejimdə `PUT /answers` cavabı `reveal: { correctOptionId, isGradable }` qaytarır və sessiyada da yalnız cavablanmış suallar üçün göstərilir; cavab verildikdən sonra dəyişdirmək `409`. `AtEnd` rejimdə `reveal` həmişə `null`-dır.
+
+Bütün sessiya (≤ 200 sual) bir sorğuda gəlir — sual başına sorğudan qaçmaq və Next/Prev keçidlərini ani etmək üçün (50 sual ≈ 30–60 KB).
 
 ## Rate limiting
 

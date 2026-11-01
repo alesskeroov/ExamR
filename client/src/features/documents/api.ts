@@ -67,6 +67,14 @@ export function useMyDocuments() {
   })
 }
 
+/** All processed documents in the shared bank (exam sources). */
+export function useCompletedDocuments() {
+  return useQuery({
+    queryKey: queryKeys.documents.completed,
+    queryFn: () => api.get<PagedResult<DocumentDto>>('/documents?status=Completed&pageSize=100'),
+  })
+}
+
 /** Polls every 1.5 s until processing finishes. */
 export function useDocument(id: string | null) {
   return useQuery({

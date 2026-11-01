@@ -8,7 +8,7 @@ Hər mərhələ istifadəçi təsdiqi ilə başlayır. Tələb ID-ləri: [REQUIR
 | 2 — Project Setup | ✅ Tamamlandı |
 | 3 — PDF Processing | 🟡 Kod hazırdır — real PDF nümunələri ilə yoxlama gözlənilir |
 | 4 — Question Bank | ⏳ |
-| 5 — Exam Engine | ⏳ |
+| 5 — Exam Engine | ✅ Tamamlandı (backend + frontend) |
 | 6 — Frontend | ⏳ |
 | 7 — Testing & Optimization | ⏳ |
 

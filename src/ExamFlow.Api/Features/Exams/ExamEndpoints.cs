@@ -1,0 +1,318 @@
+using System.Security.Claims;
+using ExamFlow.Api.Common;
+using ExamFlow.Api.Features.Questions;
+using ExamFlow.Api.Infrastructure.Data;
+using ExamFlow.Api.Infrastructure.Security;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+
+namespace ExamFlow.Api.Features.Exams;
+
+public static class ExamEndpoints
+{
+    public static void MapExamEndpoints(this RouteGroupBuilder api)
+    {
+        var group = api.MapGroup("/exams").RequireAuthorization();
+
+        group.MapGet("/availability", Availability);
+        group.MapPost("/", Create).Validate<CreateExamRequest>();
+        group.MapGet("/", History);
+        group.MapGet("/active", Active);
+        group.MapGet("/{id:guid}", Session);
+        group.MapPut("/{id:guid}/answers/{examQuestionId:guid}", Answer).Validate<AnswerRequest>();
+        group.MapPost("/{id:guid}/finish", Finish);
+        group.MapGet("/{id:guid}/result", Result);
+    }
+
+    /// <summary>How many distinct questions can be drawn from the given documents (none = all).</summary>
+    private static async Task<IResult> Availability(
+        [Microsoft.AspNetCore.Mvc.FromQuery] Guid[]? documentIds, AppDbContext db, IOptions<ExamOptions> options, CancellationToken ct)
+    {
+        var candidates = await Candidates(db, documentIds ?? [], ct);
+        var ungraded = ExamEngine.CountDistinct(candidates.Where(c => !c.IsGradable));
+        return TypedResults.Ok(new ExamAvailabilityDto(
+            ExamEngine.CountDistinct(candidates), ungraded, options.Value.MaxQuestions, options.Value.MinutesPerQuestion));
+    }
+
+    private static async Task<IResult> Create(
+        CreateExamRequest request, ClaimsPrincipal user, AppDbContext db, TimeProvider clock,
+        IOptions<ExamOptions> options, CancellationToken ct)
+    {
+        var userId = user.GetUserId();
+        var now = clock.GetUtcNow();
+        var settings = options.Value;
+
+        if (request.QuestionCount > settings.MaxQuestions)
+        {
+            return Problem(StatusCodes.Status400BadRequest, $"Sual sayı {settings.MaxQuestions}-dən çox ola bilməz.");
+        }
+
+        var documentIds = request.DocumentIds?.Distinct().ToList() ?? [];
+        if (documentIds.Count > 0 && await db.Documents.CountAsync(d => documentIds.Contains(d.Id), ct) != documentIds.Count)
+        {
+            return Problem(StatusCodes.Status400BadRequest, "Seçilmiş PDF tapılmadı.");
+        }
+
+        var active = await LoadActiveAsync(db, userId, ct);
+        if (active is not null && !await FinalizeIfExpiredAsync(db, active, now, settings, ct))
+        {
+            return Problem(StatusCodes.Status409Conflict, "Davam edən imtahanınız var.", new() { ["activeExamId"] = active.Id });
+        }
+
+        var candidates = await Candidates(db, documentIds, ct);
+        var available = ExamEngine.CountDistinct(candidates);
+        if (available < request.QuestionCount)
+        {
+            return Problem(StatusCodes.Status422UnprocessableEntity,
+                $"Seçilmiş mənbədə cəmi {available} unikal sual var.", new() { ["available"] = available });
+        }
+
+        var pickedIds = ExamEngine.PickQuestions(candidates, request.QuestionCount, Random.Shared);
+        var questions = await db.Questions.AsNoTracking()
+            .Include(q => q.Options)
+            .Where(q => pickedIds.Contains(q.Id))
+            .ToDictionaryAsync(q => q.Id, ct);
+
+        var exam = new Exam
+        {
+            UserId = userId,
+            QuestionCount = (short)request.QuestionCount,
+            RevealMode = request.RevealMode,
+            SourceDocumentIds = documentIds,
+            Status = ExamStatus.InProgress,
+            StartedAt = now,
+            ExpiresAt = now + settings.DurationFor(request.QuestionCount),
+            Questions = pickedIds.Select((id, position) => Freeze(questions[id], position)).ToList(),
+        };
+
+        db.Exams.Add(exam);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            // UX_Exams_UserActive: another request started an exam at the same moment.
+            return Problem(StatusCodes.Status409Conflict, "Davam edən imtahanınız var.");
+        }
+
+        return TypedResults.Created($"/api/exams/{exam.Id}", ToSession(exam, now));
+    }
+
+    private static async Task<IResult> History(
+        ClaimsPrincipal user, AppDbContext db, TimeProvider clock, IOptions<ExamOptions> options, CancellationToken ct,
+        int? page = null, int? pageSize = null)
+    {
+        var userId = user.GetUserId();
+        if (await LoadActiveAsync(db, userId, ct) is { } active)
+        {
+            await FinalizeIfExpiredAsync(db, active, clock.GetUtcNow(), options.Value, ct);
+        }
+
+        var (pageNumber, size) = Paging.Normalize(page, pageSize);
+        var query = db.Exams.AsNoTracking().Where(e => e.UserId == userId);
+        var total = await query.CountAsync(ct);
+        var items = await query
+            .OrderByDescending(e => e.StartedAt)
+            .Skip((pageNumber - 1) * size)
+            .Take(size)
+            .Select(e => new ExamSummaryDto(
+                e.Id, e.Status, e.QuestionCount, e.RevealMode, e.SourceDocumentIds.Count,
+                e.StartedAt, e.ExpiresAt, e.CompletedAt, e.CompletionReason,
+                e.CorrectCount, e.IncorrectCount, e.UnansweredCount, e.UngradedCount, e.ScorePercent))
+            .ToListAsync(ct);
+
+        return TypedResults.Ok(new PagedResult<ExamSummaryDto>(items, pageNumber, size, total));
+    }
+
+    private static async Task<IResult> Active(
+        ClaimsPrincipal user, AppDbContext db, TimeProvider clock, IOptions<ExamOptions> options, CancellationToken ct)
+    {
+        var active = await LoadActiveAsync(db, user.GetUserId(), ct);
+        if (active is null || await FinalizeIfExpiredAsync(db, active, clock.GetUtcNow(), options.Value, ct))
+        {
+            return TypedResults.NoContent();
+        }
+
+        return TypedResults.Ok(new ActiveExamDto(active.Id));
+    }
+
+    private static async Task<IResult> Session(
+        Guid id, ClaimsPrincipal user, AppDbContext db, TimeProvider clock, IOptions<ExamOptions> options, CancellationToken ct)
+    {
+        var exam = await LoadAsync(db, id, user.GetUserId(), ct);
+        if (exam is null)
+        {
+            return NotFound();
+        }
+
+        var now = clock.GetUtcNow();
+        await FinalizeIfExpiredAsync(db, exam, now, options.Value, ct);
+        return TypedResults.Ok(ToSession(exam, now));
+    }
+
+    private static async Task<IResult> Answer(
+        Guid id, Guid examQuestionId, AnswerRequest request, ClaimsPrincipal user, AppDbContext db,
+        TimeProvider clock, IOptions<ExamOptions> options, CancellationToken ct)
+    {
+        var exam = await LoadAsync(db, id, user.GetUserId(), ct);
+        var question = exam?.Questions.FirstOrDefault(q => q.Id == examQuestionId);
+        if (exam is null || question is null)
+        {
+            return NotFound();
+        }
+
+        var now = clock.GetUtcNow();
+        if (exam.Status == ExamStatus.Completed || await FinalizeIfExpiredAsync(db, exam, now, options.Value, ct))
+        {
+            return Problem(StatusCodes.Status409Conflict, "İmtahan artıq bitib.");
+        }
+
+        if (request.SelectedOptionId is { } optionId && question.Snapshot.Options.All(o => o.OptionId != optionId))
+        {
+            return Problem(StatusCodes.Status400BadRequest, "Variant bu suala aid deyil.");
+        }
+
+        if (exam.RevealMode == RevealMode.Immediate)
+        {
+            // The correct answer is shown right after answering, so the first answer is final.
+            if (question.SelectedOptionId is not null)
+            {
+                return Problem(StatusCodes.Status409Conflict, "Bu rejimdə cavab verildikdən sonra dəyişdirilə bilməz.");
+            }
+
+            if (request.SelectedOptionId is null)
+            {
+                return Problem(StatusCodes.Status400BadRequest, "Variant seçilməyib.");
+            }
+        }
+
+        question.SelectedOptionId = request.SelectedOptionId;
+        question.AnsweredAt = request.SelectedOptionId is null ? null : now;
+        await db.SaveChangesAsync(ct);
+
+        return TypedResults.Ok(new AnswerResultDto(question.Id, question.SelectedOptionId, RevealFor(exam, question)));
+    }
+
+    private static async Task<IResult> Finish(
+        Guid id, ClaimsPrincipal user, AppDbContext db, TimeProvider clock, CancellationToken ct)
+    {
+        var exam = await LoadAsync(db, id, user.GetUserId(), ct);
+        if (exam is null)
+        {
+            return NotFound();
+        }
+
+        if (exam.Status == ExamStatus.InProgress)
+        {
+            var now = clock.GetUtcNow();
+            ExamEngine.Grade(exam, now, now >= exam.ExpiresAt ? CompletionReason.TimeExpired : CompletionReason.Submitted);
+            await db.SaveChangesAsync(ct);
+        }
+
+        return TypedResults.Ok(ToResult(exam)); // Idempotent: a finished exam returns its stored result.
+    }
+
+    private static async Task<IResult> Result(
+        Guid id, ClaimsPrincipal user, AppDbContext db, TimeProvider clock, IOptions<ExamOptions> options, CancellationToken ct)
+    {
+        var exam = await LoadAsync(db, id, user.GetUserId(), ct);
+        if (exam is null)
+        {
+            return NotFound();
+        }
+
+        await FinalizeIfExpiredAsync(db, exam, clock.GetUtcNow(), options.Value, ct);
+        return exam.Status == ExamStatus.Completed
+            ? TypedResults.Ok(ToResult(exam))
+            : Problem(StatusCodes.Status409Conflict, "İmtahan hələ bitməyib.");
+    }
+
+    private static async Task<List<ExamCandidate>> Candidates(AppDbContext db, IReadOnlyCollection<Guid> documentIds, CancellationToken ct)
+    {
+        var query = db.Questions.AsNoTracking().Where(q => q.Options.Count >= 2);
+        if (documentIds.Count > 0)
+        {
+            query = query.Where(q => documentIds.Contains(q.DocumentId));
+        }
+
+        return await query
+            .Select(q => new ExamCandidate(q.Id, q.ContentHash, q.VerificationStatus != VerificationStatus.Unverified))
+            .ToListAsync(ct);
+    }
+
+    /// <summary>Copies the question into the exam with its options in a new random order.</summary>
+    private static ExamQuestion Freeze(Question question, int position)
+    {
+        var options = question.Options.OrderBy(o => o.Position).ToList();
+        ExamEngine.Shuffle(options, Random.Shared);
+
+        return new ExamQuestion
+        {
+            QuestionId = question.Id,
+            Position = (short)position,
+            Snapshot = new QuestionSnapshot
+            {
+                Text = question.Text,
+                Options = options.Select((o, i) => new OptionSnapshot { OptionId = o.Id, Label = ((char)('A' + i)).ToString(), Text = o.Text }).ToList(),
+            },
+            CorrectOptionId = question.VerificationStatus == VerificationStatus.Unverified ? null : options.FirstOrDefault(o => o.IsCorrect)?.Id,
+        };
+    }
+
+    private static Task<Exam?> LoadAsync(AppDbContext db, Guid id, Guid userId, CancellationToken ct) =>
+        db.Exams.Include(e => e.Questions).FirstOrDefaultAsync(e => e.Id == id && e.UserId == userId, ct);
+
+    private static Task<Exam?> LoadActiveAsync(AppDbContext db, Guid userId, CancellationToken ct) =>
+        db.Exams.Include(e => e.Questions).FirstOrDefaultAsync(e => e.UserId == userId && e.Status == ExamStatus.InProgress, ct);
+
+    /// <summary>Completes an exam whose time is up (even if the browser was closed). Returns true if it is now completed.</summary>
+    private static async Task<bool> FinalizeIfExpiredAsync(AppDbContext db, Exam exam, DateTimeOffset now, ExamOptions options, CancellationToken ct)
+    {
+        if (exam.Status == ExamStatus.Completed)
+        {
+            return true;
+        }
+
+        if (now <= exam.ExpiresAt.AddSeconds(options.AnswerGraceSeconds))
+        {
+            return false;
+        }
+
+        ExamEngine.Grade(exam, now, CompletionReason.TimeExpired);
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    private static AnswerRevealDto? RevealFor(Exam exam, ExamQuestion question) =>
+        exam.RevealMode == RevealMode.Immediate && question.SelectedOptionId is not null
+            ? new AnswerRevealDto(question.CorrectOptionId, question.CorrectOptionId is not null)
+            : null;
+
+    private static IReadOnlyList<ExamOptionDto> Options(ExamQuestion question) =>
+        question.Snapshot.Options.Select(o => new ExamOptionDto(o.OptionId, o.Label, o.Text)).ToList();
+
+    private static ExamSessionDto ToSession(Exam exam, DateTimeOffset now) => new(
+        exam.Id, exam.Status, exam.RevealMode, exam.QuestionCount, exam.StartedAt, exam.ExpiresAt, now,
+        exam.Questions.OrderBy(q => q.Position)
+            .Select(q => new ExamSessionQuestionDto(q.Id, q.Position, q.Snapshot.Text, Options(q), q.SelectedOptionId, RevealFor(exam, q)))
+            .ToList());
+
+    private static ExamResultDto ToResult(Exam exam)
+    {
+        var completedAt = exam.CompletedAt ?? exam.ExpiresAt;
+        return new ExamResultDto(
+            exam.Id, exam.QuestionCount, exam.RevealMode, exam.SourceDocumentIds, exam.CompletionReason ?? CompletionReason.Submitted,
+            exam.CorrectCount ?? 0, exam.IncorrectCount ?? 0, exam.UnansweredCount ?? 0, exam.UngradedCount ?? 0, exam.ScorePercent,
+            exam.StartedAt, completedAt, (int)Math.Round((completedAt - exam.StartedAt).TotalSeconds),
+            exam.Questions.OrderBy(q => q.Position)
+                .Select(q => new ExamResultQuestionDto(q.Position, q.Snapshot.Text, Options(q), q.SelectedOptionId, q.CorrectOptionId,
+                    q.Outcome ?? ExamEngine.OutcomeOf(q)))
+                .ToList());
+    }
+
+    private static IResult NotFound() => Problem(StatusCodes.Status404NotFound, "İmtahan tapılmadı.");
+
+    private static IResult Problem(int status, string detail, Dictionary<string, object?>? extensions = null) =>
+        TypedResults.Problem(detail, statusCode: status, extensions: extensions);
+}

@@ -158,6 +158,124 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.ToTable("UploadedDocuments", (string)null);
                 });
 
+            modelBuilder.Entity("ExamFlow.Api.Features.Exams.Exam", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<string>("CompletionReason")
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<short?>("CorrectCount")
+                        .HasColumnType("smallint");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<short?>("IncorrectCount")
+                        .HasColumnType("smallint");
+
+                    b.Property<short>("QuestionCount")
+                        .HasColumnType("smallint");
+
+                    b.Property<string>("RevealMode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<decimal?>("ScorePercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.PrimitiveCollection<string>("SourceDocumentIds")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<short?>("UnansweredCount")
+                        .HasColumnType("smallint");
+
+                    b.Property<short?>("UngradedCount")
+                        .HasColumnType("smallint");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Exams_UserActive")
+                        .HasFilter("[Status] = 'InProgress'");
+
+                    b.HasIndex("UserId", "StartedAt")
+                        .IsDescending(false, true);
+
+                    b.ToTable("Exams", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Exams_QuestionCount", "[QuestionCount] BETWEEN 1 AND 200");
+                        });
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Exams.ExamQuestion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("AnsweredAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid?>("CorrectOptionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ExamId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Outcome")
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<short>("Position")
+                        .HasColumnType("smallint");
+
+                    b.Property<Guid?>("QuestionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("SelectedOptionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QuestionId");
+
+                    b.HasIndex("ExamId", "Position")
+                        .IsUnique()
+                        .HasDatabaseName("UX_ExamQuestions_ExamId_Position");
+
+                    b.ToTable("ExamQuestions", (string)null);
+                });
+
             modelBuilder.Entity("ExamFlow.Api.Features.Questions.AnswerOption", b =>
                 {
                     b.Property<Guid>("Id")
@@ -434,6 +552,87 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.Navigation("UploadedBy");
                 });
 
+            modelBuilder.Entity("ExamFlow.Api.Features.Exams.Exam", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Auth.AppUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Exams.ExamQuestion", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Exams.Exam", null)
+                        .WithMany("Questions")
+                        .HasForeignKey("ExamId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ExamFlow.Api.Features.Questions.Question", "Question")
+                        .WithMany()
+                        .HasForeignKey("QuestionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.OwnsOne("ExamFlow.Api.Features.Exams.QuestionSnapshot", "Snapshot", b1 =>
+                        {
+                            b1.Property<Guid>("ExamQuestionId")
+                                .HasColumnType("uniqueidentifier");
+
+                            b1.Property<string>("Text")
+                                .IsRequired()
+                                .HasColumnType("nvarchar(max)");
+
+                            b1.HasKey("ExamQuestionId");
+
+                            b1.ToTable("ExamQuestions");
+
+                            b1
+                                .ToJson("Snapshot")
+                                .HasColumnType("nvarchar(max)");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ExamQuestionId");
+
+                            b1.OwnsMany("ExamFlow.Api.Features.Exams.OptionSnapshot", "Options", b2 =>
+                                {
+                                    b2.Property<Guid>("QuestionSnapshotExamQuestionId")
+                                        .HasColumnType("uniqueidentifier");
+
+                                    b2.Property<int>("__synthesizedOrdinal")
+                                        .ValueGeneratedOnAdd()
+                                        .HasColumnType("int");
+
+                                    b2.Property<string>("Label")
+                                        .IsRequired()
+                                        .HasColumnType("nvarchar(max)");
+
+                                    b2.Property<Guid>("OptionId")
+                                        .HasColumnType("uniqueidentifier");
+
+                                    b2.Property<string>("Text")
+                                        .IsRequired()
+                                        .HasColumnType("nvarchar(max)");
+
+                                    b2.HasKey("QuestionSnapshotExamQuestionId", "__synthesizedOrdinal");
+
+                                    b2.ToTable("ExamQuestions");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("QuestionSnapshotExamQuestionId");
+                                });
+
+                            b1.Navigation("Options");
+                        });
+
+                    b.Navigation("Question");
+
+                    b.Navigation("Snapshot")
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ExamFlow.Api.Features.Questions.AnswerOption", b =>
                 {
                     b.HasOne("ExamFlow.Api.Features.Questions.Question", null)
@@ -506,6 +705,11 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                 });
 
             modelBuilder.Entity("ExamFlow.Api.Features.Documents.UploadedDocument", b =>
+                {
+                    b.Navigation("Questions");
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Exams.Exam", b =>
                 {
                     b.Navigation("Questions");
                 });

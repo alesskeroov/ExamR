@@ -1,0 +1,209 @@
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { api, ApiError } from '../../lib/api-client'
+import { queryKeys } from '../../lib/query-keys'
+import type { PagedResult } from '../documents/api'
+
+export type RevealMode = 'Immediate' | 'AtEnd'
+export type ExamStatus = 'InProgress' | 'Completed'
+export type CompletionReason = 'Submitted' | 'TimeExpired'
+export type ExamOutcome = 'Correct' | 'Incorrect' | 'Unanswered' | 'Ungraded'
+
+export interface ExamOption {
+  id: string
+  label: string
+  text: string
+}
+
+export interface AnswerReveal {
+  correctOptionId: string | null
+  isGradable: boolean
+}
+
+export interface ExamSessionQuestion {
+  examQuestionId: string
+  position: number
+  text: string
+  options: ExamOption[]
+  selectedOptionId: string | null
+  reveal: AnswerReveal | null
+}
+
+export interface ExamSession {
+  id: string
+  status: ExamStatus
+  revealMode: RevealMode
+  questionCount: number
+  startedAt: string
+  expiresAt: string
+  serverNow: string
+  questions: ExamSessionQuestion[]
+}
+
+export interface ExamResultQuestion {
+  position: number
+  text: string
+  options: ExamOption[]
+  selectedOptionId: string | null
+  correctOptionId: string | null
+  outcome: ExamOutcome
+}
+
+export interface ExamResult {
+  id: string
+  questionCount: number
+  revealMode: RevealMode
+  documentIds: string[]
+  completionReason: CompletionReason
+  correct: number
+  incorrect: number
+  unanswered: number
+  ungraded: number
+  scorePercent: number | null
+  startedAt: string
+  completedAt: string
+  durationSeconds: number
+  questions: ExamResultQuestion[]
+}
+
+export interface ExamSummary {
+  id: string
+  status: ExamStatus
+  questionCount: number
+  revealMode: RevealMode
+  sourceDocumentCount: number
+  startedAt: string
+  expiresAt: string
+  completedAt: string | null
+  completionReason: CompletionReason | null
+  correct: number | null
+  incorrect: number | null
+  unanswered: number | null
+  ungraded: number | null
+  scorePercent: number | null
+}
+
+export interface ExamAvailability {
+  available: number
+  ungraded: number
+  maxQuestions: number
+  minutesPerQuestion: number
+}
+
+export interface CreateExamRequest {
+  questionCount: number
+  documentIds: string[]
+  revealMode: RevealMode
+}
+
+export function useExamAvailability(documentIds: string[]) {
+  const query = documentIds.map((id) => `documentIds=${id}`).join('&')
+  return useQuery({
+    queryKey: queryKeys.exams.availability(documentIds),
+    queryFn: () => api.get<ExamAvailability>(`/exams/availability${query ? `?${query}` : ''}`),
+    placeholderData: keepPreviousData,
+  })
+}
+
+export function useActiveExam() {
+  return useQuery({
+    queryKey: queryKeys.exams.active,
+    queryFn: async () => {
+      try {
+        return (await api.get<{ id: string } | undefined>('/exams/active')) ?? null
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) return null
+        throw error
+      }
+    },
+    staleTime: 0,
+  })
+}
+
+export function useCreateExam() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: CreateExamRequest) => api.post<ExamSession>('/exams', request),
+    onSuccess: (session) => {
+      queryClient.setQueryData(queryKeys.exams.session(session.id), session)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.exams.all })
+    },
+  })
+}
+
+export function useExamSession(id: string) {
+  return useQuery({
+    queryKey: queryKeys.exams.session(id),
+    queryFn: () => api.get<ExamSession>(`/exams/${id}`),
+    staleTime: Infinity, // Answers are kept in the cache optimistically; no background refetches.
+  })
+}
+
+interface AnswerVariables {
+  examQuestionId: string
+  selectedOptionId: string | null
+}
+
+interface AnswerResponse {
+  examQuestionId: string
+  selectedOptionId: string | null
+  reveal: AnswerReveal | null
+}
+
+export const answerMutationKey = (examId: string) => ['exams', 'answer', examId] as const
+
+/** Saves an answer immediately; the UI updates optimistically and rolls back if the server rejects it. */
+export function useAnswerQuestion(examId: string) {
+  const queryClient = useQueryClient()
+  const key = queryKeys.exams.session(examId)
+
+  const patch = (examQuestionId: string, change: Partial<ExamSessionQuestion>) =>
+    queryClient.setQueryData<ExamSession>(key, (session) =>
+      session && {
+        ...session,
+        questions: session.questions.map((q) => (q.examQuestionId === examQuestionId ? { ...q, ...change } : q)),
+      },
+    )
+
+  return useMutation({
+    mutationKey: answerMutationKey(examId),
+    mutationFn: ({ examQuestionId, selectedOptionId }: AnswerVariables) =>
+      api.put<AnswerResponse>(`/exams/${examId}/answers/${examQuestionId}`, { selectedOptionId }),
+    onMutate: ({ examQuestionId, selectedOptionId }) => {
+      const previous = queryClient.getQueryData<ExamSession>(key)?.questions.find((q) => q.examQuestionId === examQuestionId)
+      patch(examQuestionId, { selectedOptionId })
+      return { previous }
+    },
+    onSuccess: (response) => patch(response.examQuestionId, { selectedOptionId: response.selectedOptionId, reveal: response.reveal }),
+    onError: (_error, { examQuestionId }, context) => {
+      if (context?.previous) patch(examQuestionId, context.previous)
+    },
+  })
+}
+
+export function useFinishExam(examId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.post<ExamResult>(`/exams/${examId}/finish`),
+    onSuccess: (result) => {
+      queryClient.setQueryData(queryKeys.exams.result(examId), result)
+      queryClient.removeQueries({ queryKey: queryKeys.exams.session(examId) })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.exams.all })
+    },
+  })
+}
+
+export function useExamResult(id: string) {
+  return useQuery({
+    queryKey: queryKeys.exams.result(id),
+    queryFn: () => api.get<ExamResult>(`/exams/${id}/result`),
+    staleTime: Infinity,
+  })
+}
+
+export function useExamHistory(page: number) {
+  return useQuery({
+    queryKey: queryKeys.exams.history(page),
+    queryFn: () => api.get<PagedResult<ExamSummary>>(`/exams?page=${page}&pageSize=20`),
+    placeholderData: keepPreviousData,
+  })
+}

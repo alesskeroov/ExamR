@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using ExamFlow.Api.Features.Auth;
 using ExamFlow.Api.Features.Documents;
+using ExamFlow.Api.Features.Exams;
 using ExamFlow.Api.Features.Health;
 using ExamFlow.Api.Features.Questions;
 using ExamFlow.Api.Infrastructure;
@@ -28,6 +29,8 @@ builder.Services.AddSingleton<ProcessingQueue>();
 builder.Services.AddScoped<DocumentProcessor>();
 builder.Services.AddHostedService<DocumentProcessingService>();
 
+builder.Services.Configure<ExamOptions>(builder.Configuration.GetSection(ExamOptions.Section));
+
 // Request limits sit just above the PDF limit; the endpoint returns the friendly 413.
 var maxUpload = builder.Configuration.GetValue<long?>($"{DocumentOptions.Section}:{nameof(DocumentOptions.MaxFileSizeBytes)}")
     ?? new DocumentOptions().MaxFileSizeBytes;
@@ -36,7 +39,11 @@ builder.Services.Configure<FormOptions>(form => form.MultipartBodyLengthLimit = 
 
 var app = builder.Build();
 
-app.UseExceptionHandler();
+// Malformed request bodies are client errors (400), not server errors.
+app.UseExceptionHandler(new ExceptionHandlerOptions
+{
+    StatusCodeSelector = ex => ex is BadHttpRequestException bad ? bad.StatusCode : StatusCodes.Status500InternalServerError,
+});
 app.UseStatusCodePages();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -51,6 +58,7 @@ api.MapHealthEndpoints();
 api.MapAuthEndpoints();
 api.MapDocumentEndpoints();
 api.MapQuestionEndpoints();
+api.MapExamEndpoints();
 
 await app.SeedIdentityAsync();
 
