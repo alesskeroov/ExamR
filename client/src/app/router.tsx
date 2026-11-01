@@ -1,5 +1,7 @@
 import { createBrowserRouter } from 'react-router'
 import { ResetPasswordPage } from '../features/auth/ResetPasswordPage'
+import { BattleHomePage } from '../features/battle/BattleHomePage'
+import { BattleRoomPage } from '../features/battle/BattleRoomPage'
 import { DashboardPage } from '../features/dashboard/DashboardPage'
 import { UploadPage } from '../features/documents/UploadPage'
 import { ExamHistoryPage } from '../features/exams/ExamHistoryPage'
@@ -25,6 +27,7 @@ export const router = createBrowserRouter([
       { path: 'exams/new', element: <ExamSetupPage /> },
       { path: 'exams', element: <ExamHistoryPage /> },
       { path: 'exams/:id/result', element: <ExamResultPage /> },
+      { path: 'battle', element: <BattleHomePage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
   },
@@ -32,6 +35,15 @@ export const router = createBrowserRouter([
     // Public: opened from the password-reset email.
     path: 'reset-password',
     element: <ResetPasswordPage />,
+  },
+  {
+    // Live battle room (shareable link /battle/CODE): focused screen with its own header and chat.
+    path: 'battle/:code',
+    element: (
+      <RequireAuth>
+        <BattleRoomPage />
+      </RequireAuth>
+    ),
   },
   {
     // Focused exam screen: no sidebar.

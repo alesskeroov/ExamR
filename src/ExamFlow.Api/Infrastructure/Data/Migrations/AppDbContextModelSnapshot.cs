@@ -93,6 +93,63 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
+            modelBuilder.Entity("ExamFlow.Api.Features.Battles.BattleResult", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("BattleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("CorrectCount")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ParticipantCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("PlayedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<int>("QuestionCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RangeFrom")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RangeTo")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Rank")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RoomCode")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(8)");
+
+                    b.Property<int>("Score")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BattleId", "UserId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "PlayedAt")
+                        .IsDescending(false, true);
+
+                    b.ToTable("BattleResults", (string)null);
+                });
+
             modelBuilder.Entity("ExamFlow.Api.Features.Documents.UploadedDocument", b =>
                 {
                     b.Property<Guid>("Id")
@@ -510,6 +567,17 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.HasKey("UserId", "LoginProvider", "Name");
 
                     b.ToTable("AspNetUserTokens", (string)null);
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Battles.BattleResult", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Auth.AppUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("ExamFlow.Api.Features.Documents.UploadedDocument", b =>

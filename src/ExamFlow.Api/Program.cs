@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using ExamFlow.Api.Features.Auth;
+using ExamFlow.Api.Features.Battles;
 using ExamFlow.Api.Features.Documents;
 using ExamFlow.Api.Features.Exams;
 using ExamFlow.Api.Features.Health;
@@ -35,6 +36,12 @@ builder.Services.AddHostedService<DocumentProcessingService>();
 
 builder.Services.Configure<ExamOptions>(builder.Configuration.GetSection(ExamOptions.Section));
 
+// Battle mode: SignalR (built into ASP.NET Core) + in-memory rooms on this single server.
+builder.Services.AddSignalR(options => options.MaximumReceiveMessageSize = 8 * 1024)
+    .AddJsonProtocol(options => options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+builder.Services.AddSingleton<BattleService>();
+builder.Services.AddHostedService<BattleCleanupService>();
+
 // Request limits sit just above the PDF limit; the endpoint returns the friendly 413.
 var maxUpload = builder.Configuration.GetValue<long?>($"{DocumentOptions.Section}:{nameof(DocumentOptions.MaxFileSizeBytes)}")
     ?? new DocumentOptions().MaxFileSizeBytes;
@@ -64,6 +71,8 @@ api.MapAuthEndpoints();
 api.MapDocumentEndpoints();
 api.MapQuestionEndpoints();
 api.MapExamEndpoints();
+api.MapBattleEndpoints();
+app.MapHub<BattleHub>(BattleHub.Path);
 
 await app.SeedIdentityAsync();
 

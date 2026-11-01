@@ -257,7 +257,7 @@ public static class ExamEndpoints
     }
 
     /// <summary>Usable questions of one PDF whose original number lies in [from, to].</summary>
-    private static Task<List<ExamCandidate>> Candidates(AppDbContext db, Guid documentId, int from, int to, CancellationToken ct) =>
+    internal static Task<List<ExamCandidate>> Candidates(AppDbContext db, Guid documentId, int from, int to, CancellationToken ct) =>
         db.Questions.AsNoTracking()
             .Where(q => q.DocumentId == documentId && q.SourceNumber >= from && q.SourceNumber <= to && q.Options.Count >= 2)
             .Select(q => new ExamCandidate(q.Id, q.ContentHash, q.VerificationStatus != VerificationStatus.Unverified))
@@ -279,7 +279,7 @@ public static class ExamEndpoints
     }
 
     /// <summary>Copies the question into the exam with its options in a new random order.</summary>
-    private static ExamQuestion Freeze(Question question, int position)
+    internal static ExamQuestion Freeze(Question question, int position)
     {
         var options = question.Options.OrderBy(o => o.Position).ToList();
         ExamEngine.Shuffle(options, Random.Shared);

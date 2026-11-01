@@ -115,6 +115,15 @@ Bank siyahısında hər sual `isCorrect` ilə qaytarılır (bank imtahan deyil);
 
 Bütün sessiya (≤ 200 sual) bir sorğuda gəlir — sual başına sorğudan qaçmaq və Next/Prev keçidlərini ani etmək üçün (50 sual ≈ 30–60 KB).
 
+## Battles
+
+| Method | Route | Təsvir |
+|---|---|---|
+| POST | `/api/battles` | `{ documentId, rangeFrom, rangeTo, questionCount: 1–50, secondsPerQuestion: 15–30 }` → `201 { code }`; aktiv otağınız varsa `409 { code }`; aralıqda cavabı məlum sual azdırsa `422` |
+| GET | `/api/battles/history` | Yalnız çağıranın nəticələri: `{ battleId, roomCode, playedAt, source, questionCount, participantCount, rank, score, correctCount }` |
+
+**SignalR hub `/hubs/battle`** (JWT: `?access_token=`). Server → client: `RoomUpdated(BattleStateDto)` (hər dəyişiklikdə tam snapshot), `ChatMessage`, `Kicked`, `RoomClosed`. Client → server: `JoinRoom(code)` → snapshot (+ öz cavabı, son 50 mesaj), `LeaveRoom`, `StartGame` (host, ≥ 2 onlayn), `SubmitAnswer(code, index, optionId)` (bir dəfə, vaxt daxilində), `Advance` (host), `SendMessage`, `SetMuted`/`Kick` (host). Xətalar `HubException` mətni ilə (Azərbaycan dilində). `BattleStateDto.question` düzgün cavabı ehtiva etmir; `reveal.correctOptionId` yalnız `Reveal` statusunda.
+
 ## Rate limiting
 
 | Policy | Limit | Tətbiq |

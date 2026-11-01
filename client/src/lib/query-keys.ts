@@ -9,6 +9,9 @@ export const queryKeys = {
   questions: {
     byDocument: (documentId: string, filter: string) => ['questions', 'byDocument', documentId, filter] as const,
   },
+  battles: {
+    history: (page: number) => ['battles', 'history', page] as const,
+  },
   exams: {
     all: ['exams'] as const,
     active: ['exams', 'active'] as const,

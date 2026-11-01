@@ -1,4 +1,4 @@
-import { FileUp, History, LayoutDashboard, Library, ListChecks, LogOut, Menu, X, type LucideIcon } from 'lucide-react'
+import { FileUp, History, LayoutDashboard, Library, ListChecks, LogOut, Menu, Swords, X, type LucideIcon } from 'lucide-react'
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router'
 import { useCurrentUser, useLogout } from '../features/auth/api'
@@ -9,6 +9,7 @@ const navItems: { to: string; label: string; icon: LucideIcon; end?: boolean }[]
   { to: '/upload', label: 'PDF yüklə', icon: FileUp },
   { to: '/questions', label: 'Sual bankı', icon: Library },
   { to: '/exams/new', label: 'İmtahana başla', icon: ListChecks },
+  { to: '/battle', label: 'Battle', icon: Swords },
   { to: '/exams', label: 'Tarixçə', icon: History, end: true },
 ]
 

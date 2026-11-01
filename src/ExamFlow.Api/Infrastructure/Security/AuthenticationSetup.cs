@@ -12,6 +12,7 @@ public static class AuthenticationSetup
 {
     public const string AuthRateLimit = "auth";
     public const string PasswordResetRateLimit = "password-reset";
+    public const string HubPathPrefix = "/hubs";
 
     /// <summary>ASP.NET Core Identity (users, password hashing, lockout, reset tokens) + JWT bearer authentication.</summary>
     public static IServiceCollection AddJwtIdentity(this IServiceCollection services, IConfiguration configuration)
@@ -68,6 +69,18 @@ public static class AuthenticationSetup
                 };
                 options.Events = new JwtBearerEvents
                 {
+                    // Browsers cannot set headers on WebSocket requests, so SignalR sends the token
+                    // as ?access_token=. Accept it only for hub endpoints.
+                    OnMessageReceived = context =>
+                    {
+                        var token = context.Request.Query["access_token"];
+                        if (!string.IsNullOrEmpty(token) && context.HttpContext.Request.Path.StartsWithSegments(HubPathPrefix))
+                        {
+                            context.Token = token;
+                        }
+
+                        return Task.CompletedTask;
+                    },
                     // Reject tokens issued before the last logout / password reset.
                     OnTokenValidated = async context =>
                     {

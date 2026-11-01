@@ -1,6 +1,6 @@
 import { ChevronRight, History, PlayCircle } from 'lucide-react'
 import { useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
 import { Button } from '../../components/common/Button'
 import { EmptyState } from '../../components/common/EmptyState'
@@ -8,27 +8,62 @@ import { PageHeader } from '../../components/common/PageHeader'
 import { StatusBadge } from '../../components/common/StatusBadge'
 import { formatDate, formatNumber } from '../../lib/format'
 import { cn } from '../../lib/utils'
+import { BattleHistoryList } from '../battle/BattleHistoryList'
 import { useExamHistory, type ExamSummary } from './api'
 import { sourceName, sourceRange } from './examSource'
 
+type Tab = 'exams' | 'battle'
+
 export function ExamHistoryPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tab: Tab = searchParams.get('tab') === 'battle' ? 'battle' : 'exams'
+
+  return (
+    <>
+      <PageHeader
+        title="Tarixçə"
+        description="Keçmiş imtahanlarınız, yarışlarınız və nəticələriniz."
+        actions={
+          <Link
+            to={tab === 'battle' ? '/battle' : '/exams/new'}
+            className="inline-flex h-10 items-center gap-2 rounded-lg bg-indigo-600 px-4 font-medium text-white hover:bg-indigo-700"
+          >
+            <PlayCircle className="size-4" aria-hidden />
+            {tab === 'battle' ? 'Yeni yarış' : 'Yeni imtahan'}
+          </Link>
+        }
+      />
+
+      <div role="tablist" aria-label="Tarixçə növü" className="mb-6 inline-flex rounded-lg bg-slate-100 p-1">
+        {(['exams', 'battle'] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            role="tab"
+            aria-selected={tab === t}
+            onClick={() => setSearchParams(t === 'battle' ? { tab: 'battle' } : {})}
+            className={cn(
+              'h-8 rounded-md px-4 font-medium transition-colors duration-150',
+              tab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900',
+            )}
+          >
+            {t === 'exams' ? 'İmtahanlar' : 'Battle'}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'battle' ? <BattleHistoryList /> : <ExamHistoryList />}
+    </>
+  )
+}
+
+function ExamHistoryList() {
   const [page, setPage] = useState(1)
   const history = useExamHistory(page)
   const totalPages = history.data ? Math.max(1, Math.ceil(history.data.totalCount / history.data.pageSize)) : 1
 
   return (
     <>
-      <PageHeader
-        title="Tarixçə"
-        description="Keçmiş imtahanlarınız və nəticələriniz."
-        actions={
-          <Link to="/exams/new" className="inline-flex h-10 items-center gap-2 rounded-lg bg-indigo-600 px-4 font-medium text-white hover:bg-indigo-700">
-            <PlayCircle className="size-4" aria-hidden />
-            Yeni imtahan
-          </Link>
-        }
-      />
-
       {history.isPending ? (
         <div className="h-48 animate-pulse rounded-xl bg-slate-200/60" aria-label="Yüklənir" />
       ) : history.isError ? (

@@ -122,6 +122,22 @@ Constraint-lər:
 
 İndeks: `UX_ExamQuestions_ExamId_Position` UNIQUE (ExamId, Position).
 
+### `BattleResults`
+
+Yalnız bitmiş yarışın yekun nəticəsi saxlanılır (otaq, suallar və chat yaddaşdadır).
+
+| Sütun | Tip | Qeyd |
+|---|---|---|
+| Id | uniqueidentifier PK | |
+| BattleId | uniqueidentifier | eyni yarışın sətirlərini qruplaşdırır |
+| RoomCode | varchar(8) | |
+| UserId | uniqueidentifier FK → AspNetUsers | `CASCADE` |
+| DocumentId | uniqueidentifier | FK yoxdur (PDF silinsə də nəticə qalır) |
+| RangeFrom, RangeTo, QuestionCount, ParticipantCount, Rank, Score, CorrectCount | int | |
+| PlayedAt | datetimeoffset(3) | |
+
+İndekslər: `IX_BattleResults_UserId_PlayedAt` (tarixçə), UNIQUE (BattleId, UserId).
+
 ## Model qərarları
 
 **Question və AnswerOption ayrı cədvəllərdə (JSON massiv yerinə):**

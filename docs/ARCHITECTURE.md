@@ -23,7 +23,7 @@
 
 **Çatışmazlıqlar və qarşı tədbir:**
 - Modullar eyni `DbContext`-i paylaşır → modullar arası sıx bağlılıq riski. Qayda: bir modul başqa modulun cədvəlinə **yalnız oxumaq** üçün müraciət edə bilər; yazma həmişə sahib modulun servisi vasitəsilə.
-- Repository qatı yoxdur → servislər `DbContext`-i birbaşa istifadə edir. İnteqrasiya testləri real SQL Server (Testcontainers) ilə aparılır, ona görə mock-a ehtiyac yoxdur.
+- Repository qatı yoxdur → endpoint handler-ləri `DbContext`-i birbaşa istifadə edir. Saf məntiq (`ExamEngine`, parser) ayrıca unit test olunur; real SQL Server ilə inteqrasiya testləri (Testcontainers) planlaşdırılır (`TASKS.md`).
 
 ## 2. Texnologiya qərarları
 
@@ -40,7 +40,7 @@
 | Background iş | `Channel<Guid>` + `BackgroundService` | Redis/RabbitMQ lazım deyil; restart-da `Pending` sənədlər yenidən növbəyə qoyulur |
 | Fayl saxlama | `IFileStorage` → lokal disk | Sonradan Azure Blob/S3-ə keçid üçün abstraksiya |
 | Logging | Built-in `ILogger` (console + JSON) | Serilog lazım olduqda sonra |
-| Test | xUnit, Testcontainers.MsSql, `WebApplicationFactory` | Real DB ilə integration test |
+| Test | xUnit: parser testləri (generasiya olunmuş + real PDF-lər), `ExamEngine` və `TokenService` unit testləri. Testcontainers.MsSql + `WebApplicationFactory` inteqrasiya testləri planlaşdırılır | Saf məntiq DB-siz sürətli test olunur |
 | Konfiqurasiya | Connection string `appsettings.json`-da **yoxdur**; dev: `dotnet user-secrets`, prod: environment variable `ConnectionStrings__Default` | Gizli məlumat repo-ya düşmür |
 
 ### PDF kitabxanası müqayisəsi
@@ -59,30 +59,42 @@ Bold aşkarlanması tələbi PdfPig-i yeganə uyğun açıq lisenziyalı seçim 
 
 ```
 ExamFlow/
+├─ AGENTS.md, CLAUDE.md, TASKS.md   (agent qaydaları və ötürmə — bax §6)
 ├─ src/
 │  ├─ ExamFlow.Api/
 │  │  ├─ Features/
-│  │  │  ├─ Auth/            (Identity endpoint-ləri, /me)
-│  │  │  ├─ Documents/       (upload, list, delete, DocumentProcessor, ProcessingQueue)
-│  │  │  ├─ Questions/       (bank CRUD, search)
-│  │  │  └─ Exams/           (create, session, answers, finish, results, ExamGenerator, ExamGrader)
+│  │  │  ├─ Auth/            AuthEndpoints (register/login/logout/me/forgot/reset), AppUser, IdentitySeeder
+│  │  │  ├─ Documents/       DocumentEndpoints (upload/list/get/reprocess/delete), DocumentProcessing
+│  │  │  │                   (ProcessingQueue, DocumentProcessingService, DocumentProcessor), UploadedDocument
+│  │  │  ├─ Questions/       QuestionEndpoints (read-only siyahı), Question, AnswerOption
+│  │  │  ├─ Exams/           ExamEndpoints, ExamEngine (seçim/qarışdırma/qiymətləndirmə), Exam, ExamDtos, ExamOptions
+│  │  │  ├─ Battles/         BattleHub (SignalR), BattleService (yaddaşda otaqlar + oyun dövrü), BattleScoring,
+│  │  │  │                   BattleEndpoints (otaq yarat, tarixçə), BattleResult, BattleCleanupService
+│  │  │  └─ Health/          /api/health (DB bağlantısı)
 │  │  ├─ Infrastructure/
-│  │  │  ├─ Data/            (AppDbContext, Configurations/, Migrations/)
-│  │  │  ├─ Storage/         (IFileStorage, LocalFileStorage)
-│  │  │  └─ Security/        (CurrentUser, ownership helpers)
-│  │  ├─ Common/             (ProblemDetails, Paging, Result types)
-│  │  └─ Program.cs
-│  └─ ExamFlow.Parsing/      (PdfPig, heç bir EF/HTTP asılılığı yox)
+│  │  │  ├─ Data/            AppDbContext, AuditInterceptor, Configurations/, Migrations/
+│  │  │  ├─ Security/        AuthenticationSetup (Identity + JWT + rate limit), TokenService, ClaimsPrincipalExtensions
+│  │  │  ├─ Email/           EmailQueue + SmtpEmailService (arxa plan)
+│  │  │  ├─ Storage/         IFileStorage, LocalFileStorage
+│  │  │  └─ DependencyInjection.cs (DbContext + connection string yoxlaması)
+│  │  ├─ Common/             Paging, ValidationFilter<T>, IAuditable
+│  │  └─ Program.cs          servislərin qeydiyyatı, middleware, endpoint qrupları
+│  └─ ExamFlow.Parsing/      PdfQuestionParser → PdfTextExtractor → LayoutCleaner → QuestionSegmenter
+│                            → IAnswerDetector (Marker, Style) → ContentHasher. EF/HTTP asılılığı yoxdur
 ├─ tests/
-│  ├─ ExamFlow.Parsing.Tests/
-│  └─ ExamFlow.Api.Tests/    (integration, Testcontainers)
-├─ client/                   (React + Vite)
-├─ samples/                  (test üçün nümunə PDF-lər)
-├─ ExamFlow.sln
+│  ├─ ExamFlow.Parsing.Tests/  TestPdf (PDF generatoru), parser/segmenter testləri, RealSampleTests
+│  └─ ExamFlow.Api.Tests/      ExamEngineTests, TokenServiceTests (unit)
+├─ client/src/
+│  ├─ app/                   router, providers (QueryClient, 401 → çıxış), AppLayout, RequireAuth
+│  ├─ features/              auth, dashboard, documents, questions, exams, battle — hər birində api.ts + səhifələr
+│  │                         (battle/api.ts: `useBattleRoom` — SignalR bağlantısı, auto-reconnect + yenidən JoinRoom)
+│  ├─ components/common/     Button, FormField, Alert, EmptyState, FileDropzone, StatusBadge, PageHeader
+│  └─ lib/                   api-client (fetch + JWT), auth-token, query-keys, format, form-errors
+├─ samples/                  real nümunə PDF-lər (Git-də deyil)
 └─ docs/
 ```
 
-Hər feature qovluğu: `XxxEndpoints.cs` (route-lar), `XxxService.cs` (məntiq), `XxxDtos.cs` (request/response record-ları).
+Hər backend modulu: `XxxEndpoints.cs` (route-lar + handler-lər), entity-lər, `XxxDtos.cs`. Ayrıca servis sinfi yalnız saf məntiq üçün yaradılır (`ExamEngine`); DB işi handler-lərdədir.
 
 ## 4. Deploy modeli
 
@@ -100,7 +112,46 @@ Hər feature qovluğu: `XxxEndpoints.cs` (route-lar), `XxxService.cs` (məntiq),
 | Authorization | Bütün route qrupları `RequireAuthorization()`; ownership yoxlaması servisdə; imtahan yalnız sahibi tərəfindən oxunur (başqası üçün 404) |
 | Token | JWT `Authorization` header-də; brauzer onu avtomatik göndərmir → CSRF tətbiq olunmur. Signing key yalnız user-secrets / `Jwt__SigningKey` env-də (≥ 32 bayt, yoxdursa tətbiq başlamır). Frontend tokeni `localStorage`-da saxlayır (XSS riskinə qarşı: React escaping, `dangerouslySetInnerHTML` yoxdur) |
 | Şifrə bərpası | Eyni cavab (hesab aşkarlanmır), email arxa planda göndərilir (cavab vaxtı da fərqlənmir), link 30 dəq + birdəfəlik, link URL-i yalnız konfiqurasiyadan (Host header injection yoxdur) |
-| Rate limiting | Built-in `RateLimiter` per IP: login/register 10/dəq, forgot/reset password 5/15 dəq |
+| Rate limiting | Built-in `RateLimiter` per IP: login/register 10/dəq, forgot/reset password 5/15 dəq. Battle chat: istifadəçi başına 5 mesaj / 10 s, ≤ 300 simvol, idarəetmə simvolları silinir; mətn React-da escape olunur (HTML/script icra olunmur) |
 | Xəta idarəsi | Global exception handler → ProblemDetails; stack trace yalnız Development-də |
 | Şifrə | Identity default hashing, min 8 simvol; lockout 5 uğursuz cəhddən sonra |
 | Məlumat sızması | İmtahan DTO-larında `IsCorrect` sahəsi yoxdur (ayrıca DTO tipi, test ilə təmin olunur) |
+
+## 6. Cari implementasiya (necə işləyir)
+
+### Sorğu axını
+```
+Brauzer (React, :5190) ──/api──▶ Vite proxy ──▶ ASP.NET Core (:5180)
+  Authorization: Bearer <JWT>        ExceptionHandler → Authentication (JWT + SecurityStamp yoxlaması)
+                                     → Authorization → RateLimiter → endpoint qrupu (/api/<modul>)
+                                     → handler → AppDbContext (EF Core) → SQL Server
+```
+
+### Modullar və əsas axınlar
+| Modul | Axın |
+|---|---|
+| Auth | Register/Login → Identity (PBKDF2 hash, lockout) → `TokenService` JWT (60 dəq, `sub`/`role`/`sst`). Logout və şifrə bərpası SecurityStamp-i dəyişir → köhnə tokenlər rədd olunur. Forgot password → `EmailQueue` → `SmtpEmailService` |
+| Documents | Upload (validasiya, SHA-256 dublikat yoxlaması) → `IFileStorage` → `ProcessingQueue` → `DocumentProcessingService` → `PdfQuestionParser` → `Questions` + `AnswerOptions` (tək `SaveChanges`) |
+| Questions | Sənəd üzrə səhifələnmiş read-only siyahı (redaktə Phase 4-dədir) |
+| Battles | REST `POST /api/battles` otaq yaradır (host) → SignalR `/hubs/battle` (JWT `access_token` query, yalnız `/hubs` üçün). `BattleService` (singleton) otaqları yaddaşda saxlayır, hər otaq üçün `SemaphoreSlim`; oyun dövrü: sual (15–30 s) → reveal (6 s) → növbəti; hamı cavab verəndə və ya host “Advance” edəndə erkən keçid. Cavab vaxtı, təkrar cavab, üzvlük və host səlahiyyəti serverdə yoxlanılır; düzgün cavab yalnız reveal-da göndərilir. Xal: `BattleScoring` (düzgün 500–1000, yanlış 0). Sonda `BattleResults` cədvəlinə yazılır |
+| Exams | PDF + orijinal nömrə aralığı → `ExamEngine.PickQuestions` (Fisher–Yates, hash üzrə dedup) → `ExamQuestions` snapshot (qarışdırılmış variantlar) → cavablar → `ExamEngine.Grade` (serverdə). Vaxtı bitmiş imtahan növbəti sorğuda avtomatik tamamlanır |
+
+### Arxa plan servisləri (in-process)
+- `DocumentProcessingService` — PDF emalı; restart-da yarımçıq sənədləri yenidən növbəyə qoyur.
+- `SmtpEmailService` — email göndərilməsi (`Smtp:Host` və ya dev üçün `Smtp:PickupDirectory`).
+- `BattleCleanupService` — hər dəqiqə boş / bitmiş / köhnə battle otaqlarını silir.
+
+**Real-time (SignalR):** ASP.NET Core-a daxildir (NuGet yoxdur); frontend `@microsoft/signalr`. MVP bir serverdədir — Redis/backplane yoxdur, buna görə otaq vəziyyəti restart-da itir. Bir neçə instansa keçəndə Azure SignalR və ya Redis backplane + otaq vəziyyətinin paylaşılan yaddaşa köçürülməsi lazımdır.
+
+### Konfiqurasiya
+| Açar | Harada |
+|---|---|
+| `ConnectionStrings:Default`, `Jwt:SigningKey`, `Smtp:UserName/Password` | user-secrets (dev) / env (prod) — **heç vaxt** `appsettings`-də deyil |
+| `Jwt:Issuer/Audience/AccessTokenMinutes`, `Documents:*`, `Exam:*`, `Storage:RootPath` | `appsettings.json` |
+| `App:FrontendBaseUrl`, `Smtp:PickupDirectory` | `appsettings.Development.json` (prod-da env) |
+
+### Migration-lar
+`InitialCreate` (Identity, sənədlər, suallar) → `AddExams` → `AddExamQuestionRange` → `AddBattleResults`. Sxem: `docs/DATABASE_SCHEMA.md`.
+
+### Agent iş axını
+Claude Code və OpenAI Codex növbə ilə işləyir. Ortaq qaydalar `AGENTS.md`-dədir (`CLAUDE.md` onu import edir); vəziyyət, növbəti addımlar və yarımçıq işin ötürülməsi `TASKS.md`-dədir. Commit/push yalnız istifadəçinin təsdiqi ilə.

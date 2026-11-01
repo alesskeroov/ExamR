@@ -11,6 +11,8 @@ export default defineConfig({
     // Same-origin in dev: /api is forwarded to ASP.NET Core, so no CORS and cookies just work.
     proxy: {
       '/api': 'http://localhost:5180',
+      // SignalR (battle mode): WebSocket upgrade must be proxied too.
+      '/hubs': { target: 'http://localhost:5180', ws: true },
     },
   },
 })
