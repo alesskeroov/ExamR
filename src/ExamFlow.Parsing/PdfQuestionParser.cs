@@ -1,0 +1,169 @@
+using UglyToad.PdfPig;
+using UglyToad.PdfPig.Exceptions;
+
+namespace ExamFlow.Parsing;
+
+/// <summary>Entry point: PDF stream → structured questions. Stateless and thread-safe.</summary>
+public sealed class PdfQuestionParser(IEnumerable<IAnswerDetector>? detectors = null)
+{
+    public const int MaxQuestionLength = 4000;
+    public const int MaxOptionLength = 1000;
+    private const int MinCharactersPerPage = 20;
+    private const double MaxUnknownGlyphRatio = 0.05;
+
+    // DI passes an empty sequence when nothing is registered; never run without a detector.
+    private readonly IReadOnlyList<IAnswerDetector> _detectors =
+        detectors?.ToList() is { Count: > 0 } configured ? configured : DefaultDetectors;
+
+    /// <summary>Explicit markers are more reliable than styling, so they are tried first.</summary>
+    public static IReadOnlyList<IAnswerDetector> DefaultDetectors { get; } = [new MarkerAnswerDetector(), new StyleAnswerDetector()];
+
+    public static PdfInspection Inspect(Stream pdf)
+    {
+        try
+        {
+            using var document = PdfDocument.Open(pdf, new ParsingOptions { UseLenientParsing = true });
+            return new PdfInspection(true, false, document.NumberOfPages);
+        }
+        catch (PdfDocumentEncryptedException)
+        {
+            return new PdfInspection(false, true, 0);
+        }
+        catch (Exception)
+        {
+            return new PdfInspection(false, false, 0);
+        }
+    }
+
+    public ParseResult Parse(Stream pdf, CancellationToken ct = default)
+    {
+        PdfDocument document;
+        try
+        {
+            document = PdfDocument.Open(pdf, new ParsingOptions { UseLenientParsing = true });
+        }
+        catch (PdfDocumentEncryptedException)
+        {
+            return ParseResult.Failed(ParseFailure.Encrypted);
+        }
+        catch (Exception)
+        {
+            return ParseResult.Failed(ParseFailure.Unreadable);
+        }
+
+        using (document)
+        {
+            PdfTextContent content;
+            try
+            {
+                content = PdfTextExtractor.Extract(document, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                return ParseResult.Failed(ParseFailure.Unreadable, document.NumberOfPages);
+            }
+
+            if (content.CharacterCount < MinCharactersPerPage * Math.Max(1, content.PageCount))
+            {
+                return ParseResult.Failed(ParseFailure.Scanned, content.PageCount);
+            }
+
+            return ParseLines(content.Lines, content.PageCount);
+        }
+    }
+
+    /// <summary>Parses already extracted lines; used directly by tests.</summary>
+    public ParseResult ParseLines(IReadOnlyList<TextLine> lines, int pageCount)
+    {
+        var warnings = new List<string>();
+        var allText = string.Concat(lines.Select(l => l.Text));
+        if (allText.Length > 0 && (double)allText.Count(c => c == '�') / allText.Length > MaxUnknownGlyphRatio)
+        {
+            warnings.Add("Şrift kodlaşdırması problemi: bəzi simvollar düzgün oxunmadı");
+        }
+
+        var questions = new List<ParsedQuestion>();
+        var seenHashes = new HashSet<string>();
+        var duplicates = 0;
+
+        foreach (var raw in QuestionSegmenter.Segment(LayoutCleaner.Clean(lines)))
+        {
+            var questionWarnings = new List<string>(raw.Warnings);
+            var text = Truncate(Join(raw.TextTokens), MaxQuestionLength, "Sual mətni", questionWarnings);
+            if (text.Length == 0)
+            {
+                warnings.Add($"Sual {raw.Number}: mətn boşdur, atlandı");
+                continue;
+            }
+
+            var options = raw.Options
+                .Select(o => new ParsedOption(o.Letter.ToString(), Truncate(Join(o.TextTokens), MaxOptionLength, $"Variant {o.Letter}", questionWarnings)))
+                .ToList();
+
+            if (options.Count < 2)
+            {
+                questionWarnings.Add($"Yalnız {options.Count} variant tapıldı");
+            }
+
+            var detection = Detect(raw);
+            if (detection.Warning is not null)
+            {
+                questionWarnings.Add(detection.Warning);
+            }
+
+            var hash = ContentHasher.Compute(text, options.Select(o => o.Text));
+            if (!seenHashes.Add(Convert.ToHexString(hash)))
+            {
+                duplicates++;
+                continue;
+            }
+
+            var warning = questionWarnings.Count > 0 ? string.Join("; ", questionWarnings) : null;
+            if (warning is not null)
+            {
+                warnings.Add($"Sual {raw.Number}: {warning}");
+            }
+
+            questions.Add(new ParsedQuestion(raw.Number, text, options, detection.CorrectIndex, warning, hash));
+        }
+
+        return new ParseResult
+        {
+            Questions = questions,
+            Warnings = warnings,
+            PageCount = pageCount,
+            DuplicatesSkipped = duplicates,
+            Failure = questions.Count == 0 ? ParseFailure.NoQuestions : ParseFailure.None,
+        };
+    }
+
+    private AnswerDetection Detect(RawQuestion question)
+    {
+        string? warning = null;
+        foreach (var detector in _detectors)
+        {
+            var result = detector.Detect(question);
+            if (result.CorrectIndex is not null)
+            {
+                return result;
+            }
+
+            warning ??= result.Warning;
+        }
+
+        return new AnswerDetection(null, warning);
+    }
+
+    private static string Join(IEnumerable<TextToken> tokens) => string.Join(' ', tokens.Select(t => t.Text)).Trim();
+
+    private static string Truncate(string text, int maxLength, string field, List<string> warnings)
+    {
+        if (text.Length <= maxLength)
+        {
+            return text;
+        }
+
+        warnings.Add($"{field} {maxLength} simvoldan uzundur, qısaldıldı");
+        return text[..maxLength];
+    }
+}

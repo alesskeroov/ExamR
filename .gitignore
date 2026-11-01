@@ -426,3 +426,15 @@ FodyWeavers.xsd
 
 # Official VS Code C# Dev Kit Extension exclusion
 #*.lscache
+
+# ExamFlow
+# Uploaded PDFs (local file storage)
+App_Data/
+
+# Environment files (secrets); connection strings live in dotnet user-secrets
+.env
+.env.*
+!.env.example
+
+# Real exam PDFs used as local parser samples are not published
+samples/*.pdf
