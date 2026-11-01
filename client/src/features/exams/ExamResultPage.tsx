@@ -8,6 +8,7 @@ import { PageHeader } from '../../components/common/PageHeader'
 import { formatDate, formatNumber } from '../../lib/format'
 import { cn } from '../../lib/utils'
 import { useCreateExam, useExamResult, type ExamOutcome, type ExamResult, type ExamResultQuestion } from './api'
+import { sourceName, sourceRange } from './examSource'
 
 type Filter = 'all' | 'Incorrect' | 'Unanswered' | 'Ungraded'
 
@@ -46,25 +47,38 @@ function ResultView({ result }: { result: ExamResult }) {
     <>
       <PageHeader
         title="İmtahan nəticəsi"
-        description={`${formatDate(result.completedAt)} · ${result.completionReason === 'TimeExpired' ? 'Vaxt bitdi' : 'Tamamlandı'}`}
+        description={[
+          sourceName(result.source),
+          sourceRange(result.source) && `suallar ${sourceRange(result.source)}`,
+          formatDate(result.completedAt),
+          result.completionReason === 'TimeExpired' ? 'Vaxt bitdi' : 'Tamamlandı',
+        ].filter(Boolean).join(' · ')}
         actions={
           <>
             <Link to="/exams" className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 font-medium text-slate-700 hover:bg-slate-50">
               <History className="size-4" aria-hidden />
               Tarixçə
             </Link>
-            <Button
-              loading={retake.isPending}
-              onClick={() =>
-                retake.mutate(
-                  { questionCount: result.questionCount, documentIds: result.documentIds, revealMode: result.revealMode },
-                  { onSuccess: (session) => navigate(`/exams/${session.id}`) },
-                )
-              }
-            >
-              <RotateCw className="size-4" aria-hidden />
-              Yenidən imtahan ver
-            </Button>
+            {canRetake(result) && (
+              <Button
+                loading={retake.isPending}
+                onClick={() =>
+                  retake.mutate(
+                    {
+                      questionCount: result.questionCount,
+                      documentId: result.source.documentId!,
+                      rangeFrom: result.source.rangeFrom!,
+                      rangeTo: result.source.rangeTo!,
+                      revealMode: result.revealMode,
+                    },
+                    { onSuccess: (session) => navigate(`/exams/${session.id}`) },
+                  )
+                }
+              >
+                <RotateCw className="size-4" aria-hidden />
+                Yenidən imtahan ver
+              </Button>
+            )}
           </>
         }
       />
@@ -124,6 +138,9 @@ function ResultView({ result }: { result: ExamResult }) {
     </>
   )
 }
+
+/** Retake needs the same PDF and range; older exams (all PDFs) and deleted PDFs cannot be repeated. */
+const canRetake = ({ source }: ExamResult) => !!source.documentName && source.rangeFrom !== null && source.rangeTo !== null
 
 function ScoreRing({ percent }: { percent: number | null }) {
   const radius = 52

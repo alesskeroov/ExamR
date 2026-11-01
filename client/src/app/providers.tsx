@@ -1,16 +1,21 @@
-import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from 'react-router'
 import { ApiError } from '../lib/api-client'
+import { clearToken } from '../lib/auth-token'
 import { queryKeys } from '../lib/query-keys'
 import { router } from './router'
 
+// A 401 anywhere means the token expired or was revoked: drop it so the sign-in screen shows.
+function handleUnauthorized(error: unknown) {
+  if (error instanceof ApiError && error.status === 401) {
+    clearToken()
+    queryClient.setQueryData(queryKeys.me, null)
+  }
+}
+
 const queryClient: QueryClient = new QueryClient({
-  // A 401 anywhere means the session expired: drop the user so the sign-in screen shows.
-  queryCache: new QueryCache({
-    onError: (error) => {
-      if (error instanceof ApiError && error.status === 401) queryClient.setQueryData(queryKeys.me, null)
-    },
-  }),
+  queryCache: new QueryCache({ onError: handleUnauthorized }),
+  mutationCache: new MutationCache({ onError: handleUnauthorized }),
   defaultOptions: {
     queries: {
       staleTime: 30_000,

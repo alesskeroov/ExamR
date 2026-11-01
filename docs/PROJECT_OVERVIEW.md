@@ -7,7 +7,7 @@ ExamFlow PDF fayllarından test suallarını avtomatik çıxaran və həmin sual
 1. İstifadəçi qeydiyyatdan keçir / daxil olur.
 2. PDF yükləyir → sistem arxa planda sualları, variantları və (qalın/rəngli şriftdən) düzgün cavabı çıxarır.
 3. Yükləyən şəxs (və ya Admin) sualları yoxlayır, redaktə edir, düzgün cavabı təsdiqləyir.
-4. İstənilən istifadəçi konkret PDF və ya bütün PDF-lərdən istədiyi sayda (1–200) sualla imtahan başladır; düzgün cavabları hər sualdan sonra və ya sonda görməyi seçir.
+4. İstifadəçi PDF-i və sual aralığını (məs. 150–200) seçib həmin aralıqdan istədiyi sayda sualla imtahan başladır; düzgün cavabları hər sualdan sonra və ya sonda görməyi seçir.
 5. İmtahan vaxt limiti ilə keçirilir, cavablar serverdə saxlanılır.
 6. Backend nəticəni hesablayır, səhvləri və düzgün cavabları göstərir.
 

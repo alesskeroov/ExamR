@@ -11,8 +11,12 @@ public class Exam
     public short QuestionCount { get; set; }
     public RevealMode RevealMode { get; set; }
 
-    /// <summary>Documents the questions were drawn from; empty means all documents.</summary>
+    /// <summary>Document the questions were drawn from (one item). Older exams may hold none (= all documents).</summary>
     public List<Guid> SourceDocumentIds { get; set; } = [];
+
+    /// <summary>Inclusive range of original PDF question numbers (<c>Question.SourceNumber</c>); null on older exams.</summary>
+    public int? RangeFrom { get; set; }
+    public int? RangeTo { get; set; }
 
     public ExamStatus Status { get; set; }
     public CompletionReason? CompletionReason { get; set; }

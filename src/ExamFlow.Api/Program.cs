@@ -5,6 +5,7 @@ using ExamFlow.Api.Features.Exams;
 using ExamFlow.Api.Features.Health;
 using ExamFlow.Api.Features.Questions;
 using ExamFlow.Api.Infrastructure;
+using ExamFlow.Api.Infrastructure.Email;
 using ExamFlow.Api.Infrastructure.Security;
 using ExamFlow.Api.Infrastructure.Storage;
 using ExamFlow.Parsing;
@@ -13,7 +14,10 @@ using Microsoft.AspNetCore.Http.Features;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddInfrastructure(builder.Configuration);
-builder.Services.AddCookieIdentity();
+builder.Services.AddJwtIdentity(builder.Configuration);
+builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection(SmtpOptions.Section));
+builder.Services.AddSingleton<EmailQueue>();
+builder.Services.AddHostedService<SmtpEmailService>();
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -47,6 +51,7 @@ app.UseExceptionHandler(new ExceptionHandlerOptions
 app.UseStatusCodePages();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 if (app.Environment.IsDevelopment())
 {

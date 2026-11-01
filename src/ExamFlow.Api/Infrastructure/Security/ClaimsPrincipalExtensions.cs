@@ -11,7 +11,7 @@ public static class Roles
 public static class ClaimsPrincipalExtensions
 {
     public static Guid GetUserId(this ClaimsPrincipal user) =>
-        Guid.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)
+        Guid.Parse(user.FindFirstValue(JwtClaims.UserId)
             ?? throw new InvalidOperationException("Authenticated user has no id claim."));
 
     public static bool IsAdmin(this ClaimsPrincipal user) => user.IsInRole(Roles.Admin);

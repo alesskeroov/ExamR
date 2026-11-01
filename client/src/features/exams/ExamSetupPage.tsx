@@ -1,17 +1,17 @@
-import { Clock, Eye, EyeOff, Files, FileText, Loader2, PlayCircle } from 'lucide-react'
+import { Clock, Eye, EyeOff, Loader2, PlayCircle } from 'lucide-react'
 import { useId, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { Alert } from '../../components/common/Alert'
 import { Button } from '../../components/common/Button'
 import { PageHeader } from '../../components/common/PageHeader'
-import { ApiError } from '../../lib/api-client'
 import { formatNumber } from '../../lib/format'
 import { cn } from '../../lib/utils'
 import { useCompletedDocuments } from '../documents/api'
 import { useActiveExam, useCreateExam, useExamAvailability, type RevealMode } from './api'
 
-type Source = 'all' | 'document'
 const PRESETS = [10, 20, 30, 50]
+const inputClass =
+  'h-10 rounded-lg border border-slate-300 bg-white px-3 tabular-nums focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none aria-invalid:border-rose-400'
 
 export function ExamSetupPage() {
   const navigate = useNavigate()
@@ -19,30 +19,58 @@ export function ExamSetupPage() {
   const documents = useCompletedDocuments()
   const create = useCreateExam()
 
-  const [source, setSource] = useState<Source>('all')
   const [documentId, setDocumentId] = useState('')
-  const [count, setCount] = useState(30)
+  // Typed range; null = use the PDF's full question-number span.
+  const [rangeInput, setRangeInput] = useState<{ from: string; to: string } | null>(null)
+  const [count, setCount] = useState(20)
   const [revealMode, setRevealMode] = useState<RevealMode>('AtEnd')
 
-  const documentIds = source === 'document' && documentId ? [documentId] : []
-  const availability = useExamAvailability(documentIds)
-  const available = availability.data?.available ?? 0
+  const span = useExamAvailability(documentId)
+  const first = span.data?.firstNumber ?? null
+  const last = span.data?.lastNumber ?? null
+  const parse = (value: string) => (value.trim() === '' ? null : Number(value))
+  const from = rangeInput ? parse(rangeInput.from) : first
+  const to = rangeInput ? parse(rangeInput.to) : last
+
+  const rangeError = validateRange(from, to, first, last)
+  const range = documentId && !rangeError && from !== null && to !== null ? { from, to } : undefined
+  const availability = useExamAvailability(range ? documentId : '', range)
+
+  const available = range ? (availability.data?.available ?? 0) : 0
   const max = Math.min(available, availability.data?.maxQuestions ?? 200)
+  const countError = !range
+    ? null
+    : !Number.isInteger(count) || count < 1
+      ? 'Sual sayı ən azı 1 olmalıdır.'
+      : count > max
+        ? `Bu aralıqda ən çox ${formatNumber(max)} sual seçmək olar.`
+        : null
   const minutes = Math.ceil(count * (availability.data?.minutesPerQuestion ?? 1))
+  const selectedDocument = documents.data?.items.find((d) => d.id === documentId)
 
-  const sourceMissing = source === 'document' && !documentId
-  const countInvalid = !Number.isInteger(count) || count < 1 || count > max
-  const canStart = !sourceMissing && !countInvalid && !availability.isFetching && !create.isPending && !active.data
+  const canStart =
+    !!range && !countError && !availability.isFetching && !create.isPending && !active.data
 
-  const createError = create.error instanceof ApiError ? create.error : null
+  function selectDocument(id: string) {
+    setDocumentId(id)
+    setRangeInput(null)
+  }
+
+  function updateRange(field: 'from' | 'to', value: string) {
+    setRangeInput((current) => ({ from: String(current?.from ?? from ?? ''), to: String(current?.to ?? to ?? ''), [field]: value }))
+  }
 
   function start() {
-    create.mutate({ questionCount: count, documentIds, revealMode }, { onSuccess: (session) => navigate(`/exams/${session.id}`) })
+    if (!range) return
+    create.mutate(
+      { questionCount: count, documentId, rangeFrom: range.from, rangeTo: range.to, revealMode },
+      { onSuccess: (session) => navigate(`/exams/${session.id}`) },
+    )
   }
 
   return (
     <>
-      <PageHeader title="İmtahana başla" description="Sual mənbəyini, sayını və cavab rejimini seçin." />
+      <PageHeader title="İmtahana başla" description="PDF-i, sual aralığını, sual sayını və cavab rejimini seçin." />
 
       {active.data && (
         <div className="mb-6">
@@ -62,40 +90,57 @@ export function ExamSetupPage() {
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="flex min-w-0 flex-col gap-6">
-          <Section step={1} title="Sual mənbəyi">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <ChoiceCard name="source" checked={source === 'all'} onChange={() => setSource('all')} icon={<Files className="size-5" />} title="Bütün PDF-lər" description="Bazadakı bütün suallardan" />
-              <ChoiceCard name="source" checked={source === 'document'} onChange={() => setSource('document')} icon={<FileText className="size-5" />} title="Konkret PDF" description="Yalnız seçilmiş fayldan" />
-            </div>
-            {source === 'document' && (
-              <div className="mt-4">
-                <label htmlFor="document" className="mb-1.5 block font-medium text-slate-700">
-                  PDF
-                </label>
-                <select
-                  id="document"
-                  value={documentId}
-                  onChange={(e) => setDocumentId(e.target.value)}
-                  className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
-                >
-                  <option value="">{documents.isPending ? 'Yüklənir…' : 'PDF seçin'}</option>
-                  {documents.data?.items.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.originalFileName} · {formatNumber(d.questionCount)} sual
-                    </option>
-                  ))}
-                </select>
-              </div>
+          <Section step={1} title="PDF">
+            <label htmlFor="document" className="sr-only">
+              PDF
+            </label>
+            <select
+              id="document"
+              value={documentId}
+              onChange={(e) => selectDocument(e.target.value)}
+              className={cn(inputClass, 'w-full')}
+            >
+              <option value="">{documents.isPending ? 'Yüklənir…' : 'PDF seçin'}</option>
+              {documents.data?.items.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.originalFileName} · {formatNumber(d.questionCount)} sual
+                </option>
+              ))}
+            </select>
+            {documents.data?.items.length === 0 && (
+              <p className="mt-2 text-slate-500">
+                Hələ emal olunmuş PDF yoxdur.{' '}
+                <Link to="/upload" className="font-medium text-indigo-600 hover:text-indigo-700">
+                  PDF yükləyin
+                </Link>
+              </p>
             )}
           </Section>
 
-          <Section step={2} title="Sual sayı">
+          <Section step={2} title="Sual aralığı">
+            <div className="flex flex-wrap items-end gap-3">
+              <NumberField label="Başlanğıc sual" value={from} disabled={!documentId || span.isPending} invalid={!!rangeError} onChange={(v) => updateRange('from', v)} />
+              <span className="pb-2.5 text-slate-400" aria-hidden>
+                –
+              </span>
+              <NumberField label="Son sual" value={to} disabled={!documentId || span.isPending} invalid={!!rangeError} onChange={(v) => updateRange('to', v)} />
+            </div>
+            <p className={cn('mt-2', rangeError && documentId && !span.isPending ? 'text-rose-600' : 'text-slate-500')}>
+              {!documentId
+                ? 'Əvvəlcə PDF seçin.'
+                : span.isPending
+                  ? 'Yüklənir…'
+                  : rangeError ?? `PDF-dəki orijinal sual nömrələri: ${first}–${last}. Suallar yalnız bu aralıqdan təsadüfi seçilir.`}
+            </p>
+          </Section>
+
+          <Section step={3} title="Sual sayı">
             <div className="flex flex-wrap items-center gap-2">
               {PRESETS.map((preset) => (
                 <button
                   key={preset}
                   type="button"
-                  disabled={preset > max}
+                  disabled={!range || preset > max}
                   onClick={() => setCount(preset)}
                   aria-pressed={count === preset}
                   className={cn(
@@ -114,16 +159,17 @@ export function ExamSetupPage() {
                   max={max || undefined}
                   value={Number.isNaN(count) ? '' : count}
                   onChange={(e) => setCount(e.target.valueAsNumber)}
-                  className="h-10 w-24 rounded-lg border border-slate-300 bg-white px-3 tabular-nums focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none"
+                  aria-invalid={!!countError}
+                  className={cn(inputClass, 'w-24')}
                 />
               </label>
             </div>
-            <p className={cn('mt-2', countInvalid && !availability.isFetching && !sourceMissing ? 'text-rose-600' : 'text-slate-500')}>
-              {sourceMissing ? 'Əvvəlcə PDF seçin.' : `1 ilə ${formatNumber(max)} arasında. Suallar təsadüfi seçilir və təkrarlanmır.`}
+            <p className={cn('mt-2', countError ? 'text-rose-600' : 'text-slate-500')}>
+              {countError ?? (range ? `Aralıqda ${formatNumber(available)} unikal sual var. Suallar təkrarlanmır.` : 'Əvvəlcə aralığı təyin edin.')}
             </p>
           </Section>
 
-          <Section step={3} title="Düzgün cavablar nə vaxt göstərilsin?">
+          <Section step={4} title="Düzgün cavablar nə vaxt göstərilsin?">
             <div className="grid gap-3 sm:grid-cols-2">
               <ChoiceCard name="reveal" checked={revealMode === 'AtEnd'} onChange={() => setRevealMode('AtEnd')} icon={<EyeOff className="size-5" />} title="İmtahan bitdikdə" description="Cavablar sona qədər dəyişdirilə bilər" />
               <ChoiceCard name="reveal" checked={revealMode === 'Immediate'} onChange={() => setRevealMode('Immediate')} icon={<Eye className="size-5" />} title="Hər sualdan sonra" description="Cavab verildikdən sonra dəyişmir" />
@@ -135,26 +181,32 @@ export function ExamSetupPage() {
           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="mb-4 font-semibold">Xülasə</h2>
             <dl className="flex flex-col gap-3">
-              <SummaryRow label="Mövcud unikal sual">
-                {availability.isPending ? <Loader2 className="size-4 animate-spin" /> : formatNumber(available)}
+              <SummaryRow label="PDF">
+                <span className="block max-w-40 truncate" title={selectedDocument?.originalFileName}>
+                  {selectedDocument?.originalFileName ?? '—'}
+                </span>
               </SummaryRow>
-              <SummaryRow label="Sual sayı">{countInvalid ? '—' : formatNumber(count)}</SummaryRow>
+              <SummaryRow label="Aralıq">{range ? `${range.from}–${range.to}` : '—'}</SummaryRow>
+              <SummaryRow label="Mövcud sual">
+                {range && availability.isFetching ? <Loader2 className="size-4 animate-spin" /> : range ? formatNumber(available) : '—'}
+              </SummaryRow>
+              <SummaryRow label="Sual sayı">{range && !countError ? formatNumber(count) : '—'}</SummaryRow>
               <SummaryRow label="Vaxt">
                 <span className="inline-flex items-center gap-1.5">
                   <Clock className="size-4 text-slate-400" aria-hidden />
-                  {countInvalid ? '—' : `${minutes} dəqiqə`}
+                  {range && !countError ? `${minutes} dəqiqə` : '—'}
                 </span>
               </SummaryRow>
               <SummaryRow label="Cavablar">{revealMode === 'AtEnd' ? 'Sonda' : 'Dərhal'}</SummaryRow>
             </dl>
-            {!!availability.data?.ungraded && (
+            {range && !!availability.data?.ungraded && (
               <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-amber-800">
-                {formatNumber(availability.data.ungraded)} sualın düzgün cavabı məlum deyil — düşsə, ballanmayacaq.
+                Aralıqdakı {formatNumber(availability.data.ungraded)} sualın düzgün cavabı məlum deyil — düşsə, ballanmayacaq.
               </p>
             )}
             {create.error && (
               <p role="alert" className="mt-4 rounded-lg bg-rose-50 px-3 py-2 text-rose-700">
-                {createError?.message ?? create.error.message}
+                {create.error.message}
               </p>
             )}
             <Button className="mt-5 w-full" disabled={!canStart} loading={create.isPending} onClick={start}>
@@ -165,6 +217,44 @@ export function ExamSetupPage() {
         </aside>
       </div>
     </>
+  )
+}
+
+/** Returns an error message, or null when the range is valid for the PDF's numbering. */
+function validateRange(from: number | null, to: number | null, first: number | null, last: number | null) {
+  if (first === null || last === null) return 'Bu PDF-də sual yoxdur.'
+  if (from === null || to === null || !Number.isInteger(from) || !Number.isInteger(to)) return 'Başlanğıc və son sual nömrəsini daxil edin.'
+  if (from > to) return 'Başlanğıc nömrə son nömrədən böyük ola bilməz.'
+  if (from < first || to > last) return `Aralıq PDF-dəki nömrələr daxilində olmalıdır (${first}–${last}).`
+  return null
+}
+
+interface NumberFieldProps {
+  label: string
+  value: number | null
+  disabled: boolean
+  invalid: boolean
+  onChange: (value: string) => void
+}
+
+function NumberField({ label, value, disabled, invalid, onChange }: NumberFieldProps) {
+  const id = useId()
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="font-medium text-slate-700">
+        {label}
+      </label>
+      <input
+        id={id}
+        type="number"
+        min={1}
+        value={value === null || Number.isNaN(value) ? '' : value}
+        disabled={disabled}
+        aria-invalid={invalid}
+        onChange={(e) => onChange(e.target.value)}
+        className={cn(inputClass, 'w-32 disabled:bg-slate-50 disabled:text-slate-400')}
+      />
+    </div>
   )
 }
 

@@ -33,7 +33,8 @@
 | API stili | **Minimal APIs** + `MapGroup` per feature | Feature-qovluq strukturuna təbii uyğun, controller-dən az boilerplate |
 | ORM | EF Core 9 + `Microsoft.EntityFrameworkCore.SqlServer` | Tələb |
 | Database | **SQL Server 2022** | Tələb; dev-də lokal instance, prod-da SQL Server / Azure SQL |
-| Auth | **ASP.NET Core Identity**, **cookie** auth | SPA eyni origin-dən xidmət olunur → HttpOnly cookie localStorage-dakı JWT-dən təhlükəsizdir; refresh token məntiqi lazım deyil |
+| Auth | **ASP.NET Core Identity + JWT** (`Microsoft.AspNetCore.Authentication.JwtBearer`) | İstifadəçi tələbi. HS256, 60 dəq access token, issuer/audience/lifetime yoxlanılır; SecurityStamp claim-i ilə logout/şifrə bərpası köhnə tokenləri ləğv edir. Refresh token yoxdur (müddət bitəndə yenidən giriş) |
+| Email | `System.Net.Mail` SMTP, arxa plan növbəsi (`EmailQueue`) | Əlavə paket yoxdur; dev-də `Smtp:PickupDirectory` ilə `.eml` faylı |
 | Validation | DataAnnotations + kiçik `ValidationFilter<T>` endpoint filter (`Validator.TryValidateObject`) + servisdə domen qaydaları | .NET 9-da Minimal API built-in validation yoxdur; FluentValidation əlavə dependency-dir, MVP üçün lazım deyil |
 | Mapping | Əl ilə (`Select` projection) | AutoMapper lazımsızdır; projection SQL-i də optimallaşdırır |
 | Background iş | `Channel<Guid>` + `BackgroundService` | Redis/RabbitMQ lazım deyil; restart-da `Pending` sənədlər yenidən növbəyə qoyulur |
@@ -97,8 +98,9 @@ Hər feature qovluğu: `XxxEndpoints.cs` (route-lar), `XxxService.cs` (məntiq),
 | Təhlükəsiz emal | Parsing ayrıca task-da, timeout (60 s) və səhifə limiti ilə; PdfPig JavaScript/embedded fayl icra etmir |
 | Input validation | DTO-larda uzunluq limitləri (sual ≤ 4000, variant ≤ 1000 simvol), 2–6 variant, tam olaraq 0 və ya 1 düzgün variant |
 | Authorization | Bütün route qrupları `RequireAuthorization()`; ownership yoxlaması servisdə; imtahan yalnız sahibi tərəfindən oxunur (başqası üçün 404) |
-| Cookie | `HttpOnly`, `Secure`, `SameSite=Strict` → CSRF riski aradan qalxır (SPA eyni origin) |
-| Rate limiting | Built-in `RateLimiter`: login 10/dəq, upload 10/saat per user |
+| Token | JWT `Authorization` header-də; brauzer onu avtomatik göndərmir → CSRF tətbiq olunmur. Signing key yalnız user-secrets / `Jwt__SigningKey` env-də (≥ 32 bayt, yoxdursa tətbiq başlamır). Frontend tokeni `localStorage`-da saxlayır (XSS riskinə qarşı: React escaping, `dangerouslySetInnerHTML` yoxdur) |
+| Şifrə bərpası | Eyni cavab (hesab aşkarlanmır), email arxa planda göndərilir (cavab vaxtı da fərqlənmir), link 30 dəq + birdəfəlik, link URL-i yalnız konfiqurasiyadan (Host header injection yoxdur) |
+| Rate limiting | Built-in `RateLimiter` per IP: login/register 10/dəq, forgot/reset password 5/15 dəq |
 | Xəta idarəsi | Global exception handler → ProblemDetails; stack trace yalnız Development-də |
 | Şifrə | Identity default hashing, min 8 simvol; lockout 5 uğursuz cəhddən sonra |
 | Məlumat sızması | İmtahan DTO-larında `IsCorrect` sahəsi yoxdur (ayrıca DTO tipi, test ilə təmin olunur) |

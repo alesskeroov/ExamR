@@ -14,7 +14,8 @@ ID-lər digər sənədlərdə və roadmap-da istinad üçün istifadə olunur.
 ## Funksional tələblər
 
 ### Auth (AUTH)
-- **AUTH-1** Email + şifrə ilə qeydiyyat, giriş, çıxış.
+- **AUTH-1** Email + şifrə ilə qeydiyyat, giriş, çıxış (Identity + JWT access token).
+- **AUTH-4** "Şifrəmi unutdum": emailə birdəfəlik, 30 dəqiqəlik reset linki; email mövcud olsa da, olmasa da eyni cavab.
 - **AUTH-2** Bütün API endpoint-ləri (auth istisna) autentifikasiya tələb edir.
 - **AUTH-3** Redaktə hüququ: `document.UploadedByUserId == currentUser || Admin`.
 
@@ -41,7 +42,7 @@ ID-lər digər sənədlərdə və roadmap-da istinad üçün istifadə olunur.
 - **QB-4** Sualı silmək.
 
 ### İmtahan (EX)
-- **EX-1** Sual sayını istifadəçi seçir (1–200); mənbə — konkret PDF və ya bazadakı bütün PDF-lər.
+- **EX-1** Mənbə — **bir PDF** və onun orijinal sual nömrələri üzrə aralıq (məs. 150–200); sual sayını istifadəçi seçir (1–200, aralıqdakı unikal sual sayından çox olmamaqla). Bütün PDF-lərdən qarışıq seçim yoxdur.
 - **EX-1a** Cavab rejimi: düzgün cavab **hər sualdan sonra** (`Immediate`; cavab verildikdən sonra dəyişdirilə bilməz) və ya **imtahan bitdikdə** (`AtEnd`; cavablar sona qədər dəyişdirilə bilər).
 - **EX-2** Suallar təsadüfi seçilir, imtahan daxilində təkrar yoxdur (dublikat hash nəzərə alınır).
 - **EX-3** Kifayət qədər sual yoxdursa, imtahan yaradılmır və mövcud say göstərilir.

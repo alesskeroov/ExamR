@@ -48,11 +48,19 @@ export interface ExamResultQuestion {
   outcome: ExamOutcome
 }
 
+/** Source PDF and question range. documentName is null if the PDF was deleted; range is null on older exams. */
+export interface ExamSource {
+  documentId: string | null
+  documentName: string | null
+  rangeFrom: number | null
+  rangeTo: number | null
+}
+
 export interface ExamResult {
   id: string
   questionCount: number
   revealMode: RevealMode
-  documentIds: string[]
+  source: ExamSource
   completionReason: CompletionReason
   correct: number
   incorrect: number
@@ -70,7 +78,7 @@ export interface ExamSummary {
   status: ExamStatus
   questionCount: number
   revealMode: RevealMode
-  sourceDocumentCount: number
+  source: ExamSource
   startedAt: string
   expiresAt: string
   completedAt: string | null
@@ -85,21 +93,32 @@ export interface ExamSummary {
 export interface ExamAvailability {
   available: number
   ungraded: number
+  /** First and last original question number of the PDF. */
+  firstNumber: number | null
+  lastNumber: number | null
   maxQuestions: number
   minutesPerQuestion: number
 }
 
 export interface CreateExamRequest {
   questionCount: number
-  documentIds: string[]
+  documentId: string
+  rangeFrom: number
+  rangeTo: number
   revealMode: RevealMode
 }
 
-export function useExamAvailability(documentIds: string[]) {
-  const query = documentIds.map((id) => `documentIds=${id}`).join('&')
+/** Question-number span of a PDF and how many questions a range of it holds (no range = whole PDF). */
+export function useExamAvailability(documentId: string, range?: { from: number; to: number }) {
+  const params = new URLSearchParams({ documentId })
+  if (range) {
+    params.set('from', String(range.from))
+    params.set('to', String(range.to))
+  }
   return useQuery({
-    queryKey: queryKeys.exams.availability(documentIds),
-    queryFn: () => api.get<ExamAvailability>(`/exams/availability${query ? `?${query}` : ''}`),
+    queryKey: queryKeys.exams.availability(documentId, range?.from, range?.to),
+    queryFn: () => api.get<ExamAvailability>(`/exams/availability?${params}`),
+    enabled: documentId !== '',
     placeholderData: keepPreviousData,
   })
 }

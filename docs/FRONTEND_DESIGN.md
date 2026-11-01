@@ -51,7 +51,7 @@ Qayda: hər feature öz `api.ts` (fetch funksiyaları + query hook-ları) faylı
 | `/exams/:id?q=` | İmtahan sessiyası | **ExamLayout** (sidebar yox, diqqət rejimi) |
 | `/exams/:id/result` | Nəticə | AppLayout |
 
-`RequireAuth` `/api/auth/me` ilə yoxlayır; 401 qlobal olaraq `/login?returnTo=`-ya yönləndirir.
+`RequireAuth` token yoxdursa və ya `/api/auth/me` 401 qaytarırsa giriş ekranını göstərir (Daxil ol / Qeydiyyat / Şifrəmi unutdum). `/reset-password?uid=&token=` — açıq route (emaildəki link). JWT `localStorage`-da; istənilən 401 tokeni silir.
 
 ## 4. Səhifələr
 
@@ -61,7 +61,7 @@ Qayda: hər feature öz `api.ts` (fetch funksiyaları + query hook-ları) faylı
 
 **Question Bank** — filtr paneli: sənəd (select), status (Hamısı / Unverified / Avtomatik / Təsdiqlənmiş), "Yalnız xəbərdarlıqlılar", axtarış (300 ms debounce). Cədvəl: №, mətn (2 sətir), sənəd, status badge, əməliyyatlar. Redaktə sağdan açılan **Sheet**-də: sual mətni, variantlar (əlavə / sil / yuxarı-aşağı), düzgün cavab radio-su, "Saxla". AutoDetected sual üçün bir kliklə "Təsdiqlə". `canEdit = false` olanda redaktə gizlədilir. Mobil: cədvəl kart siyahısına çevrilir.
 
-**Exam Setup** — mənbə (Bütün PDF-lər / Konkret PDF + seçim), sual sayı (10/20/30/50 + istənilən rəqəm), cavab rejimi (sonda / hər sualdan sonra). Canlı xülasə (`/api/exams/availability`): mövcud unikal sual, vaxt (1 sual = 1 dəq), ballanmayacaq suallar. Kifayət qədər sual yoxdursa "Başla" deaktivdir və səbəb göstərilir.
+**Exam Setup** — PDF (məcburi), sual aralığı (başlanğıc/son nömrə, default PDF-in tam aralığı; `from ≤ to` və PDF nömrələri daxilində yoxlanılır), sual sayı (10/20/30/50 + istənilən rəqəm), cavab rejimi (sonda / hər sualdan sonra). Canlı xülasə (`/api/exams/availability`): mövcud unikal sual, vaxt (1 sual = 1 dəq), ballanmayacaq suallar. Kifayət qədər sual yoxdursa "Başla" deaktivdir və səbəb göstərilir.
 
 **Exam Session** (ExamLayout):
 ```

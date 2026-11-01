@@ -186,6 +186,12 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.Property<short>("QuestionCount")
                         .HasColumnType("smallint");
 
+                    b.Property<int?>("RangeFrom")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("RangeTo")
+                        .HasColumnType("int");
+
                     b.Property<string>("RevealMode")
                         .IsRequired()
                         .HasMaxLength(20)

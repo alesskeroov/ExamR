@@ -1,3 +1,5 @@
+import { getToken } from './auth-token'
+
 // Thin fetch wrapper. All requests are same-origin (/api via Vite proxy in dev, served by the API in prod).
 
 export interface ProblemDetails {
@@ -14,7 +16,10 @@ export class ApiError extends Error {
   readonly problem?: ProblemDetails
 
   constructor(status: number, problem?: ProblemDetails) {
-    super(problem?.detail ?? problem?.title ?? `Sorğu uğursuz oldu (${status})`)
+    super(
+      problem?.detail ??
+        (status === 429 ? 'Çox sayda cəhd. Bir az sonra yenidən yoxlayın.' : (problem?.title ?? `Sorğu uğursuz oldu (${status})`)),
+    )
     this.name = 'ApiError'
     this.status = status
     this.problem = problem
@@ -26,11 +31,12 @@ type RequestOptions = Omit<RequestInit, 'body'> & { body?: unknown }
 export async function apiRequest<T>(path: string, { body, headers, ...init }: RequestOptions = {}): Promise<T> {
   const isFormData = body instanceof FormData
 
+  const token = getToken()
   const response = await fetch(`/api${path}`, {
-    credentials: 'same-origin',
     ...init,
     headers: {
       Accept: 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(body !== undefined && !isFormData ? { 'Content-Type': 'application/json' } : {}),
       ...headers,
     },
@@ -53,6 +59,8 @@ export function uploadFile<T>(path: string, file: File, onProgress?: (percent: n
     const xhr = new XMLHttpRequest()
     xhr.open('POST', `/api${path}`)
     xhr.setRequestHeader('Accept', 'application/json')
+    const token = getToken()
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100))
     }

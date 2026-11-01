@@ -94,7 +94,8 @@ Constraint-lər:
 | UserId | uniqueidentifier FK → AspNetUsers | `CASCADE` |
 | QuestionCount | smallint | CHECK BETWEEN 1 AND 200 |
 | RevealMode | varchar(20) | `Immediate / AtEnd` |
-| SourceDocumentIds | nvarchar(max), JSON array | `List<Guid>` primitive collection; "yenidən ver" üçün; FK deyil (sənəd silinə bilər) |
+| RangeFrom, RangeTo | int null | PDF-dəki orijinal sual nömrələri aralığı (`Questions.SourceNumber`); köhnə imtahanlarda null |
+| SourceDocumentIds | nvarchar(max), JSON array | Bir PDF (`[id]`); köhnə "bütün PDF-lər" imtahanlarında boş; "yenidən ver" üçün; FK deyil (sənəd silinə bilər) |
 | Status | varchar(20) | `InProgress / Completed` |
 | CompletionReason | varchar(20) null | `Submitted / TimeExpired` |
 | StartedAt, ExpiresAt, CompletedAt | datetimeoffset(3) | |

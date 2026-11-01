@@ -1,4 +1,5 @@
 import { createBrowserRouter } from 'react-router'
+import { ResetPasswordPage } from '../features/auth/ResetPasswordPage'
 import { DashboardPage } from '../features/dashboard/DashboardPage'
 import { UploadPage } from '../features/documents/UploadPage'
 import { ExamHistoryPage } from '../features/exams/ExamHistoryPage'
@@ -26,6 +27,11 @@ export const router = createBrowserRouter([
       { path: 'exams/:id/result', element: <ExamResultPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
+  },
+  {
+    // Public: opened from the password-reset email.
+    path: 'reset-password',
+    element: <ResetPasswordPage />,
   },
   {
     // Focused exam screen: no sidebar.

@@ -15,7 +15,7 @@ Cədvəllər: [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md#exams). Endpoint-lər: [AP
 
 ## 2. İmtahan yaradılması
 
-1. Validasiya: `questionCount` 1..200, `documentIds` boş (= bütün PDF-lər) və ya 1..20 mövcud sənəd, `revealMode` `Immediate`/`AtEnd`.
+1. Validasiya: `documentId` mövcud, `1 ≤ rangeFrom ≤ rangeTo`, `questionCount` 1..200, `revealMode` `Immediate`/`AtEnd`. Namizədlər: `DocumentId = @doc AND SourceNumber BETWEEN @from AND @to` (orijinal PDF nömrələri). `Exams.SourceDocumentIds = [doc]`, `RangeFrom/RangeTo` saxlanılır.
 2. İstifadəçinin vaxtı bitmiş aktiv imtahanı varsa, avtomatik tamamlanır; vaxtı bitməmiş aktiv imtahan varsa → `409` (frontend "Davam et" təklif edir).
 3. **Namizədlər (yalnız ID + hash):**
    ```sql
@@ -84,7 +84,7 @@ scorePercent = gradable > 0 ? round(correct / gradable × 100, 2) : null
 
 ## 6. Yenidən imtahan
 
-Ayrıca endpoint yoxdur: frontend nəticədəki `questionCount`, `documentIds`, `revealMode` ilə `POST /api/exams` çağırır (§2, yeni təsadüfi seçim).
+Ayrıca endpoint yoxdur: frontend nəticədəki `questionCount`, `source` (PDF + aralıq), `revealMode` ilə `POST /api/exams` çağırır (§2, yeni təsadüfi seçim).
 
 ## 7. Testlər
 

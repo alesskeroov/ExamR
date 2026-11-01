@@ -7,9 +7,15 @@ public sealed class CreateExamRequest
     [Range(1, ExamOptions.HardMaxQuestions)]
     public int QuestionCount { get; init; }
 
-    /// <summary>Empty or null: questions from all documents.</summary>
-    [MaxLength(20)]
-    public List<Guid>? DocumentIds { get; init; }
+    [Required]
+    public Guid? DocumentId { get; init; }
+
+    /// <summary>First and last original question number of the PDF to draw from (inclusive).</summary>
+    [Range(1, 100_000)]
+    public int RangeFrom { get; init; }
+
+    [Range(1, 100_000)]
+    public int RangeTo { get; init; }
 
     public RevealMode RevealMode { get; init; } = RevealMode.AtEnd;
 }
@@ -52,11 +58,14 @@ public sealed record ExamResultQuestionDto(
     Guid? CorrectOptionId,
     ExamOutcome Outcome);
 
+/// <summary>Where the exam's questions came from. DocumentName is null when the PDF was deleted.</summary>
+public sealed record ExamSourceDto(Guid? DocumentId, string? DocumentName, int? RangeFrom, int? RangeTo);
+
 public sealed record ExamResultDto(
     Guid Id,
     int QuestionCount,
     RevealMode RevealMode,
-    IReadOnlyList<Guid> DocumentIds,
+    ExamSourceDto Source,
     CompletionReason CompletionReason,
     int Correct,
     int Incorrect,
@@ -73,7 +82,7 @@ public sealed record ExamSummaryDto(
     ExamStatus Status,
     int QuestionCount,
     RevealMode RevealMode,
-    int SourceDocumentCount,
+    ExamSourceDto Source,
     DateTimeOffset StartedAt,
     DateTimeOffset ExpiresAt,
     DateTimeOffset? CompletedAt,
@@ -84,6 +93,8 @@ public sealed record ExamSummaryDto(
     int? Ungraded,
     decimal? ScorePercent);
 
-public sealed record ExamAvailabilityDto(int Available, int Ungraded, int MaxQuestions, double MinutesPerQuestion);
+/// <summary>Questions available in a PDF range; FirstNumber/LastNumber are the PDF's own question numbers.</summary>
+public sealed record ExamAvailabilityDto(
+    int Available, int Ungraded, int? FirstNumber, int? LastNumber, int MaxQuestions, double MinutesPerQuestion);
 
 public sealed record ActiveExamDto(Guid Id);

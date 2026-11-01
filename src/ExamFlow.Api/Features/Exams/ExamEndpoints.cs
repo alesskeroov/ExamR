@@ -24,14 +24,32 @@ public static class ExamEndpoints
         group.MapGet("/{id:guid}/result", Result);
     }
 
-    /// <summary>How many distinct questions can be drawn from the given documents (none = all).</summary>
+    /// <summary>
+    /// The PDF's question-number span and how many distinct questions a range of it holds.
+    /// Without from/to the whole PDF is counted.
+    /// </summary>
     private static async Task<IResult> Availability(
-        [Microsoft.AspNetCore.Mvc.FromQuery] Guid[]? documentIds, AppDbContext db, IOptions<ExamOptions> options, CancellationToken ct)
+        Guid documentId, AppDbContext db, IOptions<ExamOptions> options, CancellationToken ct, int? from = null, int? to = null)
     {
-        var candidates = await Candidates(db, documentIds ?? [], ct);
-        var ungraded = ExamEngine.CountDistinct(candidates.Where(c => !c.IsGradable));
+        if (!await db.Documents.AnyAsync(d => d.Id == documentId, ct))
+        {
+            return Problem(StatusCodes.Status404NotFound, "PDF tapılmadı.");
+        }
+
+        var numbers = await db.Questions.AsNoTracking()
+            .Where(q => q.DocumentId == documentId)
+            .GroupBy(_ => 1)
+            .Select(g => new { First = g.Min(q => q.SourceNumber), Last = g.Max(q => q.SourceNumber) })
+            .FirstOrDefaultAsync(ct);
+
+        var candidates = await Candidates(db, documentId, from ?? int.MinValue, to ?? int.MaxValue, ct);
         return TypedResults.Ok(new ExamAvailabilityDto(
-            ExamEngine.CountDistinct(candidates), ungraded, options.Value.MaxQuestions, options.Value.MinutesPerQuestion));
+            ExamEngine.CountDistinct(candidates),
+            ExamEngine.CountDistinct(candidates.Where(c => !c.IsGradable)),
+            numbers?.First,
+            numbers?.Last,
+            options.Value.MaxQuestions,
+            options.Value.MinutesPerQuestion));
     }
 
     private static async Task<IResult> Create(
@@ -47,8 +65,13 @@ public static class ExamEndpoints
             return Problem(StatusCodes.Status400BadRequest, $"Sual sayı {settings.MaxQuestions}-dən çox ola bilməz.");
         }
 
-        var documentIds = request.DocumentIds?.Distinct().ToList() ?? [];
-        if (documentIds.Count > 0 && await db.Documents.CountAsync(d => documentIds.Contains(d.Id), ct) != documentIds.Count)
+        var documentId = request.DocumentId!.Value;
+        if (request.RangeFrom > request.RangeTo)
+        {
+            return Problem(StatusCodes.Status400BadRequest, "Başlanğıc sual nömrəsi son nömrədən böyük ola bilməz.");
+        }
+
+        if (!await db.Documents.AnyAsync(d => d.Id == documentId, ct))
         {
             return Problem(StatusCodes.Status400BadRequest, "Seçilmiş PDF tapılmadı.");
         }
@@ -59,12 +82,12 @@ public static class ExamEndpoints
             return Problem(StatusCodes.Status409Conflict, "Davam edən imtahanınız var.", new() { ["activeExamId"] = active.Id });
         }
 
-        var candidates = await Candidates(db, documentIds, ct);
+        var candidates = await Candidates(db, documentId, request.RangeFrom, request.RangeTo, ct);
         var available = ExamEngine.CountDistinct(candidates);
         if (available < request.QuestionCount)
         {
             return Problem(StatusCodes.Status422UnprocessableEntity,
-                $"Seçilmiş mənbədə cəmi {available} unikal sual var.", new() { ["available"] = available });
+                $"{request.RangeFrom}–{request.RangeTo} aralığında cəmi {available} unikal sual var.", new() { ["available"] = available });
         }
 
         var pickedIds = ExamEngine.PickQuestions(candidates, request.QuestionCount, Random.Shared);
@@ -78,7 +101,9 @@ public static class ExamEndpoints
             UserId = userId,
             QuestionCount = (short)request.QuestionCount,
             RevealMode = request.RevealMode,
-            SourceDocumentIds = documentIds,
+            SourceDocumentIds = [documentId],
+            RangeFrom = request.RangeFrom,
+            RangeTo = request.RangeTo,
             Status = ExamStatus.InProgress,
             StartedAt = now,
             ExpiresAt = now + settings.DurationFor(request.QuestionCount),
@@ -112,15 +137,17 @@ public static class ExamEndpoints
         var (pageNumber, size) = Paging.Normalize(page, pageSize);
         var query = db.Exams.AsNoTracking().Where(e => e.UserId == userId);
         var total = await query.CountAsync(ct);
-        var items = await query
+        var exams = await query
             .OrderByDescending(e => e.StartedAt)
             .Skip((pageNumber - 1) * size)
             .Take(size)
-            .Select(e => new ExamSummaryDto(
-                e.Id, e.Status, e.QuestionCount, e.RevealMode, e.SourceDocumentIds.Count,
+            .ToListAsync(ct);
+        var names = await DocumentNames(db, exams, ct);
+        var items = exams.Select(e => new ExamSummaryDto(
+                e.Id, e.Status, e.QuestionCount, e.RevealMode, Source(e, names),
                 e.StartedAt, e.ExpiresAt, e.CompletedAt, e.CompletionReason,
                 e.CorrectCount, e.IncorrectCount, e.UnansweredCount, e.UngradedCount, e.ScorePercent))
-            .ToListAsync(ct);
+            .ToList();
 
         return TypedResults.Ok(new PagedResult<ExamSummaryDto>(items, pageNumber, size, total));
     }
@@ -210,7 +237,8 @@ public static class ExamEndpoints
             await db.SaveChangesAsync(ct);
         }
 
-        return TypedResults.Ok(ToResult(exam)); // Idempotent: a finished exam returns its stored result.
+        // Idempotent: a finished exam returns its stored result.
+        return TypedResults.Ok(ToResult(exam, await DocumentNames(db, [exam], ct)));
     }
 
     private static async Task<IResult> Result(
@@ -224,21 +252,30 @@ public static class ExamEndpoints
 
         await FinalizeIfExpiredAsync(db, exam, clock.GetUtcNow(), options.Value, ct);
         return exam.Status == ExamStatus.Completed
-            ? TypedResults.Ok(ToResult(exam))
+            ? TypedResults.Ok(ToResult(exam, await DocumentNames(db, [exam], ct)))
             : Problem(StatusCodes.Status409Conflict, "İmtahan hələ bitməyib.");
     }
 
-    private static async Task<List<ExamCandidate>> Candidates(AppDbContext db, IReadOnlyCollection<Guid> documentIds, CancellationToken ct)
-    {
-        var query = db.Questions.AsNoTracking().Where(q => q.Options.Count >= 2);
-        if (documentIds.Count > 0)
-        {
-            query = query.Where(q => documentIds.Contains(q.DocumentId));
-        }
-
-        return await query
+    /// <summary>Usable questions of one PDF whose original number lies in [from, to].</summary>
+    private static Task<List<ExamCandidate>> Candidates(AppDbContext db, Guid documentId, int from, int to, CancellationToken ct) =>
+        db.Questions.AsNoTracking()
+            .Where(q => q.DocumentId == documentId && q.SourceNumber >= from && q.SourceNumber <= to && q.Options.Count >= 2)
             .Select(q => new ExamCandidate(q.Id, q.ContentHash, q.VerificationStatus != VerificationStatus.Unverified))
             .ToListAsync(ct);
+
+    /// <summary>File names of the exams' source PDFs (deleted PDFs are simply missing).</summary>
+    private static async Task<Dictionary<Guid, string>> DocumentNames(AppDbContext db, IEnumerable<Exam> exams, CancellationToken ct)
+    {
+        var ids = exams.SelectMany(e => e.SourceDocumentIds).Distinct().ToList();
+        return ids.Count == 0
+            ? []
+            : await db.Documents.AsNoTracking().Where(d => ids.Contains(d.Id)).ToDictionaryAsync(d => d.Id, d => d.OriginalFileName, ct);
+    }
+
+    private static ExamSourceDto Source(Exam exam, IReadOnlyDictionary<Guid, string> names)
+    {
+        Guid? documentId = exam.SourceDocumentIds.Count == 1 ? exam.SourceDocumentIds[0] : null;
+        return new ExamSourceDto(documentId, documentId is { } id ? names.GetValueOrDefault(id) : null, exam.RangeFrom, exam.RangeTo);
     }
 
     /// <summary>Copies the question into the exam with its options in a new random order.</summary>
@@ -298,11 +335,11 @@ public static class ExamEndpoints
             .Select(q => new ExamSessionQuestionDto(q.Id, q.Position, q.Snapshot.Text, Options(q), q.SelectedOptionId, RevealFor(exam, q)))
             .ToList());
 
-    private static ExamResultDto ToResult(Exam exam)
+    private static ExamResultDto ToResult(Exam exam, IReadOnlyDictionary<Guid, string> documentNames)
     {
         var completedAt = exam.CompletedAt ?? exam.ExpiresAt;
         return new ExamResultDto(
-            exam.Id, exam.QuestionCount, exam.RevealMode, exam.SourceDocumentIds, exam.CompletionReason ?? CompletionReason.Submitted,
+            exam.Id, exam.QuestionCount, exam.RevealMode, Source(exam, documentNames), exam.CompletionReason ?? CompletionReason.Submitted,
             exam.CorrectCount ?? 0, exam.IncorrectCount ?? 0, exam.UnansweredCount ?? 0, exam.UngradedCount ?? 0, exam.ScorePercent,
             exam.StartedAt, completedAt, (int)Math.Round((completedAt - exam.StartedAt).TotalSeconds),
             exam.Questions.OrderBy(q => q.Position)

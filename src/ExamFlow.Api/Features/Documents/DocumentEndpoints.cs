@@ -19,7 +19,7 @@ public static class DocumentEndpoints
     {
         var group = api.MapGroup("/documents").RequireAuthorization();
 
-        // Auth cookie is SameSite=Strict, which blocks cross-site form posts; no antiforgery token needed.
+        // Auth is a bearer token that browsers never attach automatically, so CSRF does not apply.
         group.MapPost("/", Upload).DisableAntiforgery();
         group.MapGet("/", List);
         group.MapGet("/{id:guid}", Get);

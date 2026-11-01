@@ -12,7 +12,7 @@ export const queryKeys = {
   exams: {
     all: ['exams'] as const,
     active: ['exams', 'active'] as const,
-    availability: (documentIds: string[]) => ['exams', 'availability', ...documentIds] as const,
+    availability: (documentId: string, from?: number, to?: number) => ['exams', 'availability', documentId, from, to] as const,
     history: (page: number) => ['exams', 'history', page] as const,
     session: (id: string) => ['exams', 'session', id] as const,
     result: (id: string) => ['exams', 'result', id] as const,

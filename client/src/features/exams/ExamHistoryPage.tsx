@@ -9,6 +9,7 @@ import { StatusBadge } from '../../components/common/StatusBadge'
 import { formatDate, formatNumber } from '../../lib/format'
 import { cn } from '../../lib/utils'
 import { useExamHistory, type ExamSummary } from './api'
+import { sourceName, sourceRange } from './examSource'
 
 export function ExamHistoryPage() {
   const [page, setPage] = useState(1)
@@ -76,8 +77,12 @@ function HistoryRow({ exam }: { exam: ExamSummary }) {
         {inProgress ? '…' : score === null ? '—' : `${formatNumber(score)}%`}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="font-medium">
-          {exam.questionCount} sual · {exam.sourceDocumentCount === 0 ? 'Bütün PDF-lər' : `${exam.sourceDocumentCount} PDF`}
+        <p className="truncate font-medium" title={sourceName(exam.source)}>
+          {sourceName(exam.source)}
+        </p>
+        <p className="text-slate-700">
+          {sourceRange(exam.source) && `Suallar ${sourceRange(exam.source)} · `}
+          {exam.questionCount} sual
         </p>
         <p className="text-slate-500">
           {formatDate(exam.startedAt)} · {exam.revealMode === 'Immediate' ? 'cavablar dərhal' : 'cavablar sonda'}
