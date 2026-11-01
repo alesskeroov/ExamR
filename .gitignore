@@ -438,3 +438,7 @@ App_Data/
 
 # Real exam PDFs used as local parser samples are not published
 samples/*.pdf
+
+# Internal notes and docs stay local (may contain project details)
+*.md
+!/README.md
