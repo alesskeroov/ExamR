@@ -2,10 +2,9 @@ import { CheckCircle2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { Button } from '../../components/common/Button'
-import { FormField } from '../../components/common/FormField'
 import { fieldErrors } from '../../lib/form-errors'
 import { useResetPassword } from './api'
-import { AuthShell } from './AuthPage'
+import { AuthPasswordField, AuthShell } from './AuthPage'
 
 /** Opened from the emailed link: /reset-password?uid=…&token=… */
 export function ResetPasswordPage() {
@@ -31,7 +30,7 @@ export function ResetPasswordPage() {
 
   return (
     <AuthShell>
-      <h2 className="text-lg font-semibold">Yeni şifrə təyin et</h2>
+      <h2 className="text-2xl font-semibold tracking-tight">Yeni şifrə təyin et</h2>
 
       {!userId || !token ? (
         <p role="alert" className="mt-4 rounded-lg bg-rose-50 px-3 py-2 text-rose-700">
@@ -49,7 +48,7 @@ export function ResetPasswordPage() {
         </div>
       ) : (
         <form onSubmit={submit} className="mt-4 flex flex-col gap-4" noValidate>
-          <FormField
+          <AuthPasswordField
             label="Yeni şifrə"
             type="password"
             autoComplete="new-password"
@@ -58,7 +57,7 @@ export function ResetPasswordPage() {
             error={errors.field('password') ?? errors.field('newPassword')}
             required
           />
-          <FormField
+          <AuthPasswordField
             label="Yeni şifrə (təkrar)"
             type="password"
             autoComplete="new-password"
@@ -76,7 +75,7 @@ export function ResetPasswordPage() {
               </Link>
             </p>
           )}
-          <Button type="submit" loading={reset.isPending} className="w-full">
+          <Button type="submit" loading={reset.isPending} className="auth-submit w-full">
             Şifrəni yenilə
           </Button>
         </form>

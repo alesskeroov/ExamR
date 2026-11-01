@@ -39,7 +39,7 @@ export function FileDropzone({ accept, disabled, hint, onFile }: FileDropzonePro
         <FileUp className="size-6" aria-hidden />
       </div>
       <p className="font-medium">
-        {dragging ? 'Faylı buraxın' : 'PDF faylını bura sürüşdürün və ya'}{' '}
+        {dragging ? 'Faylı buraxın' : 'Faylı bura sürüşdürün və ya'}{' '}
         {!dragging && (
           <button
             type="button"

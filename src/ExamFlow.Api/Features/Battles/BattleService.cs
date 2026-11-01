@@ -1,5 +1,5 @@
+using ExamFlow.Api.Features.Documents;
 using System.Collections.Concurrent;
-using System.Security.Cryptography;
 using ExamFlow.Api.Features.Exams;
 using ExamFlow.Api.Infrastructure.Data;
 using Microsoft.AspNetCore.SignalR;
@@ -12,10 +12,11 @@ namespace ExamFlow.Api.Features.Battles;
 /// The server alone decides timing, accepts answers and computes points; correct answers are only
 /// broadcast after a question has closed.
 /// </summary>
-public sealed class BattleService(
+public sealed partial class BattleService(
     IHubContext<BattleHub, IBattleClient> hub,
     IServiceScopeFactory scopes,
     TimeProvider clock,
+    IHostApplicationLifetime lifetime,
     ILogger<BattleService> logger)
 {
     public const int MaxQuestions = 50;
@@ -29,30 +30,42 @@ public sealed class BattleService(
     private static readonly TimeSpan ChatWindow = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan RevealDuration = TimeSpan.FromSeconds(6);
     private static readonly TimeSpan AnswerGrace = TimeSpan.FromMilliseconds(500);
-    private static readonly TimeSpan IdleLobbyLifetime = TimeSpan.FromMinutes(15);
     private static readonly TimeSpan FinishedLifetime = TimeSpan.FromMinutes(30);
-    private static readonly TimeSpan MaxRoomLifetime = TimeSpan.FromHours(4);
 
     private readonly ConcurrentDictionary<string, BattleRoom> _rooms = new(StringComparer.OrdinalIgnoreCase);
 
-    public BattleRoom? FindActiveHostedRoom(Guid hostId) =>
-        _rooms.Values.FirstOrDefault(r => r.HostUserId == hostId && r.IsActive);
-
-    public string Create(Guid hostId, BattleSettings settings)
+    public async Task<BattleLobbyDto?> InvitationLobbyAsync(string code, Guid userId, bool requireMember, CancellationToken ct)
     {
-        while (true)
+        var room = await FindStoredAsync(code, ct);
+        if (room is null) return null;
+        await room.Gate.WaitAsync(ct);
+        try
         {
-            var code = RandomNumberGenerator.GetString(CodeAlphabet, CodeLength);
-            if (_rooms.TryAdd(code, new BattleRoom(code, hostId, settings, clock.GetUtcNow())))
-            {
-                return code;
-            }
+            if (room.Status != BattleStatus.Lobby || room.Kicked.Contains(userId)) return null;
+            if (requireMember && !room.Participants.ContainsKey(userId) && room.HostUserId != userId) return null;
+            if (!room.Participants.ContainsKey(userId) && room.Participants.Count >= BattleRoom.MaxParticipants) return null;
+            return new BattleLobbyDto(room.Code, room.HostUserId,
+                room.Participants.GetValueOrDefault(room.HostUserId)?.DisplayName ?? "Otaq sahibi",
+                room.Settings.DocumentName, room.Settings.QuestionCount);
         }
+        finally { room.Gate.Release(); }
     }
 
-    public async Task<BattleStateDto> JoinAsync(string code, Guid userId, string displayName, string connectionId)
+    public async Task<IReadOnlyList<BattleLobbyDto>> InvitableLobbiesAsync(Guid userId, CancellationToken ct)
     {
-        var room = Find(code);
+        var lobbies = new List<BattleLobbyDto>();
+        using var scope = scopes.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var codes = await db.StoredBattleRooms.AsNoTracking().Where(r => r.Status == RoomStatus.Waiting && !r.IsClosed
+            && r.Members.Any(m => m.UserId == userId && !m.IsKicked)).Select(r => r.Code).ToListAsync(ct);
+        foreach (var code in codes)
+            if (await InvitationLobbyAsync(code, userId, requireMember: true, ct) is { } lobby) lobbies.Add(lobby);
+        return lobbies;
+    }
+
+    public async Task<BattleStateDto> JoinAsync(string code, Guid userId, string displayName, string connectionId, string? avatarUrl = null)
+    {
+        var room = await RequireRoomAsync(code);
         // Join the group first so no broadcast is missed between the snapshot and the subscription.
         await hub.Groups.AddToGroupAsync(connectionId, room.Group);
 
@@ -82,12 +95,15 @@ public sealed class BattleService(
                     throw new HubException($"Otaq doludur ({BattleRoom.MaxParticipants} nəfər).");
                 }
 
-                participant = new BattleParticipant(userId, displayName, clock.GetUtcNow());
+                participant = new BattleParticipant(userId, displayName, clock.GetUtcNow(), avatarUrl);
                 room.Participants[userId] = participant;
             }
+            participant.SetProfile(displayName, avatarUrl);
 
             participant.Connections.Add(connectionId);
+            room.ConnectionRevision++;
             room.LastActivityAt = clock.GetUtcNow();
+            await PersistAsync(room);
             mine = Snapshot(room, participant, includeMessages: true);
             everyone = Snapshot(room);
         }
@@ -105,14 +121,12 @@ public sealed class BattleService(
         return mine;
     }
 
-    /// <summary>Leaving the lobby removes the player (the host leaving closes the room); during a game the player just goes offline.</summary>
+    /// <summary>Detach this connection, then promote a connected host or delete an empty room.</summary>
     public async Task LeaveAsync(string code, Guid userId, string connectionId)
     {
-        var room = Find(code);
-        BattleStateDto? state = null;
-        var closed = false;
-        string[] connections = [connectionId];
-
+        var room = await RequireRoomAsync(code);
+        BattleStateDto state;
+        bool deleted;
         await room.Gate.WaitAsync();
         try
         {
@@ -121,22 +135,10 @@ public sealed class BattleService(
                 return;
             }
 
-            if (room.Status == BattleStatus.Lobby)
-            {
-                connections = [.. participant.Connections];
-                room.Participants.Remove(userId);
-                closed = userId == room.HostUserId;
-                if (closed)
-                {
-                    room.Status = BattleStatus.Closed;
-                }
-            }
-            else
-            {
-                participant.Connections.Remove(connectionId);
-            }
-
+            participant.Connections.Remove(connectionId);
+            room.ConnectionRevision++;
             room.LastActivityAt = clock.GetUtcNow();
+            deleted = await ReconcileOccupancyAsync(room);
             state = Snapshot(room);
         }
         finally
@@ -144,19 +146,9 @@ public sealed class BattleService(
             room.Gate.Release();
         }
 
-        foreach (var connection in connections)
-        {
-            await hub.Groups.RemoveFromGroupAsync(connection, room.Group);
-        }
-
-        if (closed)
-        {
-            await CloseAsync(room, "Host otağı bağladı.");
-        }
-        else
-        {
-            await hub.Clients.Group(room.Group).RoomUpdated(state!);
-        }
+        await hub.Groups.RemoveFromGroupAsync(connectionId, room.Group);
+        if (deleted) await hub.Clients.Group(room.Group).RoomClosed("Otaqda iştirakçı qalmadığı üçün otaq silindi.");
+        else await hub.Clients.Group(room.Group).RoomUpdated(state);
     }
 
     /// <summary>Connection lost: the player stays in the room as offline and can rejoin (SignalR reconnect).</summary>
@@ -165,12 +157,15 @@ public sealed class BattleService(
         foreach (var room in _rooms.Values)
         {
             BattleStateDto? state = null;
+            long revision = 0;
             await room.Gate.WaitAsync();
             try
             {
                 var participant = room.Participants.Values.FirstOrDefault(p => p.Connections.Remove(connectionId));
                 if (participant is not null)
                 {
+                    revision = ++room.ConnectionRevision;
+                    room.LastActivityAt = clock.GetUtcNow();
                     state = Snapshot(room);
                 }
             }
@@ -182,13 +177,14 @@ public sealed class BattleService(
             if (state is not null)
             {
                 await hub.Clients.Group(room.Group).RoomUpdated(state);
+                ScheduleOccupancyCheck(room, revision);
             }
         }
     }
 
     public async Task StartAsync(string code, Guid userId)
     {
-        var room = Find(code);
+        var room = await RequireRoomAsync(code);
         await room.Gate.WaitAsync();
         try
         {
@@ -203,43 +199,22 @@ public sealed class BattleService(
                 throw new HubException($"Başlamaq üçün ən azı {BattleRoom.MinParticipants} onlayn iştirakçı lazımdır.");
             }
 
-            // Leave the lobby now so nobody joins while the questions load.
-            room.Status = BattleStatus.Question;
+            room.Questions = await LoadQuestionsAsync(room.Settings);
+            BeginQuestion(room, 0, TimeSpan.FromSeconds(room.Settings.SecondsPerQuestion));
+            try { await PersistAsync(room); }
+            catch { room.Status = BattleStatus.Lobby; room.CurrentIndex = -1; room.Questions = []; throw; }
         }
         finally
         {
             room.Gate.Release();
         }
 
-        List<ExamQuestion> questions;
-        try
-        {
-            questions = await LoadQuestionsAsync(room.Settings);
-        }
-        catch (Exception ex)
-        {
-            await room.Gate.WaitAsync();
-            room.Status = BattleStatus.Lobby;
-            room.Gate.Release();
-            if (ex is HubException)
-            {
-                throw;
-            }
-
-            logger.LogError(ex, "Loading questions for battle {Code} failed", room.Code);
-            throw new HubException("Suallar yüklənmədi.");
-        }
-
-        await room.Gate.WaitAsync();
-        room.Questions = questions;
-        room.Gate.Release();
-
-        _ = Task.Run(() => RunGameAsync(room));
+        _ = Task.Run(() => RunGameAsync(room, resume: true));
     }
 
     public async Task AnswerAsync(string code, Guid userId, int questionIndex, Guid optionId)
     {
-        var room = Find(code);
+        var room = await RequireRoomAsync(code);
         BattleStateDto state;
         TaskCompletionSource? everyoneAnswered = null;
 
@@ -268,6 +243,7 @@ public sealed class BattleService(
             var elapsed = now - room.QuestionStartedAt;
             participant.CurrentElapsed = elapsed < TimeSpan.Zero ? TimeSpan.Zero : elapsed;
             room.LastActivityAt = now;
+            await PersistAsync(room);
 
             if (EveryoneAnswered(room))
             {
@@ -288,7 +264,7 @@ public sealed class BattleService(
     /// <summary>Host control: close the current question now, or skip the leaderboard pause.</summary>
     public async Task AdvanceAsync(string code, Guid userId)
     {
-        var room = Find(code);
+        var room = await RequireRoomAsync(code);
         TaskCompletionSource advance;
         await room.Gate.WaitAsync();
         try
@@ -311,7 +287,7 @@ public sealed class BattleService(
 
     public async Task SendMessageAsync(string code, Guid userId, string text)
     {
-        var room = Find(code);
+        var room = await RequireRoomAsync(code);
         var clean = BattleScoring.CleanMessage(text ?? string.Empty);
         if (clean.Length == 0)
         {
@@ -328,6 +304,7 @@ public sealed class BattleService(
         try
         {
             var participant = RequireMember(room, userId);
+            if (room.Status == BattleStatus.Closed) throw new HubException("Otaq bağlanıb.");
             if (participant.IsMuted)
             {
                 throw new HubException("Host sizi səssiz rejimə keçirib.");
@@ -345,7 +322,7 @@ public sealed class BattleService(
             }
 
             participant.RecentChat.Enqueue(now);
-            message = new ChatMessageDto(Guid.NewGuid(), userId, participant.DisplayName, clean, now);
+            message = new ChatMessageDto(Guid.NewGuid(), userId, participant.DisplayName, clean, now, participant.AvatarUrl);
             room.RecentMessages.AddLast(message);
             if (room.RecentMessages.Count > BattleRoom.MaxRecentMessages)
             {
@@ -353,6 +330,7 @@ public sealed class BattleService(
             }
 
             room.LastActivityAt = now;
+            await PersistAsync(room);
         }
         finally
         {
@@ -364,13 +342,14 @@ public sealed class BattleService(
 
     public async Task SetMutedAsync(string code, Guid hostId, Guid targetId, bool muted)
     {
-        var room = Find(code);
+        var room = await RequireRoomAsync(code);
         BattleStateDto state;
         await room.Gate.WaitAsync();
         try
         {
             RequireHost(room, hostId);
             RequireOtherMember(room, hostId, targetId).IsMuted = muted;
+            await PersistAsync(room);
             state = Snapshot(room);
         }
         finally
@@ -383,7 +362,7 @@ public sealed class BattleService(
 
     public async Task KickAsync(string code, Guid hostId, Guid targetId)
     {
-        var room = Find(code);
+        var room = await RequireRoomAsync(code);
         BattleStateDto state;
         string[] connections;
         TaskCompletionSource? everyoneAnswered = null;
@@ -396,6 +375,7 @@ public sealed class BattleService(
             connections = [.. target.Connections];
             room.Participants.Remove(targetId);
             room.Kicked.Add(targetId);
+            await PersistAsync(room);
             if (room.Status == BattleStatus.Question && EveryoneAnswered(room))
             {
                 everyoneAnswered = room.Advance;
@@ -418,35 +398,35 @@ public sealed class BattleService(
         everyoneAnswered?.TrySetResult();
     }
 
-    /// <summary>Removes idle, finished and very old rooms. Called periodically by <see cref="BattleCleanupService"/>.</summary>
+    /// <summary>Evicts only completed local caches; durable rooms are never expired by connection state.</summary>
     public async Task CleanupAsync()
     {
         var now = clock.GetUtcNow();
         foreach (var room in _rooms.Values)
         {
-            var expired =
-                now - room.CreatedAt > MaxRoomLifetime
-                || (room.Status is BattleStatus.Finished or BattleStatus.Closed && now - room.LastActivityAt > FinishedLifetime)
-                || (room.Status == BattleStatus.Lobby && !room.HasConnections && now - room.LastActivityAt > IdleLobbyLifetime);
-
-            if (expired)
+            await room.Gate.WaitAsync();
+            try
             {
-                await CloseAsync(room, "Otağın müddəti bitdi.");
+                if (room.Status is BattleStatus.Finished or BattleStatus.Closed && !room.HasConnections && now - room.LastActivityAt > FinishedLifetime)
+                    _rooms.TryRemove(room.Code, out _);
             }
+            finally { room.Gate.Release(); }
         }
     }
 
-    private async Task RunGameAsync(BattleRoom room)
+    private async Task RunGameAsync(BattleRoom room, bool resume = false)
     {
+        var ct = lifetime.ApplicationStopping;
         try
         {
             var limit = TimeSpan.FromSeconds(room.Settings.SecondsPerQuestion);
-            for (var index = 0; index < room.Questions.Count; index++)
+            for (var index = Math.Max(room.CurrentIndex, 0); index < room.Questions.Count; index++)
             {
                 TaskCompletionSource advance;
                 BattleStateDto state;
+                bool alreadyRevealed;
 
-                await room.Gate.WaitAsync();
+                await room.Gate.WaitAsync(ct);
                 try
                 {
                     if (room.Status == BattleStatus.Closed)
@@ -454,19 +434,13 @@ public sealed class BattleService(
                         return;
                     }
 
-                    var now = clock.GetUtcNow();
-                    room.Status = BattleStatus.Question;
-                    room.CurrentIndex = index;
-                    room.QuestionStartedAt = now;
-                    room.Deadline = now + limit;
-                    foreach (var participant in room.Participants.Values)
+                    if (!resume || index != room.CurrentIndex)
                     {
-                        participant.CurrentAnswer = null;
-                        participant.CurrentElapsed = TimeSpan.Zero;
+                        BeginQuestion(room, index, limit);
+                        await PersistAsync(room, ct);
                     }
-
-                    advance = room.Advance = NewSignal();
-                    room.LastActivityAt = now;
+                    alreadyRevealed = room.Status == BattleStatus.Reveal;
+                    advance = room.Advance;
                     state = Snapshot(room);
                 }
                 finally
@@ -475,32 +449,31 @@ public sealed class BattleService(
                 }
 
                 await hub.Clients.Group(room.Group).RoomUpdated(state);
-                await Task.WhenAny(Task.Delay(limit), advance.Task);
-
-                await room.Gate.WaitAsync();
-                try
+                if (!alreadyRevealed)
                 {
-                    if (room.Status == BattleStatus.Closed)
+                    await Task.WhenAny(Task.Delay(Remaining(room.Deadline), ct), advance.Task);
+                    await room.Gate.WaitAsync(ct);
+                    try
                     {
-                        return;
+                        if (room.Status == BattleStatus.Closed) return;
+                        ScoreCurrentQuestion(room, limit);
+                        room.Status = BattleStatus.Reveal;
+                        room.RevealEndsAt = clock.GetUtcNow() + RevealDuration;
+                        advance = room.Advance = NewSignal();
+                        await PersistAsync(room, ct);
+                        state = Snapshot(room);
                     }
-
-                    ScoreCurrentQuestion(room, limit);
-                    room.Status = BattleStatus.Reveal;
-                    advance = room.Advance = NewSignal();
-                    state = Snapshot(room);
+                    finally { room.Gate.Release(); }
+                    await hub.Clients.Group(room.Group).RoomUpdated(state);
                 }
-                finally
-                {
-                    room.Gate.Release();
-                }
-
-                await hub.Clients.Group(room.Group).RoomUpdated(state);
-                await Task.WhenAny(Task.Delay(RevealDuration), advance.Task);
+                await Task.WhenAny(Task.Delay(Remaining(room.RevealEndsAt), ct), advance.Task);
+                ct.ThrowIfCancellationRequested();
+                resume = false;
             }
 
-            await FinishAsync(room);
+            await FinishAsync(room, ct);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
         catch (Exception ex)
         {
             logger.LogError(ex, "Battle {Code} failed", room.Code);
@@ -508,14 +481,37 @@ public sealed class BattleService(
         }
     }
 
-    private async Task FinishAsync(BattleRoom room)
+    private void BeginQuestion(BattleRoom room, int index, TimeSpan limit)
+    {
+        var now = clock.GetUtcNow();
+        room.Status = BattleStatus.Question;
+        room.CurrentIndex = index;
+        room.QuestionStartedAt = now;
+        room.Deadline = now + limit;
+        foreach (var participant in room.Participants.Values)
+        {
+            participant.CurrentAnswer = null;
+            participant.CurrentElapsed = TimeSpan.Zero;
+        }
+        room.Advance = NewSignal();
+        room.LastActivityAt = now;
+    }
+
+    private TimeSpan Remaining(DateTimeOffset until)
+    {
+        var now = clock.GetUtcNow();
+        return until > now ? until - now : TimeSpan.Zero;
+    }
+
+    private async Task FinishAsync(BattleRoom room, CancellationToken ct)
     {
         BattleStateDto state;
         List<BattleResult> results;
 
-        await room.Gate.WaitAsync();
+        await room.Gate.WaitAsync(ct);
         try
         {
+            if (room.Status == BattleStatus.Closed) return;
             var now = clock.GetUtcNow();
             room.Status = BattleStatus.Finished;
             room.LastActivityAt = now;
@@ -535,24 +531,12 @@ public sealed class BattleService(
                 CorrectCount = p.CorrectCount,
                 PlayedAt = now,
             }).ToList();
+            await PersistAsync(room, ct, results);
             state = Snapshot(room);
         }
         finally
         {
             room.Gate.Release();
-        }
-
-        try
-        {
-            using var scope = scopes.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            db.BattleResults.AddRange(results);
-            await db.SaveChangesAsync();
-        }
-        catch (Exception ex)
-        {
-            // Results are still shown live; only the history entry is lost.
-            logger.LogError(ex, "Saving results of battle {Code} failed", room.Code);
         }
 
         await hub.Clients.Group(room.Group).RoomUpdated(state);
@@ -581,6 +565,12 @@ public sealed class BattleService(
         using var scope = scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
+        if (!await db.Documents.AsNoTracking().Where(d => d.Id == settings.DocumentId)
+            .AnyAsync(d => !d.ShareWithEveryone && !db.DocumentUserShares.Any(s => s.DocumentId == d.Id)
+                && !db.DocumentGroupShares.Any(s => s.DocumentId == d.Id)
+                && !db.UserRoles.Any(r => r.UserId == d.UploadedByUserId && db.Roles.Any(role => role.Id == r.RoleId && role.NormalizedName == "ADMIN"))))
+            throw new HubException("Bu sənəd Battle üçün əlçatan deyil.");
+
         // Only questions with a known correct answer can be scored.
         var candidates = (await ExamEndpoints.Candidates(db, settings.DocumentId, settings.RangeFrom, settings.RangeTo, default))
             .Where(c => c.IsGradable)
@@ -605,11 +595,8 @@ public sealed class BattleService(
         await room.Gate.WaitAsync();
         try
         {
-            if (room.Status is not BattleStatus.Finished)
-            {
-                room.Status = BattleStatus.Closed;
-            }
-
+            room.Status = BattleStatus.Closed;
+            await PersistAsync(room);
             advance = room.Advance;
         }
         finally
@@ -617,13 +604,9 @@ public sealed class BattleService(
             room.Gate.Release();
         }
 
-        _rooms.TryRemove(room.Code, out _);
         advance.TrySetResult(); // Wakes a running game loop so it can stop.
         await hub.Clients.Group(room.Group).RoomClosed(message);
     }
-
-    private BattleRoom Find(string code) =>
-        _rooms.TryGetValue(code?.Trim() ?? string.Empty, out var room) ? room : throw new HubException("Otaq tapılmadı. Kodu yoxlayın.");
 
     private static BattleParticipant RequireMember(BattleRoom room, Guid userId) =>
         room.Participants.TryGetValue(userId, out var participant)
@@ -666,7 +649,7 @@ public sealed class BattleService(
 
         var participants = ordered.Select((p, i) => new BattleParticipantDto(
             p.UserId, p.DisplayName, p.UserId == room.HostUserId, p.IsConnected, p.IsMuted,
-            p.Score, p.CorrectCount, i + 1, p.LastPoints, p.LastCorrect, inQuestion && p.CurrentAnswer is not null)).ToList();
+            p.Score, p.CorrectCount, i + 1, p.LastPoints, p.LastCorrect, inQuestion && p.CurrentAnswer is not null, p.AvatarUrl)).ToList();
 
         var current = room.CurrentQuestion;
         var question = room.Status is BattleStatus.Question or BattleStatus.Reveal && current is not null
@@ -694,7 +677,9 @@ public sealed class BattleService(
             inQuestion ? room.Participants.Values.Count(p => p.CurrentAnswer is not null) : 0,
             clock.GetUtcNow(),
             question is not null ? me?.CurrentAnswer : null,
-            includeMessages ? [.. room.RecentMessages] : null);
+            includeMessages ? [.. room.RecentMessages] : null,
+            me?.UserId,
+            room.Name);
     }
 }
 
@@ -702,6 +687,7 @@ public sealed class BattleCleanupService(BattleService battles, ILogger<BattleCl
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        await battles.RestoreActiveRoomsAsync(stoppingToken);
         using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {

@@ -19,6 +19,7 @@ public sealed class JwtOptions
     public string SigningKey { get; set; } = string.Empty;
 
     public int AccessTokenMinutes { get; set; } = 60;
+    public int RememberMeAccessTokenMinutes { get; set; } = 7 * 24 * 60;
 
     public SymmetricSecurityKey Key() => new(Encoding.UTF8.GetBytes(SigningKey));
 }
@@ -41,11 +42,11 @@ public sealed class TokenService(IOptions<JwtOptions> options, TimeProvider cloc
 {
     private readonly JsonWebTokenHandler _handler = new();
 
-    public AccessToken Create(AppUser user, IEnumerable<string> roles)
+    public AccessToken Create(AppUser user, IEnumerable<string> roles, bool rememberMe = false)
     {
         var settings = options.Value;
         var now = clock.GetUtcNow();
-        var expires = now.AddMinutes(settings.AccessTokenMinutes);
+        var expires = now.AddMinutes(rememberMe ? settings.RememberMeAccessTokenMinutes : settings.AccessTokenMinutes);
 
         var claims = new List<Claim>
         {

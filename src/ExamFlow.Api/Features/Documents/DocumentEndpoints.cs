@@ -13,6 +13,7 @@ namespace ExamFlow.Api.Features.Documents;
 
 public static class DocumentEndpoints
 {
+    private static readonly string[] DocxContentTypes = [DocxQuestionParser.ContentType, "application/octet-stream", "application/zip"];
     private static readonly string[] PdfContentTypes = ["application/pdf", "application/x-pdf"];
 
     public static void MapDocumentEndpoints(this RouteGroupBuilder api)
@@ -23,6 +24,7 @@ public static class DocumentEndpoints
         group.MapPost("/", Upload).DisableAntiforgery();
         group.MapGet("/", List);
         group.MapGet("/{id:guid}", Get);
+        group.MapGet("/{id:guid}/download", Download);
         group.MapPost("/{id:guid}/reprocess", Reprocess);
         group.MapDelete("/{id:guid}", Delete);
     }
@@ -39,7 +41,7 @@ public static class DocumentEndpoints
         var limits = options.Value;
         if (file is null || file.Length == 0)
         {
-            return Invalid("PDF faylı seçilməyib.");
+            return Invalid("PDF və ya DOCX faylı seçilməyib.");
         }
 
         if (file.Length > limits.MaxFileSizeBytes)
@@ -47,42 +49,57 @@ public static class DocumentEndpoints
             return TypedResults.Problem($"Fayl {limits.MaxFileSizeBytes / 1024 / 1024} MB-dan böyük ola bilməz.", statusCode: StatusCodes.Status413PayloadTooLarge);
         }
 
-        if (!string.Equals(Path.GetExtension(file.FileName), ".pdf", StringComparison.OrdinalIgnoreCase)
-            || !PdfContentTypes.Contains(file.ContentType, StringComparer.OrdinalIgnoreCase))
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        var isDocx = extension == ".docx";
+        if (!(extension == ".pdf" && PdfContentTypes.Contains(file.ContentType, StringComparer.OrdinalIgnoreCase))
+            && !(isDocx && DocxContentTypes.Contains(file.ContentType, StringComparer.OrdinalIgnoreCase)))
         {
-            return Invalid("Yalnız PDF faylları qəbul edilir.");
+            return Invalid("Yalnız PDF və DOCX faylları qəbul edilir.");
         }
 
         using var buffer = new MemoryStream((int)file.Length);
         await file.CopyToAsync(buffer, ct);
-        if (!HasPdfSignature(buffer))
+        if (!isDocx && !HasPdfSignature(buffer))
         {
             return Invalid("Fayl düzgün PDF deyil.");
         }
 
         var sha256 = SHA256.HashData(buffer.GetBuffer().AsSpan(0, (int)buffer.Length));
-        var duplicate = await db.Documents.Where(d => d.Sha256 == sha256).Select(d => (Guid?)d.Id).FirstOrDefaultAsync(ct);
+        var userId = user.GetUserId();
+        var duplicate = await db.Documents.AsNoTracking()
+            .Where(d => d.UploadedByUserId == userId && d.Sha256 == sha256)
+            .Select(d => (Guid?)d.Id).FirstOrDefaultAsync(ct);
         if (duplicate is not null)
         {
-            return TypedResults.Problem("Bu PDF artıq yüklənib.", statusCode: StatusCodes.Status409Conflict,
+            return TypedResults.Problem(isDocx ? "Bu DOCX artıq yüklənib." : "Bu PDF artıq yüklənib.", statusCode: StatusCodes.Status409Conflict,
                 extensions: new Dictionary<string, object?> { ["documentId"] = duplicate });
         }
 
+        int? pageCount = null;
         buffer.Position = 0;
-        var inspection = PdfQuestionParser.Inspect(buffer);
-        if (inspection.IsEncrypted)
+        if (isDocx)
         {
-            return Invalid("Şifrə ilə qorunan PDF dəstəklənmir.");
+            if (!DocxQuestionParser.Inspect(buffer))
+                return Invalid("Fayl düzgün DOCX deyil, zədələnib və ya açılmış məzmunu icazə verilən həddi aşır.");
         }
-
-        if (!inspection.IsReadable)
+        else
         {
-            return Invalid("PDF faylı oxuna bilmədi.");
-        }
+            var inspection = PdfQuestionParser.Inspect(buffer);
+            if (inspection.IsEncrypted)
+            {
+                return Invalid("Şifrə ilə qorunan PDF dəstəklənmir.");
+            }
 
-        if (inspection.PageCount > limits.MaxPages)
-        {
-            return Invalid($"PDF {limits.MaxPages} səhifədən çox ola bilməz.");
+            if (!inspection.IsReadable)
+            {
+                return Invalid("PDF faylı oxuna bilmədi.");
+            }
+
+            if (inspection.PageCount > limits.MaxPages)
+            {
+                return Invalid($"PDF {limits.MaxPages} səhifədən çox ola bilməz.");
+            }
+            pageCount = inspection.PageCount;
         }
 
         var document = new UploadedDocument
@@ -90,12 +107,12 @@ public static class DocumentEndpoints
             OriginalFileName = SafeDisplayName(file.FileName),
             FileSizeBytes = file.Length,
             Sha256 = sha256,
-            PageCount = inspection.PageCount,
+            PageCount = pageCount,
             Status = DocumentStatus.Pending,
             UploadedByUserId = user.GetUserId(),
         };
         db.Documents.Add(document); // Assigns the sequential Guid key client-side.
-        document.StoredFileName = $"{document.Id:N}.pdf";
+        document.StoredFileName = $"{document.Id:N}{extension}";
 
         buffer.Position = 0;
         await storage.SaveAsync(document.StoredFileName, buffer, ct);
@@ -118,16 +135,18 @@ public static class DocumentEndpoints
 
     private static async Task<IResult> List(
         ClaimsPrincipal user, AppDbContext db, CancellationToken ct,
-        bool? mine = null, DocumentStatus? status = null, int? page = null, int? pageSize = null)
+        bool? mine = null, DocumentStatus? status = null, int? page = null, int? pageSize = null, bool? forExam = null, bool? includeShared = null, bool? shared = null, bool? forBattle = null)
     {
         var (pageNumber, size) = Paging.Normalize(page, pageSize);
-        var query = db.Documents.AsNoTracking();
-
-        if (mine == true)
-        {
-            var userId = user.GetUserId();
-            query = query.Where(d => d.UploadedByUserId == userId);
-        }
+        var userId = user.GetUserId();
+        var query = forBattle == true ? DocumentAccess.ForBattle(db, userId)
+            : includeShared == true || shared == true ? DocumentAccess.Readable(db, userId)
+            : db.Documents.AsNoTracking().Where(d => d.UploadedByUserId == userId);
+        if (shared == true) query = query.Where(d => d.UploadedByUserId != userId);
+        if (mine == true) query = query.Where(d => d.UploadedByUserId == userId);
+        if (forExam == true)
+            query = query.Where(d => d.Questions.Any(q => q.Options.Count >= 2)
+                && !d.Questions.Any(q => q.Explanation != null && q.Explanation != ""));
 
         if (status is not null)
         {
@@ -135,7 +154,7 @@ public static class DocumentEndpoints
         }
 
         var total = await query.CountAsync(ct);
-        var items = await Project(query.OrderByDescending(d => d.CreatedAt), user)
+        var items = await Project(query.OrderByDescending(d => d.CreatedAt), user, db)
             .Skip((pageNumber - 1) * size)
             .Take(size)
             .ToListAsync(ct);
@@ -149,18 +168,27 @@ public static class DocumentEndpoints
         return dto is null ? NotFound() : TypedResults.Ok(dto);
     }
 
+    private static async Task<IResult> Download(Guid id, ClaimsPrincipal user, AppDbContext db, IFileStorage storage, CancellationToken ct)
+    {
+        var document = await DocumentAccess.Readable(db, user.GetUserId()).Where(d => d.Id == id)
+            .Select(d => new { d.StoredFileName, d.OriginalFileName }).FirstOrDefaultAsync(ct);
+        if (document is null) return NotFound();
+        try
+        {
+            var contentType = Path.GetExtension(document.StoredFileName).Equals(".docx", StringComparison.OrdinalIgnoreCase)
+                ? DocxQuestionParser.ContentType : "application/pdf";
+            return TypedResults.File(storage.OpenRead(document.StoredFileName), contentType, document.OriginalFileName, enableRangeProcessing: true);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException) { return NotFound(); }
+    }
+
     private static async Task<IResult> Reprocess(
         Guid id, ClaimsPrincipal user, AppDbContext db, ProcessingQueue queue, CancellationToken ct)
     {
-        var document = await db.Documents.FirstOrDefaultAsync(d => d.Id == id, ct);
+        var document = await db.Documents.FirstOrDefaultAsync(d => d.Id == id && d.UploadedByUserId == user.GetUserId(), ct);
         if (document is null)
         {
             return NotFound();
-        }
-
-        if (!user.CanEdit(document.UploadedByUserId))
-        {
-            return Forbidden();
         }
 
         if (document.Status is DocumentStatus.Pending or DocumentStatus.Processing)
@@ -179,15 +207,10 @@ public static class DocumentEndpoints
     private static async Task<IResult> Delete(
         Guid id, ClaimsPrincipal user, AppDbContext db, IFileStorage storage, CancellationToken ct)
     {
-        var document = await db.Documents.FirstOrDefaultAsync(d => d.Id == id, ct);
+        var document = await db.Documents.FirstOrDefaultAsync(d => d.Id == id && d.UploadedByUserId == user.GetUserId(), ct);
         if (document is null)
         {
             return NotFound();
-        }
-
-        if (!user.CanEdit(document.UploadedByUserId))
-        {
-            return Forbidden();
         }
 
         if (document.Status == DocumentStatus.Processing)
@@ -204,12 +227,11 @@ public static class DocumentEndpoints
 
     // Filter before projecting: EF cannot translate predicates on the constructed DTO.
     private static Task<DocumentDto?> FindAsync(AppDbContext db, ClaimsPrincipal user, Guid id, CancellationToken ct) =>
-        Project(db.Documents.AsNoTracking().Where(d => d.Id == id), user).FirstOrDefaultAsync(ct);
+        Project(DocumentAccess.Readable(db, user.GetUserId()).Where(d => d.Id == id), user, db).FirstOrDefaultAsync(ct);
 
-    private static IQueryable<DocumentDto> Project(IQueryable<UploadedDocument> query, ClaimsPrincipal user)
+    private static IQueryable<DocumentDto> Project(IQueryable<UploadedDocument> query, ClaimsPrincipal user, AppDbContext db)
     {
         var userId = user.GetUserId();
-        var isAdmin = user.IsAdmin();
         return query.Select(d => new DocumentDto(
             d.Id,
             d.OriginalFileName,
@@ -217,12 +239,15 @@ public static class DocumentEndpoints
             d.PageCount,
             d.Status,
             new UserSummary(d.UploadedByUserId, d.UploadedBy.DisplayName),
-            isAdmin || d.UploadedByUserId == userId,
+            d.UploadedByUserId == userId,
             d.Questions.Count,
             d.ProcessingReport,
             d.ErrorMessage,
             d.CreatedAt,
-            d.ProcessedAt));
+            d.ProcessedAt,
+            d.ShareWithEveryone ? "Everyone" : db.DocumentUserShares.Any(s => s.DocumentId == d.Id)
+                ? (db.DocumentGroupShares.Any(s => s.DocumentId == d.Id) ? "UsersAndGroups" : "Users")
+                : db.DocumentGroupShares.Any(s => s.DocumentId == d.Id) ? "Groups" : "Private"));
     }
 
     private static bool HasPdfSignature(MemoryStream buffer) =>
@@ -238,9 +263,6 @@ public static class DocumentEndpoints
     private static IResult Invalid(string detail) => TypedResults.Problem(detail, statusCode: StatusCodes.Status400BadRequest);
 
     private static IResult NotFound() => TypedResults.Problem("Sənəd tapılmadı.", statusCode: StatusCodes.Status404NotFound);
-
-    private static IResult Forbidden() =>
-        TypedResults.Problem("Bu sənədi yalnız onu yükləyən istifadəçi və ya Admin dəyişə bilər.", statusCode: StatusCodes.Status403Forbidden);
 }
 
 public sealed record UserSummary(Guid Id, string DisplayName);
@@ -257,4 +279,4 @@ public sealed record DocumentDto(
     ProcessingReport? ProcessingReport,
     string? ErrorMessage,
     DateTimeOffset CreatedAt,
-    DateTimeOffset? ProcessedAt);
+    DateTimeOffset? ProcessedAt, string SharingStatus);

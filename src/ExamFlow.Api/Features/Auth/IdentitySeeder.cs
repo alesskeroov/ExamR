@@ -29,6 +29,11 @@ public static class IdentitySeeder
             }
         }
 
+        var configuredUsers = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
+        foreach (var configuredEmail in ConfiguredAdmins.Emails(app.Configuration))
+            if (await configuredUsers.FindByEmailAsync(configuredEmail) is { } configuredUser)
+                await ConfiguredAdmins.EnsureAsync(configuredUsers, app.Configuration, configuredUser);
+
         var email = app.Configuration["Seed:Admin:Email"];
         var password = app.Configuration["Seed:Admin:Password"];
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
@@ -42,7 +47,8 @@ public static class IdentitySeeder
             return;
         }
 
-        var admin = new AppUser { UserName = email, Email = email, DisplayName = "Admin" };
+        var nickname = $"admin{Guid.NewGuid():N}"[..16];
+        var admin = new AppUser { UserName = email, Email = email, DisplayName = "Admin", Nickname = nickname, NormalizedNickname = nickname.ToUpperInvariant() };
         var result = await users.CreateAsync(admin, password);
         if (!result.Succeeded)
         {

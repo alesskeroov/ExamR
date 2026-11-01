@@ -5,6 +5,7 @@ import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-r
 import { Alert } from '../../components/common/Alert'
 import { Button } from '../../components/common/Button'
 import { cn } from '../../lib/utils'
+import { NotificationBell } from '../friends/NotificationBell'
 import {
   answerMutationKey,
   useAnswerQuestion,
@@ -110,7 +111,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
     <div className="min-h-dvh bg-slate-50">
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-[1100px] items-center gap-3 px-4 lg:px-6">
-          <Link to="/" className="hidden items-center gap-2 font-semibold sm:flex" aria-label="ExamFlow ana səhifə">
+          <Link to="/" className="hidden items-center gap-2 font-semibold sm:flex" aria-label="ExamR ana səhifə">
             <img src="/favicon.svg" alt="" className="size-7" />
           </Link>
           <div className="min-w-0 flex-1">
@@ -132,6 +133,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
             </div>
           </div>
           <ExamTimer expiresAt={session.expiresAt} serverNow={session.serverNow} onExpire={submit} />
+          <NotificationBell />
           <Button onClick={() => setConfirmOpen(true)} loading={finish.isPending} className="h-9 px-3 sm:px-4">
             Bitir
           </Button>
@@ -197,13 +199,13 @@ function QuestionPanel({ question, number, immediate, locked, onChoose }: Questi
   const headingId = `question-${question.examQuestionId}`
 
   return (
-    <section aria-labelledby={headingId} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-      <p className="mb-2 text-xs font-semibold tracking-wide text-indigo-600 uppercase">Sual {number}</p>
-      <h1 id={headingId} className="text-lg leading-7 font-medium text-slate-900">
+    <section aria-labelledby={headingId} className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
+      <p className="mb-3 text-xs font-medium text-slate-500">Sual {number}</p>
+      <h1 id={headingId} className="text-lg leading-8 font-medium break-words text-slate-900 sm:text-xl">
         {question.text}
       </h1>
 
-      <div role="radiogroup" aria-labelledby={headingId} className="mt-5 flex flex-col gap-2">
+      <div role="radiogroup" aria-labelledby={headingId} className="mt-6 flex flex-col gap-2.5">
         {question.options.map((option) => {
           const selected = question.selectedOptionId === option.id
           const isCorrect = reveal?.correctOptionId === option.id
@@ -218,32 +220,35 @@ function QuestionPanel({ question, number, immediate, locked, onChoose }: Questi
               aria-disabled={locked || undefined}
               onClick={() => onChoose(option.id)}
               className={cn(
-                'flex w-full items-start gap-3 rounded-lg border px-4 py-3 text-left transition-colors duration-150',
-                isCorrect && 'border-emerald-300 bg-emerald-50',
-                isWrongPick && 'border-rose-300 bg-rose-50',
-                !reveal && selected && 'border-indigo-500 bg-indigo-50',
-                !reveal && !selected && 'border-slate-200 hover:border-slate-300 hover:bg-slate-50',
+                'flex min-h-16 w-full items-start gap-3 rounded-xl border px-4 py-4 text-left text-sm text-slate-700 transition-colors duration-150 motion-reduce:transition-none sm:gap-4 sm:px-5 sm:text-[15px]',
+                isCorrect && 'border-emerald-300 bg-emerald-50/60',
+                isWrongPick && 'border-rose-300 bg-rose-50/60',
+                !reveal && selected && 'border-indigo-400 bg-indigo-50/60',
+                !reveal && !selected && 'border-slate-200 hover:border-slate-400 hover:bg-slate-50',
                 reveal && !isCorrect && !isWrongPick && 'border-slate-200',
                 locked && 'cursor-default',
               )}
             >
               <span
                 className={cn(
-                  'flex size-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold',
-                  isCorrect ? 'border-emerald-600 bg-emerald-600 text-white'
-                    : isWrongPick ? 'border-rose-600 bg-rose-600 text-white'
-                      : selected ? 'border-indigo-600 bg-indigo-600 text-white'
-                        : 'border-slate-300 text-slate-600',
+                  'flex size-7 shrink-0 items-center justify-center rounded-md border text-xs font-medium',
+                  isCorrect ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                    : isWrongPick ? 'border-rose-200 bg-rose-50 text-rose-800'
+                      : selected ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                        : 'border-slate-200 bg-slate-50 text-slate-500',
                 )}
                 aria-hidden
               >
-                {isCorrect ? <Check className="size-4" strokeWidth={3} /> : isWrongPick ? <X className="size-4" strokeWidth={3} /> : option.label}
+                {option.label}
               </span>
-              <span className="flex-1 pt-0.5 leading-6">
+              <span className="min-w-0 flex-1 pt-0.5 leading-6 break-words">
                 {option.text}
                 {isCorrect && <span className="sr-only"> (düzgün cavab)</span>}
                 {isWrongPick && <span className="sr-only"> (sizin cavabınız, yanlış)</span>}
               </span>
+              {isCorrect && <Check className="mt-1 size-4 shrink-0 text-emerald-700" aria-hidden />}
+              {isWrongPick && <X className="mt-1 size-4 shrink-0 text-rose-700" aria-hidden />}
+              {selected && !reveal && <Check className="mt-1 size-4 shrink-0 text-indigo-600" aria-hidden />}
             </button>
           )
         })}

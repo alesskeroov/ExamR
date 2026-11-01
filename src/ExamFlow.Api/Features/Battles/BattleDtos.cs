@@ -5,6 +5,8 @@ namespace ExamFlow.Api.Features.Battles;
 
 public sealed class CreateBattleRequest
 {
+    [MaxLength(100)]
+    public string Name { get; init; } = string.Empty;
     [Required]
     public Guid? DocumentId { get; init; }
 
@@ -22,6 +24,10 @@ public sealed class CreateBattleRequest
 }
 
 public sealed record CreateBattleResponse(string Code);
+public sealed record BattleLobbyDto(string Code, Guid HostUserId, string HostName, string DocumentName, int QuestionCount);
+public sealed record MyBattleRoomDto(Guid Id, string Name, string Code, string DocumentName,
+    int ParticipantCount, RoomStatus Status, bool IsHost, bool IsClosed, bool CanJoin);
+public sealed record BattleInviteRosterDto(IReadOnlyList<Guid> ParticipantIds);
 
 public sealed record BattleParticipantDto(
     Guid UserId,
@@ -34,7 +40,8 @@ public sealed record BattleParticipantDto(
     int Rank,
     int? LastPoints,
     bool? LastCorrect,
-    bool HasAnswered);
+    bool HasAnswered,
+    string? AvatarUrl = null);
 
 /// <summary>The current question as players see it — no correct answer.</summary>
 public sealed record BattleQuestionDto(
@@ -44,7 +51,7 @@ public sealed record BattleQuestionDto(
 public sealed record BattleRevealDto(int Index, Guid? CorrectOptionId);
 
 /// <summary>
-/// Full room snapshot broadcast on every change. <c>MyAnswerOptionId</c> and <c>RecentMessages</c>
+/// Full room snapshot broadcast on every change. <c>MyUserId</c>, <c>MyAnswerOptionId</c> and <c>RecentMessages</c>
 /// are filled only in the reply to the caller's own JoinRoom.
 /// </summary>
 public sealed record BattleStateDto(
@@ -58,9 +65,11 @@ public sealed record BattleStateDto(
     int AnsweredCount,
     DateTimeOffset ServerNow,
     Guid? MyAnswerOptionId,
-    IReadOnlyList<ChatMessageDto>? RecentMessages);
+    IReadOnlyList<ChatMessageDto>? RecentMessages,
+    Guid? MyUserId,
+    string Name);
 
-public sealed record ChatMessageDto(Guid Id, Guid UserId, string DisplayName, string Text, DateTimeOffset SentAt);
+public sealed record ChatMessageDto(Guid Id, Guid UserId, string DisplayName, string Text, DateTimeOffset SentAt, string? AvatarUrl = null);
 
 public sealed record BattleHistoryDto(
     Guid BattleId,

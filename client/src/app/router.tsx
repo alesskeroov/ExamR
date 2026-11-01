@@ -1,7 +1,11 @@
+import { AdminPage } from '../features/admin/AdminPage'
+import { GroupDetailPage, GroupsAdminPage, GroupsPage } from '../features/groups/GroupsPage'
+import { StudyPage } from '../features/study/StudyPage'
 import { createBrowserRouter } from 'react-router'
 import { ResetPasswordPage } from '../features/auth/ResetPasswordPage'
 import { BattleHomePage } from '../features/battle/BattleHomePage'
 import { BattleRoomPage } from '../features/battle/BattleRoomPage'
+import { MyRoomsPage } from '../features/battle/MyRoomsPage'
 import { DashboardPage } from '../features/dashboard/DashboardPage'
 import { UploadPage } from '../features/documents/UploadPage'
 import { ExamHistoryPage } from '../features/exams/ExamHistoryPage'
@@ -9,6 +13,9 @@ import { ExamResultPage } from '../features/exams/ExamResultPage'
 import { ExamSessionPage } from '../features/exams/ExamSessionPage'
 import { ExamSetupPage } from '../features/exams/ExamSetupPage'
 import { QuestionBankPage } from '../features/questions/QuestionBankPage'
+import { FriendsPage } from '../features/friends/FriendsPage'
+import { NotificationsPage } from '../features/friends/NotificationsPage'
+import { ProfilePage } from '../features/auth/ProfilePage'
 import { AppLayout } from './AppLayout'
 import { NotFoundPage } from './NotFoundPage'
 import { RequireAuth } from './RequireAuth'
@@ -23,11 +30,20 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <DashboardPage /> },
       { path: 'upload', element: <UploadPage /> },
+      { path: 'study', element: <StudyPage /> },
       { path: 'questions', element: <QuestionBankPage /> },
       { path: 'exams/new', element: <ExamSetupPage /> },
       { path: 'exams', element: <ExamHistoryPage /> },
       { path: 'exams/:id/result', element: <ExamResultPage /> },
       { path: 'battle', element: <BattleHomePage /> },
+      { path: 'battle/rooms', element: <MyRoomsPage /> },
+      { path: 'friends', element: <FriendsPage /> },
+      { path: 'groups', element: <GroupsPage /> },
+      { path: 'groups/:id', element: <GroupDetailPage /> },
+      { path: 'admin', element: <AdminPage /> },
+      { path: 'admin/groups', element: <GroupsAdminPage /> },
+      { path: 'notifications', element: <NotificationsPage /> },
+      { path: 'profile', element: <ProfilePage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
   },

@@ -26,6 +26,9 @@ public static partial class QuestionSegmenter
     [GeneratedRegex(@"^(?:sual|№|\d{1,4}[.):\-])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex QuestionNumberToken();
 
+    [GeneratedRegex(@"^(?:cavab|[iİıI]zah|answer)\s*[:：]\s*", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex AnswerStart();
+
     public static bool IsMarker(char c) => OptionMarkers.Contains(c) || CorrectMarkers.Contains(c);
 
     [GeneratedRegex(@"^(?:(?<prefix>sual|№)\s*(?<n>\d{1,4})\s*[.):\-]?|(?<n>\d{1,4})\s*[.):\-])\s*", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
@@ -61,6 +64,19 @@ public static partial class QuestionSegmenter
             if (current is null)
             {
                 continue; // Title, instructions and other text before the first question.
+            }
+
+            var answer = AnswerStart().Match(line.Text);
+            if (current.Options.Count == 0 && answer.Success)
+            {
+                current.ReadingAnswer = true;
+                Append(current.AnswerTokens, SkipChars(line.Tokens, answer.Length));
+                continue;
+            }
+            if (current.ReadingAnswer)
+            {
+                Append(current.AnswerTokens, line.Tokens);
+                continue;
             }
 
             if (TryReadLabel(line.Tokens, 0, ExpectedLetter(current), allowDot: true, out var consumed, out var rest))

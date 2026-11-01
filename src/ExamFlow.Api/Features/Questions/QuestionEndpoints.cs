@@ -1,5 +1,8 @@
+using System.Security.Claims;
+using ExamFlow.Api.Infrastructure.Security;
 using ExamFlow.Api.Common;
 using ExamFlow.Api.Infrastructure.Data;
+using ExamFlow.Api.Features.Documents;
 using Microsoft.EntityFrameworkCore;
 
 namespace ExamFlow.Api.Features.Questions;
@@ -14,12 +17,17 @@ public static class QuestionEndpoints
     }
 
     private static async Task<IResult> List(
-        AppDbContext db, CancellationToken ct,
+        ClaimsPrincipal user, AppDbContext db, CancellationToken ct,
         Guid? documentId = null, VerificationStatus? status = null, bool? hasWarning = null,
         int? page = null, int? pageSize = null)
     {
         var (pageNumber, size) = Paging.Normalize(page, pageSize);
-        var query = db.Questions.AsNoTracking();
+        var userId = user.GetUserId();
+        if (documentId is not null && !await DocumentAccess.Readable(db, userId)
+            .AnyAsync(d => d.Id == documentId, ct))
+            return TypedResults.Problem("Sənəd tapılmadı.", statusCode: 404);
+        var readable = DocumentAccess.Readable(db, userId);
+        var query = db.Questions.AsNoTracking().Where(q => readable.Any(d => d.Id == q.DocumentId));
 
         if (documentId is not null)
         {

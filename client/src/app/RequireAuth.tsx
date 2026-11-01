@@ -2,6 +2,7 @@ import { Loader2 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { AuthPage } from '../features/auth/AuthPage'
 import { useCurrentUser } from '../features/auth/api'
+import { SocialConnection } from '../features/friends/SocialConnection'
 
 /** Shows the sign-in screen until the user is authenticated. */
 export function RequireAuth({ children }: { children: ReactNode }) {
@@ -27,5 +28,5 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     )
   }
 
-  return user ? children : <AuthPage />
+  return user ? <><SocialConnection key={user.id} />{children}</> : <AuthPage />
 }

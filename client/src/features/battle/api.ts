@@ -1,11 +1,12 @@
 import { HubConnectionBuilder, HubConnectionState, LogLevel, type HubConnection } from '@microsoft/signalr'
-import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../../lib/api-client'
 import { getToken } from '../../lib/auth-token'
 import { queryKeys } from '../../lib/query-keys'
 import type { PagedResult } from '../documents/api'
 import type { ExamOption, ExamSource } from '../exams/api'
+import { useCurrentUser } from '../auth/api'
 
 export type BattleStatus = 'Lobby' | 'Question' | 'Reveal' | 'Finished' | 'Closed'
 
@@ -21,6 +22,7 @@ export interface BattleSettings {
 export interface BattleParticipant {
   userId: string
   displayName: string
+  avatarUrl: string | null
   isHost: boolean
   isConnected: boolean
   isMuted: boolean
@@ -42,6 +44,7 @@ export interface BattleQuestion {
 }
 
 export interface BattleState {
+  name: string
   code: string
   hostUserId: string
   status: BattleStatus
@@ -54,17 +57,20 @@ export interface BattleState {
   serverNow: string
   myAnswerOptionId: string | null
   recentMessages: ChatMessage[] | null
+  myUserId: string | null
 }
 
 export interface ChatMessage {
   id: string
   userId: string
   displayName: string
+  avatarUrl: string | null
   text: string
   sentAt: string
 }
 
 export interface CreateBattleRequest {
+  name?: string
   documentId: string
   rangeFrom: number
   rangeTo: number
@@ -88,7 +94,26 @@ export const MAX_BATTLE_QUESTIONS = 50
 export const MAX_MESSAGE_LENGTH = 300
 
 export function useCreateBattle() {
-  return useMutation({ mutationFn: (request: CreateBattleRequest) => api.post<{ code: string }>('/battles', request) })
+  const client = useQueryClient()
+  return useMutation({ mutationFn: (request: CreateBattleRequest) => api.post<{ code: string }>('/battles', request),
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.battles.all }) })
+}
+
+export interface MyBattleRoom {
+  id: string; name: string; code: string; documentName: string; participantCount: number
+  status: 'Waiting' | 'InProgress' | 'Completed'; isHost: boolean; isClosed: boolean; canJoin: boolean
+}
+
+export function useMyRooms(includeCompleted: boolean) {
+  const { data: user } = useCurrentUser()
+  return useQuery({ queryKey: queryKeys.battles.rooms(user?.id ?? '', includeCompleted), enabled: !!user,
+    queryFn: () => api.get<MyBattleRoom[]>(`/battles/rooms?includeCompleted=${includeCompleted}`), refetchInterval: 10_000 })
+}
+
+export function useCloseRoom() {
+  const client = useQueryClient()
+  return useMutation({ mutationFn: (code: string) => api.post<void>(`/battles/rooms/${code}/close`),
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.battles.all }) })
 }
 
 export function useBattleHistory(page: number) {
@@ -112,7 +137,9 @@ export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'di
  * reconnect, so the room state (score, current question, own answer, recent chat) is restored.
  */
 export function useBattleRoom(code: string) {
+  const client = useQueryClient()
   const [state, setRawState] = useState<BattleState | null>(null)
+  const [myUserId, setMyUserId] = useState('')
   // Server clock minus client clock, measured when each state arrives (for the question timer).
   const [serverOffset, setServerOffset] = useState(0)
   const setState = useCallback((next: BattleState) => {
@@ -137,7 +164,11 @@ export function useBattleRoom(code: string) {
 
     // Handlers must not return a value (SignalR would treat it as a client result).
     connection.on('RoomUpdated', (next: BattleState) => {
-      setState(next)
+      if (!disposed) {
+        setState(next)
+        void client.invalidateQueries({ queryKey: queryKeys.battles.all })
+        void client.invalidateQueries({ queryKey: queryKeys.social.room(code) })
+      }
     })
     connection.on('ChatMessage', (message: ChatMessage) => {
       setMessages((current) => [...current.slice(-99), message])
@@ -148,11 +179,13 @@ export function useBattleRoom(code: string) {
     })
     connection.on('RoomClosed', (message: string) => {
       setFatal(message)
+      void client.invalidateQueries({ queryKey: queryKeys.battles.all })
     })
 
     const join = async () => {
       const joined = await connection.invoke<BattleState>('JoinRoom', code)
       if (disposed) return
+      setMyUserId(joined.myUserId ?? '')
       setState(joined)
       setMessages(joined.recentMessages ?? [])
       setMyAnswer(joined.question && joined.myAnswerOptionId ? { index: joined.question.index, optionId: joined.myAnswerOptionId } : null)
@@ -184,7 +217,7 @@ export function useBattleRoom(code: string) {
       disposed = true
       void connection.stop()
     }
-  }, [code, setState])
+  }, [client, code, setState])
 
   const invoke = useCallback(async (method: string, ...args: unknown[]) => {
     const connection = connectionRef.current
@@ -213,6 +246,7 @@ export function useBattleRoom(code: string) {
 
   return {
     state,
+    myUserId,
     messages,
     status,
     fatal,
@@ -226,6 +260,15 @@ export function useBattleRoom(code: string) {
     send: (text: string) => invoke('SendMessage', code, text),
     setMuted: (userId: string, muted: boolean) => invoke('SetMuted', code, userId, muted),
     kick: (userId: string) => invoke('Kick', code, userId),
-    leave: () => invoke('LeaveRoom', code),
+    transferHost: (userId: string) => invoke('TransferHost', code, userId),
+    closeRoom: () => invoke('CloseRoom', code),
+    leave: async () => {
+      const left = await invoke('LeaveRoom', code)
+      if (left) {
+        void client.invalidateQueries({ queryKey: queryKeys.battles.all })
+        void client.invalidateQueries({ queryKey: queryKeys.social.all })
+      }
+      return left
+    },
   }
 }

@@ -9,6 +9,7 @@ public class UploadedDocument : IAuditable
     public Guid Id { get; set; }
     public string OriginalFileName { get; set; } = string.Empty;
     public string StoredFileName { get; set; } = string.Empty;
+    public bool ShareWithEveryone { get; set; }
     public long FileSizeBytes { get; set; }
     public byte[] Sha256 { get; set; } = [];
     public int? PageCount { get; set; }

@@ -21,7 +21,7 @@ export function Button({ variant = 'primary', loading, disabled, className, chil
       type="button"
       disabled={disabled || loading}
       className={cn(
-        'inline-flex h-10 items-center justify-center gap-2 rounded-lg px-4 font-medium transition-colors duration-150 disabled:cursor-not-allowed',
+        'inline-flex h-11 items-center justify-center gap-2 rounded-xl px-4 font-medium transition-colors duration-150 disabled:cursor-not-allowed',
         variants[variant],
         className,
       )}

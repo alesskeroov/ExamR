@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Exceptions;
 
@@ -89,7 +90,18 @@ public sealed class PdfQuestionParser(IEnumerable<IAnswerDetector>? detectors = 
         foreach (var raw in QuestionSegmenter.Segment(LayoutCleaner.Clean(lines)))
         {
             var questionWarnings = new List<string>(raw.Warnings);
-            var text = Truncate(Join(raw.TextTokens), MaxQuestionLength, "Sual mətni", questionWarnings);
+            var questionText = Join(raw.TextTokens);
+            string? answerText = raw.ReadingAnswer ? Join(raw.AnswerTokens) : null;
+            if (raw.Options.Count == 0 && answerText is null)
+            {
+                var separator = Regex.Match(questionText, @"\s+(?:cavab|[iİıI]zah|answer)\s*[:：]\s*", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+                if (separator.Success)
+                {
+                    answerText = questionText[(separator.Index + separator.Length)..];
+                    questionText = questionText[..separator.Index];
+                }
+            }
+            var text = Truncate(questionText, MaxQuestionLength, "Sual mətni", questionWarnings);
             if (text.Length == 0)
             {
                 warnings.Add($"Sual {raw.Number}: mətn boşdur, atlandı");
@@ -100,18 +112,19 @@ public sealed class PdfQuestionParser(IEnumerable<IAnswerDetector>? detectors = 
                 .Select(o => new ParsedOption(o.Letter.ToString(), Truncate(Join(o.TextTokens), MaxOptionLength, $"Variant {o.Letter}", questionWarnings)))
                 .ToList();
 
-            if (options.Count < 2)
+            var explanation = !string.IsNullOrWhiteSpace(answerText) ? Truncate(answerText, 16000, "Cavab mətni", questionWarnings) : null;
+            if (options.Count < 2 && explanation is null)
             {
                 questionWarnings.Add($"Yalnız {options.Count} variant tapıldı");
             }
 
-            var detection = Detect(raw);
+            var detection = explanation is null ? Detect(raw) : new AnswerDetection(null, null);
             if (detection.Warning is not null)
             {
                 questionWarnings.Add(detection.Warning);
             }
 
-            var hash = ContentHasher.Compute(text, options.Select(o => o.Text));
+            var hash = ContentHasher.Compute(text, options.Select(o => o.Text).Concat(explanation is null ? [] : new[] { explanation }));
             if (!seenHashes.Add(Convert.ToHexString(hash)))
             {
                 duplicates++;
@@ -124,7 +137,7 @@ public sealed class PdfQuestionParser(IEnumerable<IAnswerDetector>? detectors = 
                 warnings.Add($"Sual {raw.Number}: {warning}");
             }
 
-            questions.Add(new ParsedQuestion(raw.Number, text, options, detection.CorrectIndex, warning, hash));
+            questions.Add(new ParsedQuestion(raw.Number, text, options, detection.CorrectIndex, warning, hash) { Explanation = explanation });
         }
 
         return new ParseResult

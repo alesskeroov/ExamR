@@ -20,7 +20,7 @@ export function FormField({ label, error, className, ...input }: FormFieldProps)
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? errorId : undefined}
         className={cn(
-          'h-10 rounded-lg border bg-white px-3 text-slate-900 transition-colors duration-150 placeholder:text-slate-400',
+          'h-11 rounded-xl border bg-white px-3 text-slate-900 transition-colors duration-150 placeholder:text-slate-400',
           'focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none',
           error ? 'border-rose-400' : 'border-slate-300',
           className,

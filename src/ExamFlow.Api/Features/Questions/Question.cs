@@ -10,6 +10,7 @@ public class Question : IAuditable
     public UploadedDocument Document { get; set; } = null!;
     public int SourceNumber { get; set; }
     public string Text { get; set; } = string.Empty;
+    public string? Explanation { get; set; }
     public byte[] ContentHash { get; set; } = [];
     public VerificationStatus VerificationStatus { get; set; }
     public string? ParseWarning { get; set; }

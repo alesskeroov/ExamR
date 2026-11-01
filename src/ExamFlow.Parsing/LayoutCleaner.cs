@@ -14,7 +14,7 @@ public static partial class LayoutCleaner
     private static partial Regex Digits();
 
     /// <summary>Question or option starts are content, even when they repeat at page edges.</summary>
-    [GeneratedRegex(@"^((sual|№)\s*\d|\d{1,4}\s*[.):\-]|[A-Fa-f]\s*[).]|[•●○◦▪■□√✓✔☑])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^(cavab\s*[:：]|[iİıI]zah\s*[:：]|answer\s*[:：]|(sual|№)\s*\d|\d{1,4}\s*[.):\-]|[A-Fa-f]\s*[).]|[•●○◦▪■□√✓✔☑])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex Structural();
 
     public static IReadOnlyList<TextLine> Clean(IReadOnlyList<TextLine> lines)

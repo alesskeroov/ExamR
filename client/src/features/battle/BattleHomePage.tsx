@@ -1,6 +1,6 @@
 import { LogIn, Swords, Users } from 'lucide-react'
 import { useId, useState, type FormEvent, type ReactNode } from 'react'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { Button } from '../../components/common/Button'
 import { PageHeader } from '../../components/common/PageHeader'
 import { ApiError } from '../../lib/api-client'
@@ -18,6 +18,7 @@ export function BattleHomePage() {
   return (
     <>
       <PageHeader title="Battle" description="Dostlarınızla real vaxtda yarışın: eyni suallar, eyni anda, ən sürətli düzgün cavab qalib gəlir." />
+      <Link to="/battle/rooms" className="mb-5 inline-block font-medium text-indigo-600 hover:text-indigo-700">Otaqlarım →</Link>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <CreateRoomCard />
         <JoinRoomCard />
@@ -28,10 +29,11 @@ export function BattleHomePage() {
 
 function CreateRoomCard() {
   const navigate = useNavigate()
-  const documents = useCompletedDocuments()
+  const documents = useCompletedDocuments(true)
   const create = useCreateBattle()
 
   const [documentId, setDocumentId] = useState('')
+  const [name, setName] = useState('')
   const [range, setRange] = useState<{ from: string; to: string } | null>(null)
   const [count, setCount] = useState('10')
   const [seconds, setSeconds] = useState(20)
@@ -55,7 +57,7 @@ function CreateRoomCard() {
     event.preventDefault()
     if (!rangeValid || !countValid) return
     create.mutate(
-      { documentId, rangeFrom: from!, rangeTo: to!, questionCount, secondsPerQuestion: seconds },
+      { name, documentId, rangeFrom: from!, rangeTo: to!, questionCount, secondsPerQuestion: seconds },
       { onSuccess: ({ code }) => navigate(`/battle/${code}`) },
     )
   }
@@ -63,6 +65,9 @@ function CreateRoomCard() {
   return (
     <Card icon={<Swords className="size-5" />} title="Otaq yarat" subtitle="Siz host olacaqsınız: yarışı siz başladırsınız və idarə edirsiniz.">
       <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
+        <Field label="Otağın adı">
+          {id => <input id={id} value={name} maxLength={100} onChange={e => setName(e.target.value)} placeholder="Məsələn, axşam sınağı" className={inputClass} />}
+        </Field>
         <Field label="PDF">
           {(id) => (
             <select

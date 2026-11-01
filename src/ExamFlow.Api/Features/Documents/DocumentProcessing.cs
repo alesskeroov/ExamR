@@ -51,7 +51,9 @@ public sealed class DocumentProcessingService(
             using var scope = scopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var ids = await db.Documents
-                .Where(d => d.Status == DocumentStatus.Pending || d.Status == DocumentStatus.Processing)
+                .Where(d => d.Status == DocumentStatus.Pending || d.Status == DocumentStatus.Processing
+                    || (d.Status == DocumentStatus.Completed && d.StoredFileName.EndsWith(".docx")
+                        && d.Questions.Any(q => q.Explanation == null || q.Explanation == "")))
                 .OrderBy(d => d.CreatedAt)
                 .Select(d => d.Id)
                 .ToListAsync(ct);
@@ -74,6 +76,7 @@ public sealed class DocumentProcessor(
     AppDbContext db,
     IFileStorage storage,
     PdfQuestionParser parser,
+    DocxQuestionParser docxParser,
     TimeProvider clock,
     IOptions<DocumentOptions> options,
     ILogger<DocumentProcessor> logger)
@@ -83,17 +86,23 @@ public sealed class DocumentProcessor(
     public async Task ProcessAsync(Guid documentId, CancellationToken ct)
     {
         var document = await db.Documents.FirstOrDefaultAsync(d => d.Id == documentId, ct);
-        if (document is null || document.Status is DocumentStatus.Completed or DocumentStatus.Failed)
+        if (document is null || document.Status == DocumentStatus.Failed)
         {
             return; // Deleted meanwhile, or already handled.
         }
 
-        document.Status = DocumentStatus.Processing;
-        await db.SaveChangesAsync(ct);
+        // Enrich legacy Word answers without replacing question IDs or deleting study history.
+        var repairAnswers = document.Status == DocumentStatus.Completed;
+        if (!repairAnswers)
+        {
+            document.Status = DocumentStatus.Processing;
+            await db.SaveChangesAsync(ct);
+        }
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromSeconds(options.Value.ParseTimeoutSeconds));
 
+        var isDocx = string.Equals(Path.GetExtension(document.StoredFileName), ".docx", StringComparison.OrdinalIgnoreCase);
         ParseResult result;
         try
         {
@@ -103,7 +112,7 @@ public sealed class DocumentProcessor(
             buffer.Position = 0;
 
             // CPU-bound; keep it off the request/IO threads.
-            result = await Task.Run(() => parser.Parse(buffer, timeout.Token), timeout.Token);
+            result = await Task.Run(() => isDocx ? docxParser.Parse(buffer, timeout.Token) : parser.Parse(buffer, timeout.Token), timeout.Token);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -111,20 +120,44 @@ public sealed class DocumentProcessor(
         }
         catch (OperationCanceledException)
         {
+            if (repairAnswers) return;
             await FailAsync(document, "Emal çox uzun çəkdi.", ct);
             return;
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Parsing failed for document {DocumentId}", documentId);
-            await FailAsync(document, "PDF faylı oxuna bilmədi.", ct);
+            if (repairAnswers) return;
+            await FailAsync(document, isDocx ? "DOCX faylı oxuna bilmədi." : "PDF faylı oxuna bilmədi.", ct);
             return;
         }
 
         if (!result.IsSuccess)
         {
+            if (repairAnswers) return;
             document.PageCount = result.PageCount > 0 ? result.PageCount : document.PageCount;
-            await FailAsync(document, FailureMessage(result.Failure), ct);
+            await FailAsync(document, isDocx
+                ? result.Failure == ParseFailure.NoQuestions
+                    ? "Sual formatı tanınmadı. Nömrəli suallar, A) variantlar və ya Cavab:/İzah: ilə ayrılmış açıq cavablar istifadə edin."
+                    : "DOCX faylı oxuna bilmədi."
+                : FailureMessage(result.Failure), ct);
+            return;
+        }
+
+        if (repairAnswers)
+        {
+            var legacy = await db.Questions.Where(q => q.DocumentId == documentId
+                && (q.Explanation == null || q.Explanation == "")).ToListAsync(ct);
+            foreach (var question in legacy)
+            {
+                var parsed = result.Questions.FirstOrDefault(q => q.Number == question.SourceNumber
+                    && q.Options.Count == 0 && !string.IsNullOrWhiteSpace(q.Explanation));
+                if (parsed is null) continue;
+                question.Text = parsed.Text;
+                question.Explanation = parsed.Explanation;
+                question.ContentHash = parsed.ContentHash;
+            }
+            await db.SaveChangesAsync(ct);
             return;
         }
 
@@ -134,7 +167,7 @@ public sealed class DocumentProcessor(
         db.Questions.AddRange(result.Questions.Select(q => ToEntity(documentId, q)));
 
         document.Status = DocumentStatus.Completed;
-        document.PageCount = result.PageCount;
+        document.PageCount = isDocx ? null : result.PageCount;
         document.ErrorMessage = null;
         document.ProcessedAt = clock.GetUtcNow();
         document.ProcessingReport = new ProcessingReport
@@ -155,6 +188,7 @@ public sealed class DocumentProcessor(
         DocumentId = documentId,
         SourceNumber = parsed.Number,
         Text = parsed.Text,
+        Explanation = parsed.Explanation,
         ContentHash = parsed.ContentHash,
         VerificationStatus = parsed.CorrectIndex is null ? VerificationStatus.Unverified : VerificationStatus.AutoDetected,
         ParseWarning = parsed.Warning is { Length: > 500 } w ? w[..500] : parsed.Warning,

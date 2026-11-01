@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
 using ExamFlow.Api.Features.Auth;
@@ -12,6 +13,7 @@ public static class AuthenticationSetup
 {
     public const string AuthRateLimit = "auth";
     public const string PasswordResetRateLimit = "password-reset";
+    public const string SocialRateLimit = "social";
     public const string HubPathPrefix = "/hubs";
 
     /// <summary>ASP.NET Core Identity (users, password hashing, lockout, reset tokens) + JWT bearer authentication.</summary>
@@ -91,6 +93,14 @@ public static class AuthenticationSetup
                         if (user is null || stamp is null || user.SecurityStamp != stamp)
                         {
                             context.Fail("Token has been revoked.");
+                            return;
+                        }
+
+                        // Roles come from the database, not the token, so a granted or revoked Admin role applies immediately.
+                        if (context.Principal!.Identity is ClaimsIdentity identity)
+                        {
+                            foreach (var claim in identity.FindAll(JwtClaims.Role).ToList()) identity.RemoveClaim(claim);
+                            identity.AddClaims((await users.GetRolesAsync(user)).Select(role => new Claim(JwtClaims.Role, role)));
                         }
                     },
                 };
@@ -103,6 +113,9 @@ public static class AuthenticationSetup
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
             options.AddPolicy(AuthRateLimit, context => PerIp(context, permits: 10, TimeSpan.FromMinutes(1)));
             options.AddPolicy(PasswordResetRateLimit, context => PerIp(context, permits: 5, TimeSpan.FromMinutes(15)));
+            options.AddPolicy(SocialRateLimit, context => RateLimitPartition.GetFixedWindowLimiter(
+                context.User.GetUserId().ToString(), _ => new FixedWindowRateLimiterOptions
+                { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
         });
 
         return services;

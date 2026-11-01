@@ -1,6 +1,6 @@
 import { Clock, Eye, EyeOff, Loader2, PlayCircle } from 'lucide-react'
 import { useId, useState, type ReactNode } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
 import { Button } from '../../components/common/Button'
 import { PageHeader } from '../../components/common/PageHeader'
@@ -19,7 +19,8 @@ export function ExamSetupPage() {
   const documents = useCompletedDocuments()
   const create = useCreateExam()
 
-  const [documentId, setDocumentId] = useState('')
+  const [searchParams] = useSearchParams()
+  const [documentId, setDocumentId] = useState(() => searchParams.get('document') ?? '')
   // Typed range; null = use the PDF's full question-number span.
   const [rangeInput, setRangeInput] = useState<{ from: string; to: string } | null>(null)
   const [count, setCount] = useState(20)

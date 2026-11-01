@@ -26,7 +26,8 @@ public class UploadedDocumentConfiguration : IEntityTypeConfiguration<UploadedDo
             .HasForeignKey(d => d.UploadedByUserId)
             .OnDelete(DeleteBehavior.NoAction);
 
-        builder.HasIndex(d => d.Sha256).IsUnique().HasDatabaseName("UX_UploadedDocuments_Sha256");
+        builder.HasIndex(d => new { d.UploadedByUserId, d.Sha256 }).IsUnique()
+            .HasDatabaseName("UX_UploadedDocuments_User_Sha256");
         builder.HasIndex(d => d.UploadedByUserId);
         builder.HasIndex(d => d.Status);
     }

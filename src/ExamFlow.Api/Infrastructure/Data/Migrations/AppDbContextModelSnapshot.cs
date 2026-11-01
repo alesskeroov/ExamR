@@ -22,6 +22,58 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("ExamFlow.Api.Features.Documents.DocumentUserShare", b =>
+                {
+                    b.Property<Guid>("DocumentId").HasColumnType("uniqueidentifier");
+                    b.Property<Guid>("UserId").HasColumnType("uniqueidentifier");
+                    b.HasKey("DocumentId", "UserId");
+                    b.HasIndex("UserId");
+                    b.ToTable("DocumentUserShares");
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Documents.DocumentGroupShare", b =>
+                {
+                    b.Property<Guid>("DocumentId").HasColumnType("uniqueidentifier");
+                    b.Property<Guid>("GroupId").HasColumnType("uniqueidentifier");
+                    b.HasKey("DocumentId", "GroupId");
+                    b.HasIndex("GroupId");
+                    b.ToTable("DocumentGroupShares");
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Auth.AdminRoleAudit", b =>
+                {
+                    b.Property<long>("Id").ValueGeneratedOnAdd().HasColumnType("bigint");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<Guid>("ActorId").HasColumnType("uniqueidentifier");
+                    b.Property<Guid>("TargetUserId").HasColumnType("uniqueidentifier");
+                    b.Property<string>("Action").IsRequired().HasMaxLength(16).HasColumnType("nvarchar(16)");
+                    b.Property<DateTimeOffset>("CreatedAt").HasColumnType("datetimeoffset");
+                    b.HasKey("Id");
+                    b.HasIndex("TargetUserId");
+                    b.ToTable("AdminRoleAudits");
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Groups.StudyGroup", b =>
+                {
+                    b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("uniqueidentifier");
+                    b.Property<string>("Name").IsRequired().HasMaxLength(120).HasColumnType("nvarchar(120)");
+                    b.Property<string>("NormalizedName").IsRequired().HasMaxLength(120).HasColumnType("nvarchar(120)").UseCollation("Latin1_General_100_BIN2");
+                    b.Property<string>("Description").IsRequired().HasMaxLength(500).HasColumnType("nvarchar(500)");
+                    b.Property<DateTimeOffset>("CreatedAt").HasColumnType("datetimeoffset");
+                    b.HasKey("Id");
+                    b.HasIndex("NormalizedName").IsUnique();
+                    b.ToTable("StudyGroups");
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Groups.StudyGroupMember", b =>
+                {
+                    b.Property<Guid>("GroupId").HasColumnType("uniqueidentifier");
+                    b.Property<Guid>("UserId").HasColumnType("uniqueidentifier");
+                    b.HasKey("GroupId", "UserId");
+                    b.HasIndex("UserId");
+                    b.ToTable("StudyGroupMembers");
+                });
+
             modelBuilder.Entity("ExamFlow.Api.Features.Auth.AppUser", b =>
                 {
                     b.Property<Guid>("Id")
@@ -30,6 +82,14 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
 
                     b.Property<int>("AccessFailedCount")
                         .HasColumnType("int");
+
+                    b.Property<string>("AvatarContentType")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("AvatarFileName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
@@ -53,9 +113,19 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.Property<DateTimeOffset?>("LockoutEnd")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<string>("Nickname")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)");
+
                     b.Property<string>("NormalizedEmail")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("NormalizedNickname")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)");
 
                     b.Property<string>("NormalizedUserName")
                         .HasMaxLength(256)
@@ -84,6 +154,9 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
 
                     b.HasIndex("NormalizedEmail")
                         .HasDatabaseName("EmailIndex");
+
+                    b.HasIndex("NormalizedNickname")
+                        .IsUnique();
 
                     b.HasIndex("NormalizedUserName")
                         .IsUnique()
@@ -150,6 +223,103 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.ToTable("BattleResults", (string)null);
                 });
 
+            modelBuilder.Entity("ExamFlow.Api.Features.Battles.StoredBattleMember", b =>
+                {
+                    b.Property<Guid>("RoomId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsKicked")
+                        .HasColumnType("bit");
+
+                    b.HasKey("RoomId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("StoredBattleMembers");
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Battles.StoredBattleRoom", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(6)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(6)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("CreatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DocumentName")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<Guid>("HostUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsClosed")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("QuestionCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RangeFrom")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RangeTo")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SecondsPerQuestion")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StateJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<byte[]>("Version")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("HostUserId", "Status");
+
+                    b.ToTable("StoredBattleRooms");
+                });
+
             modelBuilder.Entity("ExamFlow.Api.Features.Documents.UploadedDocument", b =>
                 {
                     b.Property<Guid>("Id")
@@ -202,11 +372,13 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.Property<Guid>("UploadedByUserId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("ShareWithEveryone").HasColumnType("bit");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("Sha256")
+                    b.HasIndex("UploadedByUserId", "Sha256")
                         .IsUnique()
-                        .HasDatabaseName("UX_UploadedDocuments_Sha256");
+                        .HasDatabaseName("UX_UploadedDocuments_User_Sha256");
 
                     b.HasIndex("Status");
 
@@ -339,6 +511,105 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.ToTable("ExamQuestions", (string)null);
                 });
 
+            modelBuilder.Entity("ExamFlow.Api.Features.Friends.Friendship", b =>
+                {
+                    b.Property<Guid>("UserLowId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("UserHighId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<bool>("IsAccepted")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("RequestedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("UserLowId", "UserHighId");
+
+                    b.HasIndex("RequestedById");
+
+                    b.HasIndex("UserHighId");
+
+                    b.ToTable("Friendships");
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Friends.SocialNotification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("DocumentName")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<DateTimeOffset?>("ExpiresAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("HostName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)");
+
+                    b.Property<int?>("QuestionCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("ReadAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("RoomCode")
+                        .HasMaxLength(6)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(6)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.HasIndex("UserId", "ReadAt");
+
+                    b.ToTable("SocialNotifications");
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Friends.UserBlock", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("BlockedUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("UserId", "BlockedUserId");
+
+                    b.HasIndex("BlockedUserId");
+
+                    b.ToTable("UserBlocks");
+                });
+
             modelBuilder.Entity("ExamFlow.Api.Features.Questions.AnswerOption", b =>
                 {
                     b.Property<Guid>("Id")
@@ -398,6 +669,9 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.Property<Guid>("DocumentId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Explanation")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("ParseWarning")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
@@ -436,6 +710,124 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("DocumentId", "SourceNumber"), new[] { "VerificationStatus" });
 
                     b.ToTable("Questions", (string)null);
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Study.StudyAiTurn", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("CachedInputTokens")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("EstimatedCostUsd")
+                        .HasPrecision(18, 8)
+                        .HasColumnType("decimal(18,8)");
+
+                    b.Property<int>("InputTokens")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsEstimated")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(16000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("OutputTokens")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ReplyJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.HasIndex("UserId", "DocumentId", "CreatedAt");
+
+                    b.ToTable("StudyAiTurns", (string)null);
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Study.StudyAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Answer")
+                        .HasMaxLength(16000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int?>("CorrectIndex")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("DueAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("EvaluationLeaseUntil")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ExpectedAnswer")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("OptionsJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Prompt")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<Guid>("QuestionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ReferenceText")
+                        .HasMaxLength(16000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("Score")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QuestionId");
+
+                    b.HasIndex("UserId", "QuestionId", "CompletedAt");
+
+                    b.ToTable("StudyAttempts", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", b =>
@@ -580,6 +972,36 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("ExamFlow.Api.Features.Battles.StoredBattleMember", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Battles.StoredBattleRoom", null)
+                        .WithMany("Members")
+                        .HasForeignKey("RoomId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ExamFlow.Api.Features.Auth.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Battles.StoredBattleRoom", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Auth.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ExamFlow.Api.Features.Auth.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("HostUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ExamFlow.Api.Features.Documents.UploadedDocument", b =>
                 {
                     b.HasOne("ExamFlow.Api.Features.Auth.AppUser", "UploadedBy")
@@ -707,6 +1129,57 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ExamFlow.Api.Features.Friends.Friendship", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Auth.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("RequestedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ExamFlow.Api.Features.Auth.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserHighId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ExamFlow.Api.Features.Auth.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserLowId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Friends.SocialNotification", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Auth.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ExamFlow.Api.Features.Auth.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Friends.UserBlock", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Auth.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("BlockedUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ExamFlow.Api.Features.Auth.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ExamFlow.Api.Features.Questions.AnswerOption", b =>
                 {
                     b.HasOne("ExamFlow.Api.Features.Questions.Question", null)
@@ -725,6 +1198,30 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Document");
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Study.StudyAiTurn", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Auth.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Study.StudyAttempt", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Questions.Question", null)
+                        .WithMany()
+                        .HasForeignKey("QuestionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ExamFlow.Api.Features.Auth.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
@@ -778,6 +1275,11 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ExamFlow.Api.Features.Battles.StoredBattleRoom", b =>
+                {
+                    b.Navigation("Members");
+                });
+
             modelBuilder.Entity("ExamFlow.Api.Features.Documents.UploadedDocument", b =>
                 {
                     b.Navigation("Questions");
@@ -791,6 +1293,34 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
             modelBuilder.Entity("ExamFlow.Api.Features.Questions.Question", b =>
                 {
                     b.Navigation("Options");
+                });
+            modelBuilder.Entity("ExamFlow.Api.Features.Groups.StudyGroupMember", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Groups.StudyGroup", "Group").WithMany("Members")
+                        .HasForeignKey("GroupId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                    b.HasOne("ExamFlow.Api.Features.Auth.AppUser", "User").WithMany()
+                        .HasForeignKey("UserId").OnDelete(DeleteBehavior.NoAction).IsRequired();
+                    b.Navigation("Group");
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Groups.StudyGroup", b =>
+                {
+                    b.Navigation("Members");
+                });
+            modelBuilder.Entity("ExamFlow.Api.Features.Documents.DocumentUserShare", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Documents.UploadedDocument", null).WithMany()
+                        .HasForeignKey("DocumentId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                    b.HasOne("ExamFlow.Api.Features.Auth.AppUser", null).WithMany()
+                        .HasForeignKey("UserId").OnDelete(DeleteBehavior.NoAction).IsRequired();
+                });
+            modelBuilder.Entity("ExamFlow.Api.Features.Documents.DocumentGroupShare", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Documents.UploadedDocument", null).WithMany()
+                        .HasForeignKey("DocumentId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                    b.HasOne("ExamFlow.Api.Features.Groups.StudyGroup", null).WithMany()
+                        .HasForeignKey("GroupId").OnDelete(DeleteBehavior.Cascade).IsRequired();
                 });
 #pragma warning restore 612, 618
         }

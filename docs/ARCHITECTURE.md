@@ -68,8 +68,9 @@ ExamFlow/
 │  │  │  │                   (ProcessingQueue, DocumentProcessingService, DocumentProcessor), UploadedDocument
 │  │  │  ├─ Questions/       QuestionEndpoints (read-only siyahı), Question, AnswerOption
 │  │  │  ├─ Exams/           ExamEndpoints, ExamEngine (seçim/qarışdırma/qiymətləndirmə), Exam, ExamDtos, ExamOptions
-│  │  │  ├─ Battles/         BattleHub (SignalR), BattleService (yaddaşda otaqlar + oyun dövrü), BattleScoring,
+│  │  │  ├─ Battles/         BattleHub (SignalR), BattleService (DB snapshot + lokal oyun dövrü), BattleScoring,
 │  │  │  │                   BattleEndpoints (otaq yarat, tarixçə), BattleResult, BattleCleanupService
+│  │  │  ├─ Friends/         FriendsEndpoints, Friendship/UserBlock/SocialNotification, SocialHub + SocialPresence
 │  │  │  └─ Health/          /api/health (DB bağlantısı)
 │  │  ├─ Infrastructure/
 │  │  │  ├─ Data/            AppDbContext, AuditInterceptor, Configurations/, Migrations/
@@ -133,15 +134,15 @@ Brauzer (React, :5190) ──/api──▶ Vite proxy ──▶ ASP.NET Core (:5
 | Auth | Register/Login → Identity (PBKDF2 hash, lockout) → `TokenService` JWT (60 dəq, `sub`/`role`/`sst`). Logout və şifrə bərpası SecurityStamp-i dəyişir → köhnə tokenlər rədd olunur. Forgot password → `EmailQueue` → `SmtpEmailService` |
 | Documents | Upload (validasiya, SHA-256 dublikat yoxlaması) → `IFileStorage` → `ProcessingQueue` → `DocumentProcessingService` → `PdfQuestionParser` → `Questions` + `AnswerOptions` (tək `SaveChanges`) |
 | Questions | Sənəd üzrə səhifələnmiş read-only siyahı (redaktə Phase 4-dədir) |
-| Battles | REST `POST /api/battles` otaq yaradır (host) → SignalR `/hubs/battle` (JWT `access_token` query, yalnız `/hubs` üçün). `BattleService` (singleton) otaqları yaddaşda saxlayır, hər otaq üçün `SemaphoreSlim`; oyun dövrü: sual (15–30 s) → reveal (6 s) → növbəti; hamı cavab verəndə və ya host “Advance” edəndə erkən keçid. Cavab vaxtı, təkrar cavab, üzvlük və host səlahiyyəti serverdə yoxlanılır; düzgün cavab yalnız reveal-da göndərilir. Xal: `BattleScoring` (düzgün 500–1000, yanlış 0). Sonda `BattleResults` cədvəlinə yazılır |
+| Battles | REST `POST /api/battles` qalıcı otaq yaradır → SignalR `/hubs/battle` (JWT). `BattleService` otaq və oyun snapshot-unu MSSQL-də saxlayır, lokal oyun dövrünü hər otaq üçün `SemaphoreSlim` ilə qoruyur. Axın: sual (15–30 s) → reveal (6 s) → növbəti; host “Advance” edə bilər. Cavab vaxtı, üzvlük və host səlahiyyəti serverdə yoxlanılır; düzgün cavab yalnız reveal-da verilir. Xal: `BattleScoring` (500–1000 / 0). Bitmə snapshot-u və `BattleResults` atomik saxlanır. Host çıxanda qalan online iştirakçı Host olur; boş otaq silinir. Bağlantı itkisi üçün 15 s reconnect müddəti var |
 | Exams | PDF + orijinal nömrə aralığı → `ExamEngine.PickQuestions` (Fisher–Yates, hash üzrə dedup) → `ExamQuestions` snapshot (qarışdırılmış variantlar) → cavablar → `ExamEngine.Grade` (serverdə). Vaxtı bitmiş imtahan növbəti sorğuda avtomatik tamamlanır |
 
 ### Arxa plan servisləri (in-process)
 - `DocumentProcessingService` — PDF emalı; restart-da yarımçıq sənədləri yenidən növbəyə qoyur.
 - `SmtpEmailService` — email göndərilməsi (`Smtp:Host` və ya dev üçün `Smtp:PickupDirectory`).
-- `BattleCleanupService` — hər dəqiqə boş / bitmiş / köhnə battle otaqlarını silir.
+- `BattleCleanupService` — restart-da aktiv oyunları DB-dən bərpa edir; bitmiş lokal keşləri boşaldır, qalıcı otaqları silmir.
 
-**Real-time (SignalR):** ASP.NET Core-a daxildir (NuGet yoxdur); frontend `@microsoft/signalr`. MVP bir serverdədir — Redis/backplane yoxdur, buna görə otaq vəziyyəti restart-da itir. Bir neçə instansa keçəndə Azure SignalR və ya Redis backplane + otaq vəziyyətinin paylaşılan yaddaşa köçürülməsi lazımdır.
+**Real-time (SignalR):** ASP.NET Core-a daxildir (NuGet yoxdur); frontend `@microsoft/signalr`. MVP bir serverdədir — Redis/backplane yoxdur. Otaq, üzvlük, Host və oyun snapshot-u MSSQL-dədir; restart-da bərpa edilir. Oyun dövrü və bağlantılar lokal yaddaşda işləyir. Bir neçə instans üçün ayrıca koordinasiya/backplane tələb olunur. Detallar: `docs/BATTLE_ROOMS.md`.
 
 ### Konfiqurasiya
 | Açar | Harada |
@@ -151,7 +152,7 @@ Brauzer (React, :5190) ──/api──▶ Vite proxy ──▶ ASP.NET Core (:5
 | `App:FrontendBaseUrl`, `Smtp:PickupDirectory` | `appsettings.Development.json` (prod-da env) |
 
 ### Migration-lar
-`InitialCreate` (Identity, sənədlər, suallar) → `AddExams` → `AddExamQuestionRange` → `AddBattleResults`. Sxem: `docs/DATABASE_SCHEMA.md`.
+`InitialCreate` (Identity, sənədlər, suallar) → `AddExams` → `AddExamQuestionRange` → `AddBattleResults` → `AddFriendsAndNotifications` → `AddPersistentBattleRooms`. Sxem: `docs/DATABASE_SCHEMA.md`; dostluq: `docs/FRIENDS.md`; otaqlar və yoxlama: `docs/BATTLE_ROOMS.md`.
 
 ### Agent iş axını
 Claude Code və OpenAI Codex növbə ilə işləyir. Ortaq qaydalar `AGENTS.md`-dədir (`CLAUDE.md` onu import edir); vəziyyət, növbəti addımlar və yarımçıq işin ötürülməsi `TASKS.md`-dədir. Commit/push yalnız istifadəçinin təsdiqi ilə.

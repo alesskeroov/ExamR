@@ -7,7 +7,13 @@ export interface User {
   id: string
   email: string
   displayName: string
+  nickname: string
+  avatarUrl: string | null
   roles: string[]
+}
+
+export function normalizeUser(user: User): User {
+  return { ...user, nickname: user.nickname?.trim() || user.displayName || 'İstifadəçi', avatarUrl: user.avatarUrl ?? null }
 }
 
 interface AuthResponse {
@@ -19,6 +25,7 @@ interface AuthResponse {
 export interface LoginRequest {
   email: string
   password: string
+  rememberMe?: boolean
 }
 
 export interface RegisterRequest extends LoginRequest {
@@ -38,7 +45,7 @@ export function useCurrentUser() {
     queryFn: async (): Promise<User | null> => {
       if (!getToken()) return null
       try {
-        return await api.get<User>('/auth/me')
+        return normalizeUser(await api.get<User>('/auth/me'))
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
           clearToken()
@@ -55,9 +62,10 @@ function useSignIn(path: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (request: LoginRequest | RegisterRequest) => api.post<AuthResponse>(path, request),
-    onSuccess: ({ accessToken, expiresAt, user }) => {
-      saveToken({ accessToken, expiresAt })
-      queryClient.setQueryData(queryKeys.me, user)
+    onSuccess: ({ accessToken, expiresAt, user }, request) => {
+      queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== queryKeys.me[0] })
+      saveToken({ accessToken, expiresAt }, path !== '/auth/login' || request.rememberMe === true)
+      queryClient.setQueryData(queryKeys.me, normalizeUser(user))
     },
   })
 }

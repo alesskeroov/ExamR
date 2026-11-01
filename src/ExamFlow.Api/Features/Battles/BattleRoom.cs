@@ -15,7 +15,7 @@ public sealed record BattleSettings(
     Guid DocumentId, string DocumentName, int RangeFrom, int RangeTo, int QuestionCount, int SecondsPerQuestion);
 
 /// <summary>
-/// In-memory state of one live battle (single-server MVP; nothing here survives a restart).
+/// Live state of a persisted battle room. Connections are local to this server.
 /// Every read or write goes through <see cref="Gate"/>.
 /// </summary>
 public sealed class BattleRoom(string code, Guid hostUserId, BattleSettings settings, DateTimeOffset createdAt)
@@ -25,10 +25,14 @@ public sealed class BattleRoom(string code, Guid hostUserId, BattleSettings sett
     public const int MaxRecentMessages = 50;
 
     public SemaphoreSlim Gate { get; } = new(1, 1);
-    public Guid BattleId { get; } = Guid.NewGuid();
+    public Guid BattleId { get; init; } = Guid.NewGuid();
+    public Guid CreatedById { get; init; } = hostUserId;
+    public string Name { get; init; } = "Battle otağı";
+    public byte[] Version { get; set; } = [];
+    public long ConnectionRevision { get; set; }
     public string Code { get; } = code;
     public string Group => $"battle:{Code}";
-    public Guid HostUserId { get; } = hostUserId;
+    public Guid HostUserId { get; set; } = hostUserId;
     public BattleSettings Settings { get; } = settings;
     public DateTimeOffset CreatedAt { get; } = createdAt;
     public DateTimeOffset LastActivityAt { get; set; } = createdAt;
@@ -42,6 +46,7 @@ public sealed class BattleRoom(string code, Guid hostUserId, BattleSettings sett
     public int CurrentIndex { get; set; } = -1;
     public DateTimeOffset QuestionStartedAt { get; set; }
     public DateTimeOffset Deadline { get; set; }
+    public DateTimeOffset RevealEndsAt { get; set; }
 
     /// <summary>Completed to end the current phase early (everyone answered, or the host skipped).</summary>
     public TaskCompletionSource Advance { get; set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -51,12 +56,18 @@ public sealed class BattleRoom(string code, Guid hostUserId, BattleSettings sett
     public ExamQuestion? CurrentQuestion => CurrentIndex >= 0 && CurrentIndex < Questions.Count ? Questions[CurrentIndex] : null;
     public bool IsActive => Status is BattleStatus.Lobby or BattleStatus.Question or BattleStatus.Reveal;
     public bool HasConnections => Participants.Values.Any(p => p.IsConnected);
+    public Guid? ConnectedHostId => Participants.GetValueOrDefault(HostUserId)?.IsConnected == true
+        ? HostUserId
+        : Participants.Values.Where(p => p.IsConnected).OrderBy(p => p.JoinedAt).ThenBy(p => p.UserId)
+            .Select(p => (Guid?)p.UserId).FirstOrDefault();
 }
 
-public sealed class BattleParticipant(Guid userId, string displayName, DateTimeOffset joinedAt)
+public sealed class BattleParticipant(Guid userId, string displayName, DateTimeOffset joinedAt, string? avatarUrl = null)
 {
     public Guid UserId { get; } = userId;
-    public string DisplayName { get; } = displayName;
+    public string DisplayName { get; private set; } = displayName;
+    public string? AvatarUrl { get; set; } = avatarUrl;
+    public void SetProfile(string displayName, string? avatarUrl) { DisplayName = displayName; AvatarUrl = avatarUrl; }
     public DateTimeOffset JoinedAt { get; } = joinedAt;
     public HashSet<string> Connections { get; } = [];
     public bool IsConnected => Connections.Count > 0;

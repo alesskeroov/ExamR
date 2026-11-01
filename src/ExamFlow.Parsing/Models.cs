@@ -25,6 +25,8 @@ public sealed class RawQuestion(int number)
     public int Number { get; } = number;
     public List<TextToken> TextTokens { get; } = [];
     public List<RawOption> Options { get; } = [];
+    public List<TextToken> AnswerTokens { get; } = [];
+    public bool ReadingAnswer { get; set; }
     public List<string> Warnings { get; } = [];
 }
 
@@ -43,7 +45,10 @@ public sealed record ParsedQuestion(
     IReadOnlyList<ParsedOption> Options,
     int? CorrectIndex,
     string? Warning,
-    byte[] ContentHash);
+    byte[] ContentHash)
+{
+    public string? Explanation { get; init; }
+}
 
 public enum ParseFailure
 {

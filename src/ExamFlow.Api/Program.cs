@@ -1,9 +1,12 @@
 using System.Text.Json.Serialization;
 using ExamFlow.Api.Features.Auth;
+using ExamFlow.Api.Features.Study;
 using ExamFlow.Api.Features.Battles;
 using ExamFlow.Api.Features.Documents;
 using ExamFlow.Api.Features.Exams;
 using ExamFlow.Api.Features.Health;
+using ExamFlow.Api.Features.Friends;
+using ExamFlow.Api.Features.Groups;
 using ExamFlow.Api.Features.Questions;
 using ExamFlow.Api.Infrastructure;
 using ExamFlow.Api.Infrastructure.Email;
@@ -30,9 +33,14 @@ builder.Services.AddSingleton<IFileStorage, LocalFileStorage>();
 builder.Services.AddSingleton<IAnswerDetector, MarkerAnswerDetector>(); // order = priority
 builder.Services.AddSingleton<IAnswerDetector, StyleAnswerDetector>();
 builder.Services.AddSingleton<PdfQuestionParser>();
+builder.Services.AddSingleton<DocxQuestionParser>();
 builder.Services.AddSingleton<ProcessingQueue>();
 builder.Services.AddScoped<DocumentProcessor>();
 builder.Services.AddHostedService<DocumentProcessingService>();
+
+builder.Services.AddOptions<StudyAiOptions>()
+    .Bind(builder.Configuration.GetSection(StudyAiOptions.Section)).ValidateDataAnnotations().ValidateOnStart();
+builder.Services.AddHttpClient<StudyAiClient>(client => client.Timeout = TimeSpan.FromSeconds(100));
 
 builder.Services.Configure<ExamOptions>(builder.Configuration.GetSection(ExamOptions.Section));
 
@@ -41,6 +49,9 @@ builder.Services.AddSignalR(options => options.MaximumReceiveMessageSize = 8 * 1
     .AddJsonProtocol(options => options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddSingleton<BattleService>();
 builder.Services.AddHostedService<BattleCleanupService>();
+builder.Services.AddSingleton<SocialPresence>();
+builder.Services.AddSingleton<SocialEvents>();
+builder.Services.Configure<SocialOptions>(builder.Configuration.GetSection("Social"));
 
 // Request limits sit just above the PDF limit; the endpoint returns the friendly 413.
 var maxUpload = builder.Configuration.GetValue<long?>($"{DocumentOptions.Section}:{nameof(DocumentOptions.MaxFileSizeBytes)}")
@@ -68,11 +79,18 @@ if (app.Environment.IsDevelopment())
 var api = app.MapGroup("/api");
 api.MapHealthEndpoints();
 api.MapAuthEndpoints();
+api.MapProfileEndpoints();
 api.MapDocumentEndpoints();
+api.MapDocumentSharingEndpoints();
 api.MapQuestionEndpoints();
+api.MapStudyEndpoints();
 api.MapExamEndpoints();
 api.MapBattleEndpoints();
+api.MapFriendsEndpoints();
+api.MapGroupEndpoints();
+api.MapAdminEndpoints();
 app.MapHub<BattleHub>(BattleHub.Path);
+app.MapHub<SocialHub>("/hubs/social", options => options.CloseOnAuthenticationExpiration = true);
 
 await app.SeedIdentityAsync();
 

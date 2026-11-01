@@ -1,4 +1,6 @@
 using ExamFlow.Api.Infrastructure.Security;
+using ExamFlow.Api.Features.Auth;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 
@@ -9,7 +11,7 @@ namespace ExamFlow.Api.Features.Battles;
 /// checks room membership / host rights in <see cref="BattleService"/>. Errors reach the client as HubException messages.
 /// </summary>
 [Authorize]
-public sealed class BattleHub(BattleService battles) : Hub<IBattleClient>
+public sealed class BattleHub(BattleService battles, UserManager<AppUser> users) : Hub<IBattleClient>
 {
     public const string Path = $"{AuthenticationSetup.HubPathPrefix}/battle";
 
@@ -18,7 +20,13 @@ public sealed class BattleHub(BattleService battles) : Hub<IBattleClient>
     private string DisplayName => Context.User!.FindFirst(JwtClaims.Name)?.Value is { Length: > 0 } name ? name : "İstifadəçi";
 
     /// <summary>Joins (or rejoins after a reconnect) and returns the full room state for this user.</summary>
-    public Task<BattleStateDto> JoinRoom(string code) => battles.JoinAsync(code, UserId, DisplayName, Context.ConnectionId);
+    public async Task<BattleStateDto> JoinRoom(string code)
+    {
+        var user = await users.GetUserAsync(Context.User!);
+        var name = user?.Nickname ?? DisplayName;
+        var avatar = user?.AvatarFileName is null ? null : $"/api/profile/avatar/{UserId}?v={user.AvatarFileName}";
+        return await battles.JoinAsync(code, UserId, name, Context.ConnectionId, avatar);
+    }
 
     public Task LeaveRoom(string code) => battles.LeaveAsync(code, UserId, Context.ConnectionId);
 
@@ -33,6 +41,8 @@ public sealed class BattleHub(BattleService battles) : Hub<IBattleClient>
     public Task SetMuted(string code, Guid userId, bool muted) => battles.SetMutedAsync(code, UserId, userId, muted);
 
     public Task Kick(string code, Guid userId) => battles.KickAsync(code, UserId, userId);
+    public Task TransferHost(string code, Guid userId) => battles.TransferHostAsync(code, UserId, userId, Context.ConnectionAborted);
+    public Task CloseRoom(string code) => battles.CloseRoomAsync(code, UserId, Context.ConnectionAborted);
 
     public override Task OnDisconnectedAsync(Exception? exception) => battles.DisconnectAsync(Context.ConnectionId);
 }

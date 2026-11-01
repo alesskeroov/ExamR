@@ -27,6 +27,7 @@ export interface DocumentDto {
   pageCount: number | null
   status: DocumentStatus
   uploadedBy: { id: string; displayName: string }
+  sharingStatus: 'Private' | 'Users' | 'Groups' | 'UsersAndGroups' | 'Everyone'
   canEdit: boolean
   questionCount: number
   processingReport: ProcessingReport | null
@@ -58,20 +59,20 @@ export const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024
 const QUESTIONS_PAGE_SIZE = 20
 const isProcessing = (status?: DocumentStatus) => status === 'Pending' || status === 'Processing'
 
-export function useMyDocuments() {
+export function useMyDocuments(page = 1) {
   return useQuery({
-    queryKey: queryKeys.documents.mine,
-    queryFn: () => api.get<PagedResult<DocumentDto>>('/documents?mine=true&pageSize=10'),
+    queryKey: queryKeys.documents.minePage(page),
+    queryFn: () => api.get<PagedResult<DocumentDto>>(`/documents?mine=true&page=${page}&pageSize=10`),
     // Keep the list fresh while something in it is still being processed.
     refetchInterval: (query) => (query.state.data?.items.some((d) => isProcessing(d.status)) ? 2000 : false),
   })
 }
 
-/** All processed documents in the shared bank (exam sources). */
-export function useCompletedDocuments() {
+/** The current user's processed multiple-choice exam sources. */
+export function useCompletedDocuments(forBattle = false) {
   return useQuery({
-    queryKey: queryKeys.documents.completed,
-    queryFn: () => api.get<PagedResult<DocumentDto>>('/documents?status=Completed&pageSize=100'),
+    queryKey: forBattle ? queryKeys.documents.battle : queryKeys.documents.completed,
+    queryFn: () => api.get<PagedResult<DocumentDto>>(`/documents?status=Completed&forExam=true&pageSize=100&${forBattle ? 'forBattle=true' : 'includeShared=true'}`),
   })
 }
 
@@ -91,7 +92,23 @@ export function useUploadDocument(onProgress: (percent: number) => void) {
     mutationFn: (file: File) => uploadFile<DocumentDto>('/documents', file, onProgress),
     onSuccess: (document) => {
       queryClient.setQueryData(queryKeys.documents.detail(document.id), document)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.documents.completed })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.study.documents })
       void queryClient.invalidateQueries({ queryKey: queryKeys.documents.mine })
+    },
+  })
+}
+
+export function useDeleteDocument() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/documents/${id}`),
+    onSuccess: (_, id) => {
+      queryClient.removeQueries({ queryKey: queryKeys.documents.detail(id) })
+      queryClient.removeQueries({ queryKey: queryKeys.questions.document(id) })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.documents.mine })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.documents.completed })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.study.documents })
     },
   })
 }
@@ -103,6 +120,8 @@ export function useReprocessDocument() {
     onSuccess: (document) => {
       queryClient.setQueryData(queryKeys.documents.detail(document.id), document)
       void queryClient.invalidateQueries({ queryKey: ['questions'] })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.documents.completed })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.study.documents })
       void queryClient.invalidateQueries({ queryKey: queryKeys.documents.mine })
     },
   })
@@ -127,4 +146,9 @@ export function useDocumentQuestions(documentId: string, filter: QuestionFilter,
     enabled,
     placeholderData: keepPreviousData,
   })
+}
+
+export function useSharedDocuments(page = 1) {
+  return useQuery({ queryKey: queryKeys.documents.shared(page),
+    queryFn: () => api.get<PagedResult<DocumentDto>>(`/documents?shared=true&page=${page}&pageSize=10`), refetchInterval: 15_000 })
 }

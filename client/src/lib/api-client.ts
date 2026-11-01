@@ -83,3 +83,21 @@ export const api = {
   put: <T>(path: string, body?: unknown, init?: RequestOptions) => apiRequest<T>(path, { ...init, method: 'PUT', body }),
   delete: <T = void>(path: string, init?: RequestOptions) => apiRequest<T>(path, { ...init, method: 'DELETE' }),
 }
+
+/** Download protected files with the same bearer credentials as JSON requests. */
+export async function downloadFile(path: string, fileName: string): Promise<void> {
+  const token = getToken()
+  const response = await fetch(`/api${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+  if (!response.ok) {
+    const problem = await response.json().catch(() => undefined) as ProblemDetails | undefined
+    throw new ApiError(response.status, problem)
+  }
+  const url = URL.createObjectURL(await response.blob())
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  document.body.append(link)
+  link.click()
+  link.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}

@@ -1,10 +1,12 @@
-import { ArrowLeft, MailCheck } from 'lucide-react'
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { ArrowLeft, ArrowUpRight, BookOpen, Check, ChartNoAxesCombined, Eye, EyeOff, FileText, MailCheck, Moon, Sun } from 'lucide-react'
+import { useState, type ComponentProps, type FormEvent, type ReactNode } from 'react'
 import { Button } from '../../components/common/Button'
 import { FormField } from '../../components/common/FormField'
 import { fieldErrors } from '../../lib/form-errors'
 import { cn } from '../../lib/utils'
 import { useForgotPassword, useLogin, useRegister } from './api'
+import './auth.css'
+import { useTheme } from '../../lib/use-theme'
 
 type Mode = 'login' | 'register' | 'forgot'
 
@@ -22,22 +24,61 @@ export function AuthPage() {
   )
 }
 
-/** Centered card layout shared by the sign-in and password-reset screens. */
+/** Authentication layout using the shared application theme. */
 export function AuthShell({ children }: { children: ReactNode }) {
+  const { dark, toggleTheme } = useTheme()
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-slate-50 px-4 py-12">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 flex flex-col items-center gap-3 text-center">
-          <img src="/favicon.svg" alt="" className="size-10" />
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">ExamFlow</h1>
-            <p className="mt-1 text-slate-600">PDF-dən sınaq imtahanları</p>
-          </div>
+    <div className="auth-page" data-theme={dark ? 'dark' : 'light'}>
+      <header className="auth-header mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-6 sm:px-10">
+        <a href="/" className="flex items-center gap-2.5 text-xl font-semibold tracking-tight" aria-label="ExamR ana səhifə">
+          <img src="/favicon.svg" alt="" className="size-9" />ExamR<span className="auth-wordmark-dot" />
+        </a>
+        <div className="flex items-center gap-5">
+          <button type="button" onClick={toggleTheme} aria-pressed={dark} aria-label={dark ? 'İşıqlı rejimə keç' : 'Qaranlıq rejimə keç'} className="auth-theme-toggle grid size-10 place-items-center rounded-full border transition-colors">
+            {dark ? <Sun className="size-[18px]" aria-hidden /> : <Moon className="size-[18px]" aria-hidden />}
+          </button>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">{children}</div>
-      </div>
+      </header>
+      <main className="auth-main mx-auto grid w-full max-w-7xl flex-1 items-center gap-10 px-6 pb-10 pt-4 sm:px-10 lg:grid-cols-[1.1fr_1fr] lg:gap-16 lg:py-8">
+        <section className="auth-story hidden self-center lg:block" aria-labelledby="auth-story-title">
+          <div className="auth-eyebrow mb-5 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium"><span className="size-1.5 rounded-full bg-indigo-500" />Sənin şəxsi öyrənmə məkanın</div>
+          <h1 id="auth-story-title" className="max-w-lg text-[clamp(2.6rem,4vw,3.6rem)] font-semibold leading-[1.1] tracking-[-0.045em]">Biliklərini gücləndir.<br /><span className="auth-accent">Nəticəni dəyiş.</span></h1>
+          <p className="auth-muted mt-5 max-w-md text-base leading-7">Sənədlərini öyrənmə planına çevir. Öz tempində hazırlaş, sınaqlarla biliklərini yoxla və irəliləyişini izlə.</p>
+          <div className="auth-preview relative mt-9 h-[310px]" aria-hidden="true">
+            <div className="auth-preview-glow" />
+            <div className="auth-mini-card auth-source-card absolute left-0 top-2 flex items-center gap-3 rounded-2xl border p-4">
+              <div className="auth-icon-box grid size-10 place-items-center rounded-xl"><FileText className="size-5" /></div>
+              <div><p className="text-sm font-semibold">Öyrənmə materialları</p><p className="auth-muted mt-1 text-xs">PDF və DOCX · Bir yerdə</p></div><Check className="ml-5 size-4 text-indigo-500" />
+            </div>
+            <div className="auth-mini-card auth-question-card absolute left-8 right-5 top-24 rounded-2xl border p-5">
+              <div className="auth-muted flex items-center justify-between text-[11px] font-medium"><span className="flex items-center gap-1.5"><BookOpen className="size-3.5" />SINAQ İMTAHANI</span><span>04 / 20</span></div>
+              <p className="mt-4 text-sm font-medium">Biliklərini addım-addım möhkəmləndir.</p>
+              <div className="auth-demo-option mt-4 flex items-center gap-2.5 rounded-lg border p-2.5 text-xs"><span className="grid size-5 place-items-center rounded-full bg-indigo-500 text-white"><Check className="size-3" /></span>Hər məşq daha bir addımdır</div>
+              <div className="auth-progress-track mt-4 h-1.5 overflow-hidden rounded-full"><div className="h-full w-2/3 rounded-full bg-indigo-500" /></div>
+            </div>
+            <div className="auth-mini-card auth-result-card absolute bottom-0 right-0 flex items-center gap-3 rounded-2xl border px-4 py-3">
+              <div className="auth-icon-box grid size-10 place-items-center rounded-full"><ChartNoAxesCombined className="size-5" /></div><div><p className="text-xs font-semibold">İrəliləyişin görünür</p><p className="auth-muted mt-1 text-[11px]">Hər gün bir az daha yaxşı</p></div><ArrowUpRight className="size-4 text-indigo-500" />
+            </div>
+          </div>
+        </section>
+        <section className="auth-form-card mx-auto w-full max-w-[460px] rounded-3xl border p-6 sm:p-9" aria-label="Hesaba giriş və qeydiyyat">
+          <div className="auth-form-content">{children}</div>
+          <div className="auth-form-footer mt-6 border-t pt-5 text-center text-xs">Öyrənməyə ayırdığın vaxtın dəyəri var.</div>
+        </section>
+      </main>
+      <footer className="auth-muted mx-auto flex w-full max-w-7xl justify-between gap-4 px-6 py-5 text-[11px] sm:px-10"><span>ExamR · Öyrənməyə davam et.</span><span>Diqqətin biliyində qalsın.</span></footer>
     </div>
   )
+}
+
+export function AuthPasswordField(props: ComponentProps<typeof FormField>) {
+  const [visible, setVisible] = useState(false)
+  return <div className="auth-password relative">
+    <FormField {...props} type={visible ? 'text' : 'password'} className={cn('pr-12', props.className)} />
+    <button type="button" aria-label={visible ? 'Şifrəni gizlət' : 'Şifrəni göstər'} aria-pressed={visible} onClick={() => setVisible(value => !value)} className="auth-password-toggle absolute right-2 top-[31px] grid size-8 place-items-center rounded-lg">
+      {visible ? <EyeOff className="size-[18px]" aria-hidden /> : <Eye className="size-[18px]" aria-hidden />}
+    </button>
+  </div>
 }
 
 function SignInForm({ mode, onModeChange }: { mode: 'login' | 'register'; onModeChange: (mode: Mode) => void }) {
@@ -48,6 +89,7 @@ function SignInForm({ mode, onModeChange }: { mode: 'login' | 'register'; onMode
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
+  const [rememberMe, setRememberMe] = useState(false)
   const errors = fieldErrors(mutation.error)
 
   function switchMode(next: Mode) {
@@ -58,23 +100,29 @@ function SignInForm({ mode, onModeChange }: { mode: 'login' | 'register'; onMode
 
   function submit(event: FormEvent) {
     event.preventDefault()
-    if (mode === 'login') login.mutate({ email, password })
+    if (mode === 'login') login.mutate({ email, password, rememberMe })
     else register.mutate({ email, password, displayName })
   }
 
   return (
     <>
-      <div role="tablist" aria-label="Giriş növü" className="mb-6 grid grid-cols-2 rounded-lg bg-slate-100 p-1">
+      <div key={mode} className="auth-mode-enter mb-6 min-h-[80px]">
+        <p className="auth-accent mb-2 text-xs font-semibold uppercase tracking-[0.16em]">{mode === 'login' ? 'Yenidən xoş gördük' : 'Yeni başlanğıc'}</p>
+        <h2 className="text-2xl font-semibold tracking-tight">{mode === 'login' ? 'Öyrənməyə davam et.' : 'İlk addımını at.'}</h2>
+        <p className="auth-muted mt-2 text-sm">{mode === 'login' ? 'Hesabına daxil ol, qaldığın yerdən davam et.' : 'ExamR hesabını yarat və hazırlığa başla.'}</p>
+      </div>
+      <div role="tablist" data-mode={mode} aria-label="Giriş növü" className="auth-tabs mb-6 grid grid-cols-2 rounded-xl p-1">
         {(['login', 'register'] as const).map((m) => (
           <button
             key={m}
             type="button"
             role="tab"
+            disabled={mutation.isPending}
             aria-selected={mode === m}
             onClick={() => switchMode(m)}
             className={cn(
-              'h-8 rounded-md font-medium transition-colors duration-150',
-              mode === m ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900',
+              'h-10 rounded-lg text-sm font-medium transition-colors duration-150 disabled:opacity-60',
+              mode === m ? 'auth-tab-active' : 'auth-muted',
             )}
           >
             {m === 'login' ? 'Daxil ol' : 'Qeydiyyat'}
@@ -83,16 +131,6 @@ function SignInForm({ mode, onModeChange }: { mode: 'login' | 'register'; onMode
       </div>
 
       <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
-        {mode === 'register' && (
-          <FormField
-            label="Ad"
-            autoComplete="name"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            error={errors.field('displayName')}
-            required
-          />
-        )}
         <FormField
           label="Email"
           type="email"
@@ -102,7 +140,7 @@ function SignInForm({ mode, onModeChange }: { mode: 'login' | 'register'; onMode
           error={errors.field('email')}
           required
         />
-        <FormField
+        <AuthPasswordField
           label="Şifrə"
           type="password"
           autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
@@ -111,24 +149,29 @@ function SignInForm({ mode, onModeChange }: { mode: 'login' | 'register'; onMode
           error={errors.field('password')}
           required
         />
-        {mode === 'register' && <p className="-mt-2 text-slate-500">Ən azı 8 simvol, böyük/kiçik hərf və rəqəm.</p>}
-        {mode === 'login' && (
-          <button
-            type="button"
-            onClick={() => switchMode('forgot')}
-            className="-mt-2 self-end font-medium text-indigo-600 hover:text-indigo-700"
-          >
-            Şifrəmi unutdum
-          </button>
-        )}
+        <div className="auth-mode-slot">
+          <div className="auth-mode-panel" data-active={mode === 'register'} aria-hidden={mode !== 'register'}>
+            <div className="auth-mode-panel-inner space-y-2">
+            <FormField label="Ad" autoComplete="name" value={displayName} onChange={e => setDisplayName(e.target.value)} error={errors.field('displayName')} disabled={mode !== 'register'} required={mode === 'register'} />
+            <p className="auth-muted text-xs">Şifrə: ən azı 8 simvol, böyük/kiçik hərf və rəqəm.</p>
+            </div>
+          </div>
+          <div className="auth-mode-panel" data-active={mode === 'login'} aria-hidden={mode !== 'login'}>
+            <div className="auth-mode-panel-inner flex flex-wrap items-center justify-between gap-3">
+              <label className="auth-remember-option">
+                <input type="checkbox" checked={rememberMe} onChange={event => setRememberMe(event.target.checked)} disabled={mode !== 'login' || mutation.isPending} className="auth-remember" />
+                <span className="auth-remember-box" aria-hidden="true"><Check className="size-3" /></span>
+                Məni xatırla
+              </label>
+              <button type="button" disabled={mode !== 'login' || mutation.isPending} onClick={() => switchMode('forgot')} className="auth-link text-xs font-medium">Şifrəmi unutdum</button>
+            </div>
+          </div>
+        </div>
+        <div className={errors.general ? undefined : 'hidden'} aria-live="polite">
+          {errors.general && <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-rose-700">{errors.general}</p>}
+        </div>
 
-        {errors.general && (
-          <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-rose-700">
-            {errors.general}
-          </p>
-        )}
-
-        <Button type="submit" loading={mutation.isPending} className="mt-2 w-full">
+        <Button type="submit" loading={mutation.isPending} className="auth-submit w-full">
           {mode === 'login' ? 'Daxil ol' : 'Hesab yarat'}
         </Button>
       </form>
@@ -147,7 +190,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
         <ArrowLeft className="size-4" aria-hidden />
         Girişə qayıt
       </button>
-      <h2 className="text-lg font-semibold">Şifrəni bərpa et</h2>
+      <h2 className="text-2xl font-semibold tracking-tight">Şifrəni bərpa et</h2>
 
       {forgot.isSuccess ? (
         <div role="status" className="mt-4 flex gap-3 rounded-lg bg-emerald-50 px-3 py-3 text-emerald-800">
@@ -178,7 +221,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
               {errors.general}
             </p>
           )}
-          <Button type="submit" loading={forgot.isPending} className="w-full">
+          <Button type="submit" loading={forgot.isPending} className="auth-submit w-full">
             Link göndər
           </Button>
         </form>

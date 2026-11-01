@@ -1,9 +1,11 @@
+using ExamFlow.Api.Features.Documents;
 using System.Security.Claims;
 using ExamFlow.Api.Common;
 using ExamFlow.Api.Features.Exams;
 using ExamFlow.Api.Infrastructure.Data;
 using ExamFlow.Api.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.SignalR;
 
 namespace ExamFlow.Api.Features.Battles;
 
@@ -14,6 +16,8 @@ public static class BattleEndpoints
         var group = api.MapGroup("/battles").RequireAuthorization();
         group.MapPost("/", Create).Validate<CreateBattleRequest>();
         group.MapGet("/history", History);
+        group.MapGet("/rooms", MyRooms);
+        group.MapPost("/rooms/{code}/close", CloseRoom);
     }
 
     /// <summary>Creates a room; the caller becomes its host. Players then join over SignalR with the code.</summary>
@@ -21,10 +25,12 @@ public static class BattleEndpoints
         CreateBattleRequest request, ClaimsPrincipal user, AppDbContext db, BattleService battles, CancellationToken ct)
     {
         var userId = user.GetUserId();
-        if (battles.FindActiveHostedRoom(userId) is { } existing)
+        var existingCode = await db.StoredBattleRooms.AsNoTracking()
+            .Where(r => r.HostUserId == userId && !r.IsClosed && r.Status != RoomStatus.Completed).Select(r => r.Code).FirstOrDefaultAsync(ct);
+        if (existingCode is not null)
         {
             return TypedResults.Problem("Artıq aktiv otağınız var.", statusCode: StatusCodes.Status409Conflict,
-                extensions: new Dictionary<string, object?> { ["code"] = existing.Code });
+                extensions: new Dictionary<string, object?> { ["code"] = existingCode });
         }
 
         if (request.RangeFrom > request.RangeTo)
@@ -33,10 +39,12 @@ public static class BattleEndpoints
         }
 
         var documentId = request.DocumentId!.Value;
-        var documentName = await db.Documents.Where(d => d.Id == documentId).Select(d => d.OriginalFileName).FirstOrDefaultAsync(ct);
+        var documentName = await DocumentAccess.ForBattle(db, userId).Where(d => d.Id == documentId
+            && d.Questions.Any(q => q.Options.Count >= 2)
+                && !d.Questions.Any(q => q.Explanation != null && q.Explanation != "")).Select(d => d.OriginalFileName).FirstOrDefaultAsync(ct);
         if (documentName is null)
         {
-            return TypedResults.Problem("Seçilmiş PDF tapılmadı.", statusCode: StatusCodes.Status400BadRequest);
+            return TypedResults.Problem("Sənəd tapılmadı.", statusCode: StatusCodes.Status404NotFound);
         }
 
         // Battles only use questions with a known correct answer.
@@ -50,9 +58,33 @@ public static class BattleEndpoints
                 extensions: new Dictionary<string, object?> { ["available"] = available });
         }
 
-        var code = battles.Create(userId, new BattleSettings(
-            documentId, documentName, request.RangeFrom, request.RangeTo, request.QuestionCount, request.SecondsPerQuestion));
+        var name = request.Name?.Trim() ?? string.Empty;
+        if (name.Length == 0) name = "Battle otağı";
+        var hostName = await db.Users.Where(u => u.Id == userId).Select(u => u.Nickname).SingleAsync(ct);
+        var code = await battles.CreateAsync(userId, hostName, name, new BattleSettings(
+            documentId, documentName, request.RangeFrom, request.RangeTo, request.QuestionCount, request.SecondsPerQuestion), ct);
         return TypedResults.Created($"/battle/{code}", new CreateBattleResponse(code));
+    }
+
+    private static async Task<IResult> MyRooms(bool? includeCompleted, ClaimsPrincipal user, AppDbContext db, CancellationToken ct)
+    {
+        var id = user.GetUserId();
+        var rooms = await db.StoredBattleRooms.AsNoTracking()
+            .Where(r => r.CreatedById == id || r.Members.Any(m => m.UserId == id && !m.IsKicked))
+            .Where(r => includeCompleted == true || r.Status != RoomStatus.Completed)
+            .OrderByDescending(r => r.UpdatedAt).Take(100)
+            .Select(r => new MyBattleRoomDto(r.Id, r.Name, r.Code, r.DocumentName,
+                r.Members.Count(m => !m.IsKicked), r.Status, r.HostUserId == id, r.IsClosed,
+                !r.IsClosed && r.Members.Any(m => m.UserId == id && !m.IsKicked))).ToListAsync(ct);
+        return TypedResults.Ok(rooms);
+    }
+
+    private static async Task<IResult> CloseRoom(string code, ClaimsPrincipal user, AppDbContext db, BattleService battles, CancellationToken ct)
+    {
+        var id = user.GetUserId();
+        if (!await db.StoredBattleRooms.AsNoTracking().AnyAsync(r => r.Code == code && r.HostUserId == id, ct)) return TypedResults.NotFound();
+        try { await battles.CloseRoomAsync(code, id, ct); return TypedResults.NoContent(); }
+        catch (HubException ex) { return TypedResults.Problem(ex.Message, statusCode: 409); }
     }
 
     /// <summary>The caller's own battle results only.</summary>

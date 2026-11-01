@@ -16,7 +16,7 @@ public sealed class SmtpOptions
     public string? UserName { get; set; }
     public string? Password { get; set; }
     public string From { get; set; } = "no-reply@examflow.local";
-    public string FromName { get; set; } = "ExamFlow";
+    public string FromName { get; set; } = "ExamR";
 
     /// <summary>Local testing without a mail server: messages are written as .eml files to this folder.</summary>
     public string? PickupDirectory { get; set; }

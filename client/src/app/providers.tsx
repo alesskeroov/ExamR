@@ -1,8 +1,10 @@
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { ConfirmProvider } from '../components/common/ConfirmProvider'
 import { RouterProvider } from 'react-router'
 import { ApiError } from '../lib/api-client'
 import { clearToken } from '../lib/auth-token'
 import { queryKeys } from '../lib/query-keys'
+import { useTheme } from '../lib/use-theme'
 import { router } from './router'
 
 // A 401 anywhere means the token expired or was revoked: drop it so the sign-in screen shows.
@@ -26,9 +28,10 @@ const queryClient: QueryClient = new QueryClient({
 })
 
 export function Providers() {
+  useTheme()
   return (
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <ConfirmProvider><RouterProvider router={router} /></ConfirmProvider>
     </QueryClientProvider>
   )
 }

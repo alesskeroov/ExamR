@@ -1,54 +1,40 @@
 import {
   Check,
-  Circle,
   Copy,
   Crown,
-  Diamond,
-  Hexagon,
   Loader2,
   LogOut,
   Mic,
   MicOff,
-  Square,
-  Star,
-  Triangle,
   UserX,
   Wifi,
   WifiOff,
   X,
-  type LucideIcon,
 } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
 import { Button } from '../../components/common/Button'
 import { formatNumber } from '../../lib/format'
+import { useConfirm } from '../../lib/use-confirm'
 import { cn } from '../../lib/utils'
-import { useCurrentUser } from '../auth/api'
+import { NotificationBell } from '../friends/NotificationBell'
 import { BattleMessageButton, ChatPanel } from './ChatPanel'
+import { RoomInviteModal } from './RoomInviteModal'
 import { useBattleRoom, type BattleParticipant, type BattleState, type ConnectionStatus } from './api'
 
 type Room = ReturnType<typeof useBattleRoom>
 
-const TILES: { color: string; icon: LucideIcon }[] = [
-  { color: 'bg-rose-500', icon: Triangle },
-  { color: 'bg-sky-500', icon: Diamond },
-  { color: 'bg-amber-500', icon: Circle },
-  { color: 'bg-emerald-500', icon: Square },
-  { color: 'bg-violet-500', icon: Star },
-  { color: 'bg-cyan-600', icon: Hexagon },
-]
-
 export function BattleRoomPage() {
   const { code = '' } = useParams()
   const navigate = useNavigate()
-  const { data: me } = useCurrentUser()
+  const confirm = useConfirm()
   const room = useBattleRoom(code.toUpperCase())
   const [chatOpen, setChatOpen] = useState(false)
   const [seenMessages, setSeenMessages] = useState(0)
 
   const state = room.state
-  const myId = me?.id ?? ''
+  const myId = room.myUserId
   const isHost = state?.hostUserId === myId
   const myself = state?.participants.find((p) => p.userId === myId)
   const unread = chatOpen ? 0 : room.messages.length - seenMessages
@@ -62,7 +48,7 @@ export function BattleRoomPage() {
 
   async function leave() {
     await room.leave()
-    navigate('/battle')
+    navigate('/battle/rooms')
   }
 
   if (room.fatal) {
@@ -76,7 +62,7 @@ export function BattleRoomPage() {
     )
   }
 
-  if (!state) {
+  if (!state || !myId) {
     return (
       <Centered>
         <Loader2 className="size-6 animate-spin text-slate-400" aria-label="Qoşulur" />
@@ -100,17 +86,18 @@ export function BattleRoomPage() {
     <div className="flex min-h-dvh flex-col bg-slate-50">
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-[1200px] items-center gap-3 px-4">
-          <Link to="/" aria-label="ExamFlow ana səhifə" className="shrink-0">
+          <Link to="/" aria-label="ExamR ana səhifə" className="shrink-0">
             <img src="/favicon.svg" alt="" className="size-7" />
           </Link>
           <div className="min-w-0 flex-1">
-            <p className="truncate font-semibold">{state.settings.documentName}</p>
-            <p className="text-xs text-slate-500">
+            <p className="truncate font-semibold">{state.name}</p>
+            <p className="truncate text-xs text-slate-500" title={state.settings.documentName}>
               Otaq <span className="font-mono font-semibold tracking-wider text-slate-700">{state.code}</span> · suallar{' '}
-              {state.settings.rangeFrom}–{state.settings.rangeTo}
+              {state.settings.rangeFrom}–{state.settings.rangeTo} · {state.settings.documentName}
             </p>
           </div>
           <ConnectionBadge status={room.status} />
+          <NotificationBell />
           <Button variant="ghost" className="h-9 px-2 sm:px-3" onClick={leave}>
             <LogOut className="size-4" aria-hidden />
             <span className="hidden sm:inline">Çıx</span>
@@ -120,6 +107,12 @@ export function BattleRoomPage() {
 
       <div className="mx-auto grid w-full max-w-[1200px] flex-1 gap-6 px-4 py-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <main className="flex min-w-0 flex-col gap-4">
+          <div className="flex items-center justify-between gap-3">
+            <Link to="/battle/rooms" className="text-sm font-medium text-slate-600 hover:text-indigo-600">Otaqlarım</Link>
+            {isHost && <Button variant="ghost" className="h-8 px-2 text-xs" onClick={async () => {
+              if (await confirm({ title: 'Otaq bağlansın?', description: 'Otaq bütün iştirakçılar üçün bağlanacaq.', confirmLabel: 'Otağı bağla', danger: true }) && await room.closeRoom()) navigate('/battle/rooms')
+            }}>Otağı bağla</Button>}
+          </div>
           {room.actionError && (
             <Alert title={room.actionError} action={<Button variant="ghost" onClick={room.clearActionError}>Bağla</Button>} />
           )}
@@ -156,6 +149,7 @@ export function BattleRoomPage() {
 
 function Lobby({ state, room, isHost, myId }: { state: BattleState; room: Room; isHost: boolean; myId: string }) {
   const [copied, setCopied] = useState(false)
+  const [inviteOpen, setInviteOpen] = useState(false)
   const online = state.participants.filter((p) => p.isConnected).length
   const link = `${window.location.origin}/battle/${state.code}`
 
@@ -185,7 +179,9 @@ function Lobby({ state, room, isHost, myId }: { state: BattleState; room: Room; 
         <p className="mt-4 text-sm text-indigo-100">
           {state.settings.questionCount} sual · hər suala {state.settings.secondsPerQuestion} saniyə
         </p>
+        <button type="button" onClick={() => setInviteOpen(true)} className="mt-4 block w-full text-sm font-medium underline underline-offset-4">Dost dəvət et</button>
       </section>
+      {inviteOpen && <RoomInviteModal code={state.code} isFull={state.participants.length >= 10} onClose={() => setInviteOpen(false)} />}
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-4 flex items-center justify-between gap-3">
@@ -206,9 +202,9 @@ function Lobby({ state, room, isHost, myId }: { state: BattleState; room: Room; 
         {isHost && online < 2 && <p className="mb-4 text-slate-500">Başlamaq üçün ən azı 2 onlayn iştirakçı lazımdır. Kodu dostlarınızla paylaşın.</p>}
         <ul className="grid gap-2 sm:grid-cols-2">
           {state.participants.map((p) => (
-            <li key={p.userId} className={cn('flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2.5', !p.isConnected && 'opacity-50')}>
-              <Avatar name={p.displayName} />
-              <span className="min-w-0 flex-1">
+            <li key={p.userId} className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 px-3 py-2.5">
+              <Avatar name={p.displayName} src={p.avatarUrl} />
+              <span className={cn('min-w-0 flex-1', !p.isConnected && 'text-slate-400')}>
                 <span className="flex items-center gap-1.5 truncate font-medium">
                   {p.displayName}
                   {p.userId === myId && <span className="text-slate-400">(siz)</span>}
@@ -227,8 +223,13 @@ function Lobby({ state, room, isHost, myId }: { state: BattleState; room: Room; 
 }
 
 function HostActions({ participant, room }: { participant: BattleParticipant; room: Room }) {
+  const confirm = useConfirm()
   return (
     <span className="flex shrink-0 gap-1">
+      <button type="button" className="rounded-lg px-2 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100"
+        aria-label={`${participant.displayName}: Host et`} onClick={async () => {
+          if (await confirm({ title: 'Host səlahiyyəti ötürülsün?', description: `${participant.displayName} yeni Host olacaq. Siz adi iştirakçı olacaqsınız.`, confirmLabel: 'Host et' })) void room.transferHost(participant.userId)
+        }}>Host et</button>
       <button
         type="button"
         onClick={() => room.setMuted(participant.userId, !participant.isMuted)}
@@ -240,8 +241,8 @@ function HostActions({ participant, room }: { participant: BattleParticipant; ro
       </button>
       <button
         type="button"
-        onClick={() => {
-          if (window.confirm(`${participant.displayName} otaqdan çıxarılsın?`)) void room.kick(participant.userId)
+        onClick={async () => {
+          if (await confirm({ title: 'İştirakçı çıxarılsın?', description: `${participant.displayName} otaqdan çıxarılacaq.`, confirmLabel: 'Otaqdan çıxar', danger: true })) void room.kick(participant.userId)
         }}
         className="rounded-lg p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600"
         aria-label={`${participant.displayName}: otaqdan çıxar`}
@@ -263,8 +264,8 @@ function Stage({ state, room, isHost, myId }: { state: BattleState; room: Room; 
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3">
-        <span className="rounded-full bg-indigo-100 px-3 py-1 text-sm font-semibold text-indigo-700 tabular-nums">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <span className="text-sm font-medium text-slate-700 tabular-nums">
           Sual {question.index + 1} / {question.total}
         </span>
         {!reveal && (
@@ -281,17 +282,15 @@ function Stage({ state, room, isHost, myId }: { state: BattleState; room: Room; 
 
       {!reveal && <Countdown endsAt={question.endsAt} seconds={question.secondsPerQuestion} offset={room.serverOffset} />}
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-8">
-        <h1 className="text-xl leading-8 font-semibold sm:text-2xl sm:leading-9">{question.text}</h1>
+      <section className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
+        <h1 className="text-lg leading-8 font-medium break-words text-slate-900 sm:text-xl">{question.text}</h1>
       </section>
 
-      <div role="radiogroup" aria-label="Variantlar" className="grid gap-3 sm:grid-cols-2">
-        {question.options.map((option, i) => {
-          const tile = TILES[i % TILES.length]
-          const Icon = tile.icon
+      <div role="radiogroup" aria-label="Variantlar" className="flex flex-col gap-2.5">
+        {question.options.map((option) => {
           const isCorrect = reveal?.correctOptionId === option.id
           const isMine = answered === option.id
-          const dimmed = reveal ? !isCorrect && !isMine : answered !== null && !isMine
+          const isWrongPick = !!reveal && isMine && !isCorrect
 
           return (
             <button
@@ -302,19 +301,26 @@ function Stage({ state, room, isHost, myId }: { state: BattleState; room: Room; 
               disabled={!!reveal || answered !== null}
               onClick={() => room.answer(question.index, option.id)}
               className={cn(
-                'relative flex min-h-20 items-center gap-3 rounded-xl px-4 py-4 text-left text-lg font-semibold text-white shadow-sm transition-all duration-150',
-                tile.color,
-                !reveal && answered === null && 'hover:-translate-y-0.5 hover:brightness-110 active:translate-y-0',
-                dimmed && 'opacity-30',
-                isMine && !reveal && 'ring-4 ring-slate-900/80 ring-offset-2',
-                reveal && isMine && !isCorrect && 'opacity-60',
+                'flex min-h-16 w-full items-start gap-3 rounded-xl border px-4 py-4 text-left text-sm text-slate-700 transition-colors duration-150 motion-reduce:transition-none sm:gap-4 sm:px-5 sm:text-[15px]',
+                isCorrect ? 'border-emerald-300 bg-emerald-50/60'
+                  : isWrongPick ? 'border-rose-300 bg-rose-50/60'
+                    : isMine ? 'border-indigo-400 bg-indigo-50/60'
+                      : 'border-slate-200 bg-white',
+                !reveal && answered === null && 'hover:border-slate-400 hover:bg-slate-50',
                 'disabled:cursor-default',
               )}
             >
-              <Icon className="size-6 shrink-0 fill-white/30" aria-hidden />
-              <span className="flex-1 leading-6">{option.text}</span>
-              {reveal && isCorrect && <Check className="size-7 shrink-0 rounded-full bg-white p-1 text-emerald-600" strokeWidth={3} aria-label="Düzgün cavab" />}
-              {reveal && isMine && !isCorrect && <X className="size-7 shrink-0 rounded-full bg-white p-1 text-rose-600" strokeWidth={3} aria-label="Sizin cavabınız" />}
+              <span className={cn(
+                'flex size-7 shrink-0 items-center justify-center rounded-md border text-xs font-medium',
+                isCorrect ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                  : isWrongPick ? 'border-rose-200 bg-rose-50 text-rose-800'
+                    : isMine ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                      : 'border-slate-200 bg-slate-50 text-slate-500',
+              )} aria-hidden>{option.label}</span>
+              <span className="min-w-0 flex-1 pt-0.5 leading-6 break-words">{option.text}</span>
+              {isCorrect && <Check className="mt-1 size-4 shrink-0 text-emerald-700" aria-label="Düzgün cavab" />}
+              {isWrongPick && <X className="mt-1 size-4 shrink-0 text-rose-700" aria-label="Sizin cavabınız, yanlış" />}
+              {isMine && !reveal && <Check className="mt-1 size-4 shrink-0 text-indigo-600" aria-label="Seçilmiş cavab" />}
             </button>
           )
         })}
@@ -330,7 +336,7 @@ function Stage({ state, room, isHost, myId }: { state: BattleState; room: Room; 
         <div
           role="status"
           className={cn(
-            'rounded-xl px-4 py-3 text-center text-lg font-semibold',
+            'rounded-xl px-4 py-3 text-sm font-medium',
             mine.lastCorrect ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-800',
           )}
         >
@@ -338,7 +344,7 @@ function Stage({ state, room, isHost, myId }: { state: BattleState; room: Room; 
         </div>
       )}
 
-      {reveal && <Leaderboard participants={state.participants} myId={myId} />}
+      <Leaderboard participants={state.participants} myId={myId} room={room} isHost={isHost} />
     </>
   )
 }
@@ -358,20 +364,20 @@ function Countdown({ endsAt, seconds, offset }: { endsAt: string; seconds: numbe
 
   return (
     <div className="flex items-center gap-3" role="timer" aria-label={`${secondsLeft} saniyə qalıb`}>
-      <div className="h-3 flex-1 overflow-hidden rounded-full bg-slate-200">
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200">
         <div
           className={cn('h-full rounded-full transition-[width] duration-100 ease-linear', secondsLeft <= 5 ? 'bg-rose-500' : 'bg-indigo-600')}
           style={{ width: `${fraction * 100}%` }}
         />
       </div>
-      <span className={cn('w-10 text-right text-2xl font-bold tabular-nums', secondsLeft <= 5 ? 'text-rose-600' : 'text-slate-900')}>
+      <span className={cn('w-10 text-right text-lg font-medium tabular-nums', secondsLeft <= 5 ? 'text-rose-600' : 'text-slate-700')}>
         {secondsLeft}
       </span>
     </div>
   )
 }
 
-function Leaderboard({ participants, myId }: { participants: BattleParticipant[]; myId: string }) {
+function Leaderboard({ participants, myId, room, isHost }: { participants: BattleParticipant[]; myId: string; room?: Room; isHost?: boolean }) {
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <h2 className="mb-3 font-semibold">Liderlər cədvəli</h2>
@@ -379,7 +385,7 @@ function Leaderboard({ participants, myId }: { participants: BattleParticipant[]
         {participants.map((p) => (
           <li
             key={p.userId}
-            className={cn('flex items-center gap-3 rounded-lg px-3 py-2', p.userId === myId ? 'bg-indigo-50' : 'bg-slate-50')}
+            className={cn('flex flex-wrap items-center gap-3 rounded-lg px-3 py-2', p.userId === myId ? 'bg-indigo-50' : 'bg-slate-50')}
           >
             <span className="w-6 text-center font-bold text-slate-500 tabular-nums">{p.rank}</span>
             <Avatar name={p.displayName} small />
@@ -390,6 +396,8 @@ function Leaderboard({ participants, myId }: { participants: BattleParticipant[]
               </span>
             )}
             <span className="w-16 text-right font-bold tabular-nums">{formatNumber(p.score)}</span>
+            {p.isHost && <Crown className="size-4 text-amber-500" aria-label="Host" />}
+            {isHost && room && !p.isHost && <HostActions participant={p} room={room} />}
           </li>
         ))}
       </ol>
@@ -464,17 +472,15 @@ function ConnectionBadge({ status }: { status: ConnectionStatus }) {
   )
 }
 
-function Avatar({ name, small }: { name: string; small?: boolean }) {
+function Avatar({ name, small, src }: { name: string; small?: boolean; src?: string | null }) {
   const hue = [...name].reduce((sum, c) => sum + c.charCodeAt(0), 0) % 360
-  return (
-    <span
+  return src ? <img src={src} alt="" className={cn('shrink-0 rounded-full border border-slate-200 object-cover', small ? 'size-7' : 'size-9')} /> : <span
       aria-hidden
       className={cn('flex shrink-0 items-center justify-center rounded-full font-semibold text-white', small ? 'size-7 text-xs' : 'size-9')}
       style={{ backgroundColor: `hsl(${hue} 55% 50%)` }}
     >
       {name.charAt(0).toUpperCase()}
     </span>
-  )
 }
 
 function Centered({ children }: { children: ReactNode }) {

@@ -1,15 +1,55 @@
 export const queryKeys = {
+  admins: {
+    all: ['admins'] as const,
+    list: ['admins', 'list'] as const,
+    search: (term: string) => ['admins', 'search', term] as const,
+  },
+  groups: {
+    all: ['groups'] as const,
+    list: (userId: string, admin: boolean) => ['groups', userId, 'list', admin] as const,
+    detail: (userId: string, id: string) => ['groups', userId, id] as const,
+    documents: (userId: string, id: string) => ['groups', userId, id, 'documents'] as const,
+    members: (userId: string, id: string) => ['groups', userId, id, 'members'] as const,
+    search: (userId: string, id: string, term: string) => ['groups', userId, id, 'search', term] as const,
+  },
+  study: {
+    documents: ['study', 'documents'] as const,
+    progress: (documentId: string) => ['study', documentId, 'progress'] as const,
+    history: (documentId: string) => ['study', documentId, 'history'] as const,
+    usage: ['study', 'usage'] as const,
+  },
   health: ['health'] as const,
   me: ['me'] as const,
+  social: {
+    all: ['social'] as const,
+    friends: (id: string) => ['social', id, 'friends'] as const,
+    notifications: (id: string) => ['social', id, 'notifications'] as const,
+    search: (id: string, term: string) => ['social', id, 'search', term] as const,
+    lobbies: (id: string) => ['social', id, 'lobbies'] as const,
+    room: (code: string) => ['social', 'room', code] as const,
+    roomFriends: (code: string, id: string, term: string) => ['social', 'room', code, id, term] as const,
+  },
+  sharing: {
+    all: ['sharing'] as const,
+    detail: (id: string) => ['sharing', id] as const,
+    users: (term: string) => ['sharing', 'users', term] as const,
+  },
   documents: {
+    all: ['documents'] as const,
     mine: ['documents', 'mine'] as const,
+    minePage: (page: number) => ['documents', 'mine', page] as const,
     completed: ['documents', 'completed'] as const,
+    battle: ['documents', 'battle'] as const,
+    shared: (page: number) => ['documents', 'shared', page] as const,
     detail: (id: string) => ['documents', 'detail', id] as const,
   },
   questions: {
+    document: (documentId: string) => ['questions', 'byDocument', documentId] as const,
     byDocument: (documentId: string, filter: string) => ['questions', 'byDocument', documentId, filter] as const,
   },
   battles: {
+    all: ['battles'] as const,
+    rooms: (id: string, includeCompleted: boolean) => ['battles', 'rooms', id, includeCompleted] as const,
     history: (page: number) => ['battles', 'history', page] as const,
   },
   exams: {

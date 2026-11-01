@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using ExamFlow.Api.Common;
 using ExamFlow.Api.Features.Questions;
+using ExamFlow.Api.Features.Documents;
 using ExamFlow.Api.Infrastructure.Data;
 using ExamFlow.Api.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
@@ -29,11 +30,13 @@ public static class ExamEndpoints
     /// Without from/to the whole PDF is counted.
     /// </summary>
     private static async Task<IResult> Availability(
-        Guid documentId, AppDbContext db, IOptions<ExamOptions> options, CancellationToken ct, int? from = null, int? to = null)
+        Guid documentId, ClaimsPrincipal user, AppDbContext db, IOptions<ExamOptions> options, CancellationToken ct, int? from = null, int? to = null)
     {
-        if (!await db.Documents.AnyAsync(d => d.Id == documentId, ct))
+        if (!await DocumentAccess.Readable(db, user.GetUserId()).AnyAsync(d => d.Id == documentId
+            && d.Questions.Any(q => q.Options.Count >= 2)
+                && !d.Questions.Any(q => q.Explanation != null && q.Explanation != ""), ct))
         {
-            return Problem(StatusCodes.Status404NotFound, "PDF tapılmadı.");
+            return Problem(StatusCodes.Status404NotFound, "Sənəd tapılmadı.");
         }
 
         var numbers = await db.Questions.AsNoTracking()
@@ -71,9 +74,11 @@ public static class ExamEndpoints
             return Problem(StatusCodes.Status400BadRequest, "Başlanğıc sual nömrəsi son nömrədən böyük ola bilməz.");
         }
 
-        if (!await db.Documents.AnyAsync(d => d.Id == documentId, ct))
+        if (!await DocumentAccess.Readable(db, user.GetUserId()).AnyAsync(d => d.Id == documentId
+            && d.Questions.Any(q => q.Options.Count >= 2)
+                && !d.Questions.Any(q => q.Explanation != null && q.Explanation != ""), ct))
         {
-            return Problem(StatusCodes.Status400BadRequest, "Seçilmiş PDF tapılmadı.");
+            return Problem(StatusCodes.Status404NotFound, "Sənəd tapılmadı.");
         }
 
         var active = await LoadActiveAsync(db, userId, ct);
@@ -297,8 +302,16 @@ public static class ExamEndpoints
         };
     }
 
-    private static Task<Exam?> LoadAsync(AppDbContext db, Guid id, Guid userId, CancellationToken ct) =>
-        db.Exams.Include(e => e.Questions).FirstOrDefaultAsync(e => e.Id == id && e.UserId == userId, ct);
+    private static async Task<Exam?> LoadAsync(AppDbContext db, Guid id, Guid userId, CancellationToken ct)
+    {
+        var exam = await db.Exams.Include(e => e.Questions).FirstOrDefaultAsync(e => e.Id == id && e.UserId == userId, ct);
+        if (exam is null) return null;
+        var readable = DocumentAccess.Readable(db, userId);
+        // Preserve historical personal exams while blocking snapshots whose shared access was revoked.
+        if (await db.Documents.AsNoTracking().AnyAsync(d => exam.SourceDocumentIds.Contains(d.Id)
+            && d.UploadedByUserId != userId && !readable.Any(allowed => allowed.Id == d.Id), ct)) return null;
+        return exam;
+    }
 
     private static Task<Exam?> LoadActiveAsync(AppDbContext db, Guid userId, CancellationToken ct) =>
         db.Exams.Include(e => e.Questions).FirstOrDefaultAsync(e => e.UserId == userId && e.Status == ExamStatus.InProgress, ct);
