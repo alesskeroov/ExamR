@@ -53,11 +53,14 @@ builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection(SmtpOpt
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.Section));
 builder.Services.AddSingleton<EmailQueue>();
 // Brevo (HTTPS) in production — Render Free blocks outbound SMTP; SMTP / .eml pickup stays for local development.
-if (string.Equals(builder.Configuration["Email:Provider"], "Brevo", StringComparison.OrdinalIgnoreCase))
+var emailProvider = builder.Configuration["Email:Provider"]?.Trim().Trim('"');
+if (string.Equals(emailProvider, "Brevo", StringComparison.OrdinalIgnoreCase))
     builder.Services.AddHttpClient<IEmailTransport, BrevoTransport>(client => client.Timeout = TimeSpan.FromSeconds(20));
 else
     builder.Services.AddSingleton<IEmailTransport, SmtpTransport>();
 builder.Services.AddHostedService<SmtpEmailService>();
+// Visible in the host's startup log, so a misconfigured provider is obvious without sending a test email.
+Console.WriteLine($"Email provider: {(string.Equals(emailProvider, "Brevo", StringComparison.OrdinalIgnoreCase) ? "Brevo" : "SMTP")} (Email:Provider='{emailProvider}')");
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
 builder.Services.ConfigureHttpJsonOptions(options =>
