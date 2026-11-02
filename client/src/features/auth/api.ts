@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '../../lib/api-client'
-import { clearToken, getToken, saveToken } from '../../lib/auth-token'
+import { clearToken } from '../../lib/auth-token'
 import { queryKeys } from '../../lib/query-keys'
 
 export interface User {
@@ -17,7 +17,6 @@ export function normalizeUser(user: User): User {
 }
 
 interface AuthResponse {
-  accessToken: string
   expiresAt: string
   user: User
 }
@@ -43,9 +42,9 @@ export function useCurrentUser() {
   return useQuery({
     queryKey: queryKeys.me,
     queryFn: async (): Promise<User | null> => {
-      if (!getToken()) return null
       try {
-        return normalizeUser(await api.get<User>('/auth/me'))
+        // A hanging request (connected Wi-Fi without internet) must not keep the app loading forever.
+        return normalizeUser(await api.get<User>('/auth/me', { signal: AbortSignal.timeout(15_000) }))
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
           clearToken()
@@ -62,9 +61,10 @@ function useSignIn(path: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (request: LoginRequest | RegisterRequest) => api.post<AuthResponse>(path, request),
-    onSuccess: ({ accessToken, expiresAt, user }, request) => {
+    // The API sets the HttpOnly session cookie (persistent only with Remember Me).
+    onSuccess: ({ user }) => {
       queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== queryKeys.me[0] })
-      saveToken({ accessToken, expiresAt }, path !== '/auth/login' || request.rememberMe === true)
+      clearToken()
       queryClient.setQueryData(queryKeys.me, normalizeUser(user))
     },
   })

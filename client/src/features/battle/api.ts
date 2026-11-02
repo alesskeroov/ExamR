@@ -2,7 +2,6 @@ import { HubConnectionBuilder, HubConnectionState, LogLevel, type HubConnection 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../../lib/api-client'
-import { getToken } from '../../lib/auth-token'
 import { queryKeys } from '../../lib/query-keys'
 import type { PagedResult } from '../documents/api'
 import type { ExamOption, ExamSource } from '../exams/api'
@@ -156,7 +155,7 @@ export function useBattleRoom(code: string) {
   useEffect(() => {
     let disposed = false
     const connection = new HubConnectionBuilder()
-      .withUrl('/hubs/battle', { accessTokenFactory: () => getToken() ?? '' })
+      .withUrl('/hubs/battle')
       .withAutomaticReconnect([0, 1000, 2000, 5000, 10000, 10000, 15000, 30000])
       .configureLogging(LogLevel.Warning)
       .build()

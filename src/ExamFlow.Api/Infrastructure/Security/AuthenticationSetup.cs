@@ -4,6 +4,7 @@ using System.Threading.RateLimiting;
 using ExamFlow.Api.Features.Auth;
 using ExamFlow.Api.Infrastructure.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 
@@ -15,6 +16,7 @@ public static class AuthenticationSetup
     public const string PasswordResetRateLimit = "password-reset";
     public const string SocialRateLimit = "social";
     public const string HubPathPrefix = "/hubs";
+    public const string CsrfHeader = "X-ExamR-Request";
 
     /// <summary>ASP.NET Core Identity (users, password hashing, lockout, reset tokens) + JWT bearer authentication.</summary>
     public static IServiceCollection AddJwtIdentity(this IServiceCollection services, IConfiguration configuration)
@@ -75,10 +77,22 @@ public static class AuthenticationSetup
                     // as ?access_token=. Accept it only for hub endpoints.
                     OnMessageReceived = context =>
                     {
-                        var token = context.Request.Query["access_token"];
-                        if (!string.IsNullOrEmpty(token) && context.HttpContext.Request.Path.StartsWithSegments(HubPathPrefix))
+                        var request = context.HttpContext.Request;
+                        var token = request.Query["access_token"];
+                        if (!string.IsNullOrEmpty(token) && request.Path.StartsWithSegments(HubPathPrefix))
                         {
                             context.Token = token;
+                        }
+                        else if (!request.Headers.ContainsKey("Authorization") && request.Cookies.TryGetValue(AuthCookie.Name, out var cookie))
+                        {
+                            // CSRF defence in depth on top of SameSite=Strict: state-changing API calls must carry a
+                            // custom header, which cross-site forms cannot set. Hubs negotiate over POST without it.
+                            var safe = HttpMethods.IsGet(request.Method) || HttpMethods.IsHead(request.Method) || HttpMethods.IsOptions(request.Method);
+                            if (safe || request.Path.StartsWithSegments(HubPathPrefix) || request.Headers.ContainsKey(CsrfHeader))
+                            {
+                                context.Token = cookie;
+                                context.HttpContext.Items[AuthCookie.Name] = true;
+                            }
                         }
 
                         return Task.CompletedTask;
@@ -102,9 +116,43 @@ public static class AuthenticationSetup
                             foreach (var claim in identity.FindAll(JwtClaims.Role).ToList()) identity.RemoveClaim(claim);
                             identity.AddClaims((await users.GetRolesAsync(user)).Select(role => new Claim(JwtClaims.Role, role)));
                         }
+
+                        // Sliding refresh: past half its lifetime the cookie gets a fresh token with the same persistence.
+                        // Revocation still works because every token carries the current security stamp.
+                        if (context.HttpContext.Items.ContainsKey(AuthCookie.Name) && context.SecurityToken is { } issued
+                            && issued.ValidTo - DateTime.UtcNow < (issued.ValidTo - issued.ValidFrom) / 2)
+                        {
+                            var remember = context.Principal.FindFirst(JwtClaims.RememberMe) is not null;
+                            var fresh = context.HttpContext.RequestServices.GetRequiredService<TokenService>()
+                                .Create(user, await users.GetRolesAsync(user), remember);
+                            AuthCookie.Append(context.HttpContext.Response, fresh, remember);
+                        }
                     },
                 };
+            })
+            // Short-lived cookie that only carries the Google result to /api/auth/google/complete.
+            .AddCookie(IdentityConstants.ExternalScheme, options =>
+            {
+                options.Cookie.Name = "examr.external";
+                options.Cookie.HttpOnly = true;
+                options.Cookie.SameSite = SameSiteMode.Lax;
+                options.ExpireTimeSpan = TimeSpan.FromMinutes(10);
             });
+
+        if (GoogleAuthEndpoints.IsConfigured(configuration))
+        {
+            services.AddAuthentication().AddGoogle(GoogleAuthEndpoints.Scheme, options =>
+            {
+                options.ClientId = configuration["Authentication:Google:ClientId"]!;
+                options.ClientSecret = configuration["Authentication:Google:ClientSecret"]!;
+                options.SignInScheme = IdentityConstants.ExternalScheme;
+                options.CallbackPath = "/api/auth/google/callback";
+                options.UsePkce = true;
+                // The return from accounts.google.com is a top-level GET, which Lax cookies survive (also over local http).
+                options.CorrelationCookie.SameSite = SameSiteMode.Lax;
+                options.ClaimActions.MapJsonKey("email_verified", "email_verified");
+            });
+        }
 
         services.AddAuthorization();
 

@@ -1,9 +1,10 @@
-import { Search, Users } from 'lucide-react'
+import { Ban, Check, Search, Swords, Unlock, UserMinus, UserPlus, Users, X, type LucideIcon } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { Alert } from '../../components/common/Alert'
 import { Button } from '../../components/common/Button'
 import { EmptyState } from '../../components/common/EmptyState'
 import { PageHeader } from '../../components/common/PageHeader'
+import { useConfirm } from '../../lib/use-confirm'
 import { cn } from '../../lib/utils'
 import { BattleInviteModal } from './BattleInviteModal'
 import { useFriendAction, useFriends, useUserSearch, type Friend, type FriendAction } from './api'
@@ -21,7 +22,12 @@ export function FriendsPage() {
   const search = useUserSearch(term)
   const [inviting, setInviting] = useState<Friend | null>(null)
   const [notice, setNotice] = useState('')
-  function act(id: string, action: FriendAction) {
+  const confirm = useConfirm()
+  async function act(id: string, action: FriendAction, name?: string) {
+    // Removing a friend or blocking someone is destructive, so ask first.
+    if ((action === 'block' || (action === 'remove' && tab === 'friends')) && !await confirm(action === 'block'
+      ? { title: 'İstifadəçi bloklansın?', description: `“${name}” sizə sorğu göndərə və Battle dəvəti edə bilməyəcək.`, confirmLabel: 'Blokla', danger: true }
+      : { title: 'Dostluqdan çıxarılsın?', description: `“${name}” dost siyahınızdan silinəcək.`, confirmLabel: 'Çıxar', danger: true })) return
     setNotice('')
     change.mutate({ id, action }, { onSuccess: () => setNotice(action === 'request' ? 'Dostluq sorğusu göndərildi.' : 'Dəyişiklik saxlanıldı.') })
   }
@@ -43,9 +49,9 @@ export function FriendsPage() {
           {search.isError && <Alert title="Axtarış alınmadı">{search.error.message}</Alert>}
           {search.data?.length === 0 && <p className="text-slate-500">İstifadəçi tapılmadı.</p>}
           {search.data?.map(person => <PersonRow key={person.id} person={person}>
-            {person.relationship === 'None' ? <Button variant="secondary" disabled={change.isPending} onClick={() => act(person.id, 'request')}>Dost əlavə et</Button>
+            {person.relationship === 'None' ? <Button variant="secondary" disabled={change.isPending} onClick={() => act(person.id, 'request')}><UserPlus className="size-4" aria-hidden />Dost əlavə et</Button>
               : <span className="text-xs text-slate-500">{person.relationship === 'Friend' ? 'Dostunuzdur' : person.relationship === 'Incoming' ? 'Gələn sorğu var' : 'Sorğu göndərilib'}</span>}
-            <Button variant="ghost" disabled={change.isPending} onClick={() => act(person.id, 'block')}>Blokla</Button>
+            <IconAction icon={Ban} label="Blokla" danger disabled={change.isPending} onClick={() => act(person.id, 'block', person.displayName)} />
           </PersonRow>)}
         </div>}
       </section>
@@ -67,14 +73,14 @@ export function FriendsPage() {
         {friends.isSuccess && people.length === 0 && <EmptyState title={onlineOnly && tab === 'friends' ? 'Onlayn dost yoxdur' : 'Bu siyahı hələ boşdur'}
           description="Ad və ya istifadəçi adı ilə axtararaq dost əlavə edə bilərsiniz." icon={<Users className="size-6" />} />}
         <div className="space-y-3">{people.map(person => <PersonRow key={person.id} person={person} showOnline={tab === 'friends'}>
-          {tab === 'friends' && <><Button variant="secondary" onClick={() => setInviting(person)}>Battle-a dəvət et</Button>
-            <Button variant="ghost" disabled={change.isPending} onClick={() => act(person.id, 'remove')}>Dostluqdan çıxar</Button>
-            <Button variant="ghost" disabled={change.isPending} onClick={() => act(person.id, 'block')}>Blokla</Button></>}
-          {tab === 'incoming' && <><Button disabled={change.isPending} onClick={() => act(person.id, 'accept')}>Qəbul et</Button>
-            <Button variant="secondary" disabled={change.isPending} onClick={() => act(person.id, 'reject')}>Rədd et</Button>
-            <Button variant="ghost" disabled={change.isPending} onClick={() => act(person.id, 'block')}>Blokla</Button></>}
-          {tab === 'outgoing' && <Button variant="secondary" disabled={change.isPending} onClick={() => act(person.id, 'remove')}>Sorğunu ləğv et</Button>}
-          {tab === 'blocked' && <Button variant="secondary" disabled={change.isPending} onClick={() => act(person.id, 'unblock')}>Bloku aç</Button>}
+          {tab === 'friends' && <><Button variant="secondary" onClick={() => setInviting(person)}><Swords className="size-4" aria-hidden />Battle-a dəvət et</Button>
+            <IconAction icon={UserMinus} label="Dostluqdan çıxar" danger disabled={change.isPending} onClick={() => act(person.id, 'remove', person.displayName)} />
+            <IconAction icon={Ban} label="Blokla" danger disabled={change.isPending} onClick={() => act(person.id, 'block', person.displayName)} /></>}
+          {tab === 'incoming' && <><Button disabled={change.isPending} onClick={() => act(person.id, 'accept')}><Check className="size-4" aria-hidden />Qəbul et</Button>
+            <IconAction icon={X} label="Rədd et" disabled={change.isPending} onClick={() => act(person.id, 'reject')} />
+            <IconAction icon={Ban} label="Blokla" danger disabled={change.isPending} onClick={() => act(person.id, 'block', person.displayName)} /></>}
+          {tab === 'outgoing' && <IconAction icon={X} label="Sorğunu ləğv et" disabled={change.isPending} onClick={() => act(person.id, 'remove')} />}
+          {tab === 'blocked' && <Button variant="secondary" disabled={change.isPending} onClick={() => act(person.id, 'unblock')}><Unlock className="size-4" aria-hidden />Bloku aç</Button>}
         </PersonRow>)}</div>
       </section>
       {inviting && <BattleInviteModal friend={inviting} onClose={() => setInviting(null)} onSent={() => { setInviting(null); setNotice('Battle dəvəti göndərildi.') }} />}
@@ -92,4 +98,11 @@ function PersonRow({ person, showOnline, children }: { person: { id: string; dis
     </div>
     <div className="flex flex-wrap items-center gap-2">{children}</div>
   </div>
+}
+
+function IconAction({ icon: Icon, label, danger = false, disabled, onClick }: { icon: LucideIcon; label: string; danger?: boolean; disabled?: boolean; onClick: () => void }) {
+  return <button type="button" aria-label={label} title={label} disabled={disabled} onClick={onClick}
+    className={cn('grid size-10 place-items-center rounded-xl border border-slate-200 text-slate-500 transition-colors disabled:opacity-50',
+      danger ? 'hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600' : 'hover:bg-slate-100 hover:text-slate-900')}>
+    <Icon className="size-4" aria-hidden /></button>
 }

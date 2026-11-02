@@ -610,6 +610,32 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.ToTable("UserBlocks");
                 });
 
+            modelBuilder.Entity("ExamFlow.Api.Features.Focus.FocusSession", b =>
+                {
+                    b.Property<Guid>("Id").ValueGeneratedOnAdd().HasColumnType("uniqueidentifier");
+                    b.Property<string>("Activity").IsRequired().HasMaxLength(16).HasColumnType("nvarchar(16)");
+                    b.Property<int>("Answered").HasColumnType("int");
+                    b.Property<bool>("Completed").HasColumnType("bit");
+                    b.Property<int>("Correct").HasColumnType("int");
+                    b.Property<DateTimeOffset>("EndedAt").HasColumnType("datetimeoffset");
+                    b.Property<int>("FocusSeconds").HasColumnType("int");
+                    b.Property<int>("PlannedMinutes").HasColumnType("int");
+                    b.Property<DateTimeOffset>("StartedAt").HasColumnType("datetimeoffset");
+                    b.Property<Guid>("UserId").HasColumnType("uniqueidentifier");
+                    b.HasKey("Id");
+                    b.HasIndex("UserId", "EndedAt");
+                    b.ToTable("FocusSessions");
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Questions.QuestionBookmark", b =>
+                {
+                    b.Property<Guid>("UserId").HasColumnType("uniqueidentifier");
+                    b.Property<Guid>("QuestionId").HasColumnType("uniqueidentifier");
+                    b.HasKey("UserId", "QuestionId");
+                    b.HasIndex("QuestionId");
+                    b.ToTable("QuestionBookmarks");
+                });
+
             modelBuilder.Entity("ExamFlow.Api.Features.Questions.AnswerOption", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1178,6 +1204,17 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Focus.FocusSession", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Auth.AppUser", null).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Questions.QuestionBookmark", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Questions.Question", null).WithMany().HasForeignKey("QuestionId").OnDelete(DeleteBehavior.Cascade).IsRequired();
+                    b.HasOne("ExamFlow.Api.Features.Auth.AppUser", null).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.NoAction).IsRequired();
                 });
 
             modelBuilder.Entity("ExamFlow.Api.Features.Questions.AnswerOption", b =>

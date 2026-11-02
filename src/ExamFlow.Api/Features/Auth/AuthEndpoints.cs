@@ -33,7 +33,7 @@ public static class AuthEndpoints
             .RequireRateLimiting(AuthenticationSetup.PasswordResetRateLimit);
     }
 
-    private static async Task<IResult> Register(RegisterRequest request, UserManager<AppUser> users, TokenService tokens, IConfiguration configuration, EmailQueue email)
+    private static async Task<IResult> Register(RegisterRequest request, UserManager<AppUser> users, TokenService tokens, IConfiguration configuration, EmailQueue email, HttpResponse response)
     {
         var fallbackNickname = $"user{Guid.NewGuid():N}"[..16];
         var user = new AppUser
@@ -53,11 +53,11 @@ public static class AuthEndpoints
 
         await users.AddToRoleAsync(user, Roles.User);
         await ConfiguredAdmins.SendConfirmationAsync(users, configuration, email, user);
-        return TypedResults.Ok(await IssueToken(user, users, tokens, configuration));
+        return TypedResults.Ok(await IssueToken(user, users, tokens, configuration, response));
     }
 
     private static async Task<IResult> Login(
-        LoginRequest request, UserManager<AppUser> users, SignInManager<AppUser> signIn, TokenService tokens, IConfiguration configuration, EmailQueue email)
+        LoginRequest request, UserManager<AppUser> users, SignInManager<AppUser> signIn, TokenService tokens, IConfiguration configuration, EmailQueue email, HttpResponse response)
     {
         var user = await users.FindByEmailAsync(request.Email);
         if (user is null)
@@ -73,7 +73,7 @@ public static class AuthEndpoints
 
         if (!result.Succeeded) return InvalidCredentials();
         await ConfiguredAdmins.SendConfirmationAsync(users, configuration, email, user);
-        return TypedResults.Ok(await IssueToken(user, users, tokens, configuration, request.RememberMe));
+        return TypedResults.Ok(await IssueToken(user, users, tokens, configuration, response, request.RememberMe));
     }
 
     private static async Task<IResult> ConfirmAdmin(Guid userId, string token, UserManager<AppUser> users, IConfiguration configuration)
@@ -90,8 +90,9 @@ public static class AuthEndpoints
     }
 
     /// <summary>JWTs cannot be deleted, so logout rotates the security stamp: every token issued before is rejected.</summary>
-    private static async Task<IResult> Logout(ClaimsPrincipal principal, UserManager<AppUser> users)
+    private static async Task<IResult> Logout(ClaimsPrincipal principal, UserManager<AppUser> users, HttpResponse response)
     {
+        AuthCookie.Delete(response);
         if (await users.GetUserAsync(principal) is { } user)
         {
             await users.UpdateSecurityStampAsync(user);
@@ -180,12 +181,14 @@ public static class AuthEndpoints
         return TypedResults.NoContent();
     }
 
-    private static async Task<AuthResponse> IssueToken(AppUser user, UserManager<AppUser> users, TokenService tokens, IConfiguration configuration, bool rememberMe = false)
+    private static async Task<AuthResponse> IssueToken(AppUser user, UserManager<AppUser> users, TokenService tokens, IConfiguration configuration, HttpResponse response, bool rememberMe = false)
     {
         await ConfiguredAdmins.EnsureAsync(users, configuration, user);
         var roles = await users.GetRolesAsync(user);
         var token = tokens.Create(user, roles, rememberMe);
-        return new AuthResponse(token.Token, token.ExpiresAt, new UserResponse(user.Id, user.Email!, user.DisplayName, user.Nickname, AvatarUrl(user), roles.ToArray()));
+        // The JWT travels only in the HttpOnly cookie; the body carries no token for scripts to read.
+        AuthCookie.Append(response, token, rememberMe);
+        return new AuthResponse(token.ExpiresAt, new UserResponse(user.Id, user.Email!, user.DisplayName, user.Nickname, AvatarUrl(user), roles.ToArray()));
     }
 
     private static async Task<UserResponse> ToUser(AppUser user, UserManager<AppUser> users) =>
@@ -268,6 +271,6 @@ public sealed class UpdateProfileRequest
 
 public sealed record UserResponse(Guid Id, string Email, string DisplayName, string Nickname, string? AvatarUrl, string[] Roles);
 
-public sealed record AuthResponse(string AccessToken, DateTimeOffset ExpiresAt, UserResponse User);
+public sealed record AuthResponse(DateTimeOffset ExpiresAt, UserResponse User);
 
 public sealed record MessageResponse(string Message);

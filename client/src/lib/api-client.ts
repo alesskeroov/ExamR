@@ -1,4 +1,3 @@
-import { getToken } from './auth-token'
 
 // Thin fetch wrapper. All requests are same-origin (/api via Vite proxy in dev, served by the API in prod).
 
@@ -26,17 +25,20 @@ export class ApiError extends Error {
   }
 }
 
+// Required by the API on cookie-authenticated writes (CSRF protection); cross-site forms cannot send it.
+const CSRF_HEADER = 'X-ExamR-Request'
+
 type RequestOptions = Omit<RequestInit, 'body'> & { body?: unknown }
 
 export async function apiRequest<T>(path: string, { body, headers, ...init }: RequestOptions = {}): Promise<T> {
   const isFormData = body instanceof FormData
 
-  const token = getToken()
   const response = await fetch(`/api${path}`, {
     ...init,
+    credentials: 'same-origin',
     headers: {
       Accept: 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      [CSRF_HEADER]: '1',
       ...(body !== undefined && !isFormData ? { 'Content-Type': 'application/json' } : {}),
       ...headers,
     },
@@ -59,8 +61,7 @@ export function uploadFile<T>(path: string, file: File, onProgress?: (percent: n
     const xhr = new XMLHttpRequest()
     xhr.open('POST', `/api${path}`)
     xhr.setRequestHeader('Accept', 'application/json')
-    const token = getToken()
-    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    xhr.setRequestHeader(CSRF_HEADER, '1')
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100))
     }
@@ -86,8 +87,7 @@ export const api = {
 
 /** Download protected files with the same bearer credentials as JSON requests. */
 export async function downloadFile(path: string, fileName: string): Promise<void> {
-  const token = getToken()
-  const response = await fetch(`/api${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+  const response = await fetch(`/api${path}`, { credentials: 'same-origin' })
   if (!response.ok) {
     const problem = await response.json().catch(() => undefined) as ProblemDetails | undefined
     throw new ApiError(response.status, problem)

@@ -73,5 +73,27 @@ export function ProfilePage() {
         <Button type="submit" disabled={saving || nickname === user.nickname}><Save className="size-4" aria-hidden />{saving ? 'Saxlanır…' : 'Dəyişiklikləri saxla'}</Button>
       </form>
     </section>
+    <GoogleLinkSection />
   </>
+}
+
+const linkMessages: Record<string, { ok: boolean; text: string }> = {
+  linked: { ok: true, text: 'Google hesabı əlaqələndirildi. İndi Google ilə də daxil ola bilərsiniz.' },
+  google_in_use: { ok: false, text: 'Bu Google hesabı başqa ExamR hesabına bağlıdır.' },
+  google_disabled: { ok: false, text: 'Google ilə giriş hələ konfiqurasiya edilməyib.' },
+  login_required: { ok: false, text: 'Əlaqələndirmək üçün yenidən daxil olun.' },
+}
+
+function GoogleLinkSection() {
+  const [result] = useState(() => {
+    const code = new URLSearchParams(window.location.search).get('google')
+    if (code) window.history.replaceState(null, '', window.location.pathname)
+    return code ? linkMessages[code] ?? { ok: false, text: 'Google hesabı əlaqələndirilmədi.' } : null
+  })
+  return <section className="mt-6 max-w-2xl rounded-xl border border-slate-200 bg-white p-5 sm:p-7">
+    <h2 className="font-semibold">Google hesabı</h2>
+    <p className="mt-1 text-sm text-slate-500">Hesabınızı Google ilə əlaqələndirin ki, növbəti dəfə bir kliklə daxil olasınız.</p>
+    {result && <div className="mt-4"><Alert tone={result.ok ? 'info' : 'danger'} title={result.text} /></div>}
+    <a href="/api/auth/google?link=true" className="mt-4 inline-flex h-10 items-center rounded-xl border border-slate-300 px-4 text-sm font-medium transition-colors hover:bg-slate-50">Google hesabını əlaqələndir</a>
+  </section>
 }

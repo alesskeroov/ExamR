@@ -51,6 +51,10 @@ export interface QuestionDto {
   verificationStatus: VerificationStatus
   parseWarning: string | null
   options: AnswerOptionDto[]
+  documentName: string
+  answer: string | null
+  isBookmarked: boolean
+  canEdit: boolean
 }
 
 export type QuestionFilter = 'all' | 'answered' | 'unverified' | 'warnings'

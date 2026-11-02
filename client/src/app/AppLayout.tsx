@@ -1,6 +1,6 @@
-import { GraduationCap, ShieldCheck, Sparkles, DoorOpen, FileUp, History, LayoutDashboard, Library, ListChecks, LogOut, Menu, Swords, Users, X, type LucideIcon } from 'lucide-react'
-import { useState } from 'react'
-import { NavLink, Outlet } from 'react-router'
+import { GraduationCap, ShieldCheck, Sparkles, DoorOpen, FileUp, History, LayoutDashboard, Library, ListChecks, LogOut, Menu, Swords, Target, Users, X, type LucideIcon } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Link, NavLink, Outlet, useLocation, useSearchParams } from 'react-router'
 import { useCurrentUser, useLogout } from '../features/auth/api'
 import { NotificationBell } from '../features/friends/NotificationBell'
 import { cn } from '../lib/utils'
@@ -10,6 +10,7 @@ const navItems: { to: string; label: string; icon: LucideIcon; end?: boolean; ad
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/upload', label: 'Sənəd yüklə', icon: FileUp },
   { to: '/study', label: 'Öyrənmə köməkçisi', icon: Sparkles },
+  { to: '/focus', label: 'Focus Mode', icon: Target },
   { to: '/questions', label: 'Sual bankı', icon: Library },
   { to: '/exams/new', label: 'İmtahana başla', icon: ListChecks },
   { to: '/battle', label: 'Battle', icon: Swords, end: true },
@@ -23,6 +24,21 @@ const navItems: { to: string; label: string; icon: LucideIcon; end?: boolean; ad
 export function AppLayout() {
   const { data: user } = useCurrentUser()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 1024px)').matches)
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 1024px)')
+    const update = () => { setIsDesktop(media.matches); if (media.matches) setMobileOpen(false) }
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
+  useEffect(() => {
+    if (!mobileOpen) return
+    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setMobileOpen(false) }
+    const overflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', close)
+    return () => { document.body.style.overflow = overflow; window.removeEventListener('keydown', close) }
+  }, [mobileOpen])
 
   return (
     <div className="app-shell min-h-dvh lg:flex">
@@ -44,14 +60,20 @@ export function AppLayout() {
         </div>
       </header>
 
+      {/* Mobile: off-canvas drawer over a dimmed backdrop; desktop: fixed column beside the content. */}
+      <div aria-hidden onClick={() => setMobileOpen(false)}
+        className={cn('fixed inset-0 z-30 bg-slate-900/40 backdrop-blur-[2px] transition-opacity duration-300 lg:hidden', mobileOpen ? 'opacity-100' : 'pointer-events-none opacity-0')} />
       <aside
+        inert={!mobileOpen && !isDesktop}
         className={cn(
-          'app-sidebar border-slate-200 bg-white lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-64 lg:shrink-0 lg:flex-col lg:border-r',
-          mobileOpen ? 'block border-b' : 'hidden',
+          'app-sidebar fixed inset-y-0 left-0 z-40 flex w-72 max-w-[85vw] flex-col border-r border-slate-200 bg-white shadow-xl transition-transform duration-300 ease-out',
+          'lg:sticky lg:top-0 lg:z-auto lg:h-dvh lg:w-64 lg:max-w-none lg:shrink-0 lg:translate-x-0 lg:shadow-none lg:transition-none',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
-        <div className="hidden h-16 items-center justify-between px-6 lg:flex">
+        <div className="flex h-14 shrink-0 items-center justify-between px-4 lg:h-16 lg:px-6">
           <Brand />
+          <button type="button" onClick={() => setMobileOpen(false)} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden" aria-label="Menyunu bağla"><X className="size-5" /></button>
         </div>
         <nav aria-label="Əsas naviqasiya" className="app-navigation flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-3">
           {navItems.filter(item => !item.adminOnly || user?.roles.includes('Admin')).map(({ to, label, icon: Icon, end }) => (
@@ -77,7 +99,7 @@ export function AppLayout() {
 
       <div className="min-w-0 flex-1">
         <header className="app-toolbar hidden h-[72px] items-center justify-between border-b border-slate-200 px-8 lg:flex">
-          <div className="flex items-center gap-2 text-xs"><span className="font-semibold text-slate-700">ExamR</span><span className="text-slate-400" aria-hidden>/</span><span className="text-slate-500">Şəxsi məkan</span></div>
+          <Breadcrumb />
           <div className="flex items-center gap-3"><ThemeToggle /><NotificationBell /></div>
         </header>
         <main className="app-content mx-auto max-w-[1200px] min-w-0 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
@@ -125,4 +147,31 @@ function Brand() {
       ExamR
     </span>
   )
+}
+
+const extraPages: Record<string, string> = { '/notifications': 'Bildirişlər', '/profile': 'Profil' }
+const adminSections: Record<string, string> = { documents: 'Sənədlər', groups: 'Qruplar', admins: 'Adminlər' }
+
+function Breadcrumb() {
+  const { pathname } = useLocation()
+  const [params] = useSearchParams()
+  // Exact sidebar match first, otherwise the longest sidebar prefix (e.g. /groups/:id → Qruplarım).
+  const item = navItems.find(i => i.to === pathname)
+    ?? navItems.filter(i => i.to !== '/' && pathname.startsWith(`${i.to}/`)).sort((a, b) => b.to.length - a.to.length)[0]
+  const crumbs: { label: string; to?: string }[] = []
+  if (item) crumbs.push({ label: item.label, to: item.to })
+  else if (extraPages[pathname]) crumbs.push({ label: extraPages[pathname] })
+  if (pathname === '/admin') crumbs.push({ label: adminSections[params.get('section') ?? ''] ?? 'Sənədlər' })
+  else if (pathname === '/admin/groups') crumbs.push({ label: 'Qruplar' })
+  else if (/^\/groups\/[^/]+$/.test(pathname)) crumbs.push({ label: 'Qrup' })
+  else if (/^\/exams\/[^/]+\/result$/.test(pathname)) crumbs.push({ label: 'Nəticə' })
+  return <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-xs">
+    <Link to="/" className="font-semibold text-slate-700 transition-colors hover:text-indigo-600">ExamR</Link>
+    {crumbs.map((c, i) => <span key={c.label} className="flex min-w-0 items-center gap-2">
+      <span className="text-slate-400" aria-hidden>/</span>
+      {c.to && i < crumbs.length - 1
+        ? <Link to={c.to} className="truncate text-slate-500 transition-colors hover:text-indigo-600">{c.label}</Link>
+        : <span aria-current={i === crumbs.length - 1 ? 'page' : undefined} className={cn('truncate', i === crumbs.length - 1 ? 'font-medium text-slate-700' : 'text-slate-500')}>{c.label}</span>}
+    </span>)}
+  </nav>
 }

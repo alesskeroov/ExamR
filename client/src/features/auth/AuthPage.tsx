@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowUpRight, BookOpen, Check, ChartNoAxesCombined, Eye, EyeOff, FileText, MailCheck, Moon, Sun } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, BookOpen, Check, ChartNoAxesCombined, Eye, EyeOff, FileText, FlaskConical, MailCheck, Moon, Sun } from 'lucide-react'
 import { useState, type ComponentProps, type FormEvent, type ReactNode } from 'react'
 import { Button } from '../../components/common/Button'
 import { FormField } from '../../components/common/FormField'
@@ -62,6 +62,11 @@ export function AuthShell({ children }: { children: ReactNode }) {
           </div>
         </section>
         <section className="auth-form-card mx-auto w-full max-w-[460px] rounded-3xl border p-6 sm:p-9" aria-label="Hesaba giriş və qeydiyyat">
+          {/* Shown until the build sets VITE_DEMO_MODE=false. */}
+          {import.meta.env.VITE_DEMO_MODE !== 'false' && <div role="note" className="auth-demo-banner mb-6 flex items-start gap-3 rounded-xl border px-3.5 py-3 text-xs leading-5">
+            <FlaskConical className="mt-0.5 size-4 shrink-0" aria-hidden />
+            <span><strong className="font-semibold">Demo versiya.</strong> ExamR hazırda sınaq mərhələsindədir: bəzi funksiyalar dəyişə və məlumatlar sıfırlana bilər. Həssas və ya şəxsi sənədlər yükləməyin.</span>
+          </div>}
           <div className="auth-form-content">{children}</div>
           <div className="auth-form-footer mt-6 border-t pt-5 text-center text-xs">Öyrənməyə ayırdığın vaxtın dəyəri var.</div>
         </section>
@@ -91,6 +96,12 @@ function SignInForm({ mode, onModeChange }: { mode: 'login' | 'register'; onMode
   const [displayName, setDisplayName] = useState('')
   const [rememberMe, setRememberMe] = useState(false)
   const errors = fieldErrors(mutation.error)
+  const [googleError] = useState(() => {
+    // The Google callback redirects back with ?authError=…; show it once and clean the URL.
+    const code = new URLSearchParams(window.location.search).get('authError')
+    if (code) window.history.replaceState(null, '', window.location.pathname)
+    return code ? googleErrors[code] ?? 'Google ilə giriş alınmadı. Yenidən cəhd edin.' : null
+  })
 
   function switchMode(next: Mode) {
     onModeChange(next)
@@ -106,7 +117,7 @@ function SignInForm({ mode, onModeChange }: { mode: 'login' | 'register'; onMode
 
   return (
     <>
-      <div key={mode} className="auth-mode-enter mb-6 min-h-[80px]">
+      <div key={mode} data-mode={mode} className="auth-mode-enter mb-6 min-h-[80px]">
         <p className="auth-accent mb-2 text-xs font-semibold uppercase tracking-[0.16em]">{mode === 'login' ? 'Yenidən xoş gördük' : 'Yeni başlanğıc'}</p>
         <h2 className="text-2xl font-semibold tracking-tight">{mode === 'login' ? 'Öyrənməyə davam et.' : 'İlk addımını at.'}</h2>
         <p className="auth-muted mt-2 text-sm">{mode === 'login' ? 'Hesabına daxil ol, qaldığın yerdən davam et.' : 'ExamR hesabını yarat və hazırlığa başla.'}</p>
@@ -167,13 +178,17 @@ function SignInForm({ mode, onModeChange }: { mode: 'login' | 'register'; onMode
             </div>
           </div>
         </div>
-        <div className={errors.general ? undefined : 'hidden'} aria-live="polite">
-          {errors.general && <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-rose-700">{errors.general}</p>}
+        <div className={errors.general || googleError ? undefined : 'hidden'} aria-live="polite">
+          {(errors.general ?? googleError) && <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-rose-700">{errors.general ?? googleError}</p>}
         </div>
 
         <Button type="submit" loading={mutation.isPending} className="auth-submit w-full">
-          {mode === 'login' ? 'Daxil ol' : 'Hesab yarat'}
+          <span key={mode} className="auth-submit-label">{mode === 'login' ? 'Daxil ol' : 'Hesab yarat'}</span>
         </Button>
+        <div className="auth-muted flex items-center gap-3 text-xs" aria-hidden><span className="h-px flex-1 bg-current opacity-20" />və ya<span className="h-px flex-1 bg-current opacity-20" /></div>
+        <a href={`/api/auth/google?rememberMe=${mode === 'login' && rememberMe}`} className="auth-google flex h-[46px] w-full items-center justify-center gap-3 rounded-[10px] border text-sm font-medium transition-colors">
+          <GoogleLogo />Google ilə davam et
+        </a>
       </form>
     </>
   )
@@ -228,4 +243,20 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
       )}
     </>
   )
+}
+
+const googleErrors: Record<string, string> = {
+  google_disabled: 'Google ilə giriş hələ konfiqurasiya edilməyib.',
+  google_unverified: 'Google hesabınızın emaili təsdiqlənməyib.',
+  account_exists: 'Bu email ilə hesab artıq var. Şifrə ilə daxil olun və Google-u Profil səhifəsindən əlaqələndirin.',
+  locked: 'Hesab müvəqqəti bloklanıb. Bir az sonra yenidən cəhd edin.',
+}
+
+function GoogleLogo() {
+  return <svg viewBox="0 0 48 48" className="size-5" aria-hidden>
+    <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
+    <path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
+    <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z" />
+    <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" />
+  </svg>
 }

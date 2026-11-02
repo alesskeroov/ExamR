@@ -19,6 +19,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<DocumentUserShare> DocumentUserShares => Set<DocumentUserShare>();
     public DbSet<DocumentGroupShare> DocumentGroupShares => Set<DocumentGroupShare>();
     public DbSet<Question> Questions => Set<Question>();
+    public DbSet<QuestionBookmark> QuestionBookmarks => Set<QuestionBookmark>();
     public DbSet<AnswerOption> AnswerOptions => Set<AnswerOption>();
     public DbSet<Exam> Exams => Set<Exam>();
     public DbSet<ExamQuestion> ExamQuestions => Set<ExamQuestion>();

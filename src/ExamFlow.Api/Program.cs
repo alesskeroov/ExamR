@@ -1,10 +1,12 @@
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.HttpOverrides;
 using ExamFlow.Api.Features.Auth;
 using ExamFlow.Api.Features.Study;
 using ExamFlow.Api.Features.Battles;
 using ExamFlow.Api.Features.Documents;
 using ExamFlow.Api.Features.Exams;
 using ExamFlow.Api.Features.Health;
+using ExamFlow.Api.Features.Focus;
 using ExamFlow.Api.Features.Friends;
 using ExamFlow.Api.Features.Groups;
 using ExamFlow.Api.Features.Questions;
@@ -19,6 +21,19 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddJwtIdentity(builder.Configuration);
+
+// Behind a reverse proxy (nginx, IIS, a cloud load balancer) the API must see the public scheme, host and client IP:
+// OAuth redirect URIs, Secure cookies and per-IP rate limits depend on them. Loopback proxies are trusted by default;
+// ForwardedHeaders:KnownProxies lists other proxy IPs.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
+    options.ForwardLimit = 1;
+    foreach (var proxy in builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [])
+        options.KnownProxies.Add(System.Net.IPAddress.Parse(proxy));
+    // Only these public hosts are accepted from X-Forwarded-Host (empty = any; set it in production).
+    options.AllowedHosts = builder.Configuration.GetSection("ForwardedHeaders:AllowedHosts").Get<string[]>() ?? [];
+});
 builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection(SmtpOptions.Section));
 builder.Services.AddSingleton<EmailQueue>();
 builder.Services.AddHostedService<SmtpEmailService>();
@@ -61,6 +76,20 @@ builder.Services.Configure<FormOptions>(form => form.MultipartBodyLengthLimit = 
 
 var app = builder.Build();
 
+app.UseForwardedHeaders();
+
+// Baseline security headers for every API response; HSTS only outside development (localhost runs over http).
+if (!app.Environment.IsDevelopment()) app.UseHsts();
+app.Use((context, next) =>
+{
+    var headers = context.Response.Headers;
+    headers["X-Content-Type-Options"] = "nosniff";
+    headers["X-Frame-Options"] = "DENY";
+    headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
+    return next(context);
+});
+
 // Malformed request bodies are client errors (400), not server errors.
 app.UseExceptionHandler(new ExceptionHandlerOptions
 {
@@ -89,6 +118,8 @@ api.MapBattleEndpoints();
 api.MapFriendsEndpoints();
 api.MapGroupEndpoints();
 api.MapAdminEndpoints();
+api.MapFocusEndpoints();
+api.MapGoogleAuthEndpoints();
 app.MapHub<BattleHub>(BattleHub.Path);
 app.MapHub<SocialHub>("/hubs/social", options => options.CloseOnAuthenticationExpiration = true);
 

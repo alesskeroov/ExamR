@@ -43,7 +43,15 @@ export const queryKeys = {
     shared: (page: number) => ['documents', 'shared', page] as const,
     detail: (id: string) => ['documents', 'detail', id] as const,
   },
+  focus: {
+    stats: ['focus', 'stats'] as const,
+    questions: (params: string) => ['focus', 'questions', params] as const,
+  },
   questions: {
+    all: ['questions'] as const,
+    bank: (params: string) => ['questions', 'bank', params] as const,
+    stats: ['questions', 'stats'] as const,
+    documents: ['questions', 'documents'] as const,
     document: (documentId: string) => ['questions', 'byDocument', documentId] as const,
     byDocument: (documentId: string, filter: string) => ['questions', 'byDocument', documentId, filter] as const,
   },
@@ -57,6 +65,7 @@ export const queryKeys = {
     active: ['exams', 'active'] as const,
     availability: (documentId: string, from?: number, to?: number) => ['exams', 'availability', documentId, from, to] as const,
     history: (page: number) => ['exams', 'history', page] as const,
+    allHistory: ['exams', 'history', 'all'] as const,
     session: (id: string) => ['exams', 'session', id] as const,
     result: (id: string) => ['exams', 'result', id] as const,
   },

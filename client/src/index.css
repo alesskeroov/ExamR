@@ -109,3 +109,11 @@ body { background: var(--app-background); }
 @media (prefers-reduced-motion: reduce) {
   .app-shell *, .app-shell *::before, .app-shell *::after { scroll-behavior: auto !important; transition: none !important; }
 }
+
+/* Full-screen loader: breathing logo + sliding progress bar instead of a spinner. */
+.app-loader-logo { animation: app-breathe 1.6s ease-in-out infinite; }
+.app-loader-bar { position: relative; }
+.app-loader-bar::after { content: ''; position: absolute; inset: 0; width: 40%; border-radius: inherit; background: #6750dd; animation: app-slide 1.2s cubic-bezier(.65, 0, .35, 1) infinite; }
+@keyframes app-breathe { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(.92); opacity: .7; } }
+@keyframes app-slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+@media (prefers-reduced-motion: reduce) { .app-loader-logo, .app-loader-bar::after { animation: none; } }

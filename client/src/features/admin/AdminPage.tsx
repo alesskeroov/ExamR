@@ -6,6 +6,7 @@ import { Button } from '../../components/common/Button'
 import { PageHeader } from '../../components/common/PageHeader'
 import { useConfirm } from '../../lib/use-confirm'
 import { useCurrentUser } from '../auth/api'
+import { SystemStatus } from '../dashboard/DashboardPage'
 import { UploadPage } from '../documents/UploadPage'
 import { GroupsAdminPage } from '../groups/GroupsPage'
 import { cn } from '../../lib/utils'
@@ -24,6 +25,7 @@ export function AdminPage() {
   const section = sections.some(item => item.id === params.get('section')) ? params.get('section') : 'documents'
   return <>
     <PageHeader title="Admin Panel" description="Sənədləri, qrupları və adminləri idarə et." />
+    <SystemStatus />
     <nav aria-label="Admin bölmələri" className="mb-6 flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-white p-2">
       {sections.map(item => {
         const active = section === item.id

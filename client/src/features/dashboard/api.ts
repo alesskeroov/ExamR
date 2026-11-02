@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { api, ApiError } from '../../lib/api-client'
 import { queryKeys } from '../../lib/query-keys'
+import type { PagedResult } from '../documents/api'
+import type { ExamSummary } from '../exams/api'
 
 export interface HealthResponse {
   status: 'Healthy' | 'Degraded'
@@ -18,6 +20,18 @@ async function getHealth(): Promise<HealthResponse> {
     }
     throw error
   }
+}
+
+// Fetches the whole exam history (100 per page) so dashboard totals are exact.
+export function useAllExams() {
+  return useQuery({ queryKey: queryKeys.exams.allHistory, queryFn: async () => {
+    const items: ExamSummary[] = []
+    for (let page = 1; ; page++) {
+      const result = await api.get<PagedResult<ExamSummary>>(`/exams?page=${page}&pageSize=100`)
+      items.push(...result.items)
+      if (items.length >= result.totalCount || result.items.length === 0) return items
+    }
+  } })
 }
 
 export function useHealth() {

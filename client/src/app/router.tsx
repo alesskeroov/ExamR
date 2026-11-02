@@ -1,4 +1,5 @@
 import { AdminPage } from '../features/admin/AdminPage'
+import { FocusPage } from '../features/focus/FocusPage'
 import { GroupDetailPage, GroupsAdminPage, GroupsPage } from '../features/groups/GroupsPage'
 import { StudyPage } from '../features/study/StudyPage'
 import { createBrowserRouter } from 'react-router'
@@ -31,6 +32,7 @@ export const router = createBrowserRouter([
       { index: true, element: <DashboardPage /> },
       { path: 'upload', element: <UploadPage /> },
       { path: 'study', element: <StudyPage /> },
+      { path: 'focus', element: <FocusPage /> },
       { path: 'questions', element: <QuestionBankPage /> },
       { path: 'exams/new', element: <ExamSetupPage /> },
       { path: 'exams', element: <ExamHistoryPage /> },

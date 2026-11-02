@@ -112,7 +112,12 @@ function RecentDocuments({ admin, selectedId, onSelect, onDeleted }: { admin: bo
     <section aria-labelledby="recent-heading" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 id="recent-heading" className="font-semibold">Mənim sənədlərim{data ? ` (${formatNumber(data.totalCount)})` : ''}</h2>
-        <a href="#document-upload" className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">Yeni sənəd yüklə</a>
+        <button type="button" onClick={() => {
+          // The dropzone owns the file input; scroll to it and open the picker directly.
+          const zone = document.getElementById('document-upload')
+          zone?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          zone?.querySelector<HTMLInputElement>('input[type="file"]:not(:disabled)')?.click()
+        }} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700">Yeni sənəd yüklə</button>
       </div>
       {remove.error && <div className="mb-3"><Alert title={remove.error.message} /></div>}
       {isPending ? (
