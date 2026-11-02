@@ -52,15 +52,11 @@ else if (!builder.Environment.IsDevelopment())
 builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection(SmtpOptions.Section));
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.Section));
 builder.Services.AddSingleton<EmailQueue>();
-// Brevo (HTTPS) in production — Render Free blocks outbound SMTP; SMTP / .eml pickup stays for local development.
-var emailProvider = builder.Configuration["Email:Provider"]?.Trim().Trim('"');
-if (string.Equals(emailProvider, "Brevo", StringComparison.OrdinalIgnoreCase))
-    builder.Services.AddHttpClient<IEmailTransport, BrevoTransport>(client => client.Timeout = TimeSpan.FromSeconds(20));
-else
-    builder.Services.AddSingleton<IEmailTransport, SmtpTransport>();
+// Gmail SMTP (Email__SmtpHost/Port/Username/Password); .eml pickup for local development.
+builder.Services.AddSingleton<IEmailTransport, SmtpTransport>();
 builder.Services.AddHostedService<SmtpEmailService>();
-// Visible in the host's startup log, so a misconfigured provider is obvious without sending a test email.
-Console.WriteLine($"Email provider: {(string.Equals(emailProvider, "Brevo", StringComparison.OrdinalIgnoreCase) ? "Brevo" : "SMTP")} (Email:Provider='{emailProvider}')");
+// Visible in the host's startup log, so a missing setting is obvious without sending a test email (no secrets printed).
+Console.WriteLine($"Email: SMTP host '{builder.Configuration["Email:SmtpHost"] ?? builder.Configuration["Smtp:Host"] ?? "(not set)"}', user {(string.IsNullOrEmpty(builder.Configuration["Email:Username"]) ? "not set" : "set")}, password {(string.IsNullOrEmpty(builder.Configuration["Email:Password"]) ? "not set" : "set")}");
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
 builder.Services.ConfigureHttpJsonOptions(options =>

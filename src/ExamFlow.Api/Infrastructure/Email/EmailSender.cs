@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Json;
 using System.Net.Mail;
 using System.Threading.Channels;
 using Microsoft.Extensions.Options;
@@ -23,17 +22,19 @@ public sealed class SmtpOptions
     public string? PickupDirectory { get; set; }
 }
 
-/// <summary>Provider choice. Brevo sends over HTTPS (works on hosts that block SMTP ports, e.g. Render Free).</summary>
+/// <summary>
+/// SMTP delivery (Gmail: smtp.gmail.com:587 with STARTTLS and a Google App Password). Values come from environment
+/// variables (Email__SmtpHost, Email__Username, …); the older Smtp:* section is still read as a fallback.
+/// </summary>
 public sealed class EmailOptions
 {
     public const string Section = "Email";
 
-    /// <summary>"Brevo" or "Smtp" (default).</summary>
-    public string Provider { get; set; } = "Smtp";
-    public string? BrevoApiKey { get; set; }
-    /// <summary>Sender address; for Brevo it must be a verified sender. Falls back to Smtp:From.</summary>
-    public string? From { get; set; }
-    public string? FromName { get; set; }
+    public string? SmtpHost { get; set; }
+    public int? SmtpPort { get; set; }
+    public string? Username { get; set; }
+    public string? Password { get; set; }
+    public string? SenderName { get; set; }
     /// <summary>When true, password login is refused until the email address is confirmed.</summary>
     public bool RequireConfirmedEmail { get; set; }
 }
@@ -86,81 +87,67 @@ public sealed class SmtpEmailService(EmailQueue queue, IEmailTransport transport
     }
 }
 
-public sealed class SmtpTransport(IOptions<SmtpOptions> options, IHostEnvironment environment, ILogger<SmtpTransport> logger) : IEmailTransport
+public sealed class SmtpTransport(IOptions<EmailOptions> email, IOptions<SmtpOptions> options, IHostEnvironment environment, ILogger<SmtpTransport> logger) : IEmailTransport
 {
+    private const int Attempts = 3;
+
     public async Task<bool> SendAsync(EmailMessage message, CancellationToken ct)
     {
         var settings = options.Value;
-        using var client = new SmtpClient();
+        var e = email.Value;
+        var host = e.SmtpHost ?? settings.Host;
+        var user = e.Username ?? settings.UserName;
 
-        if (!string.IsNullOrWhiteSpace(settings.PickupDirectory))
+        using var mail = new MailMessage
         {
-            var directory = Path.GetFullPath(Path.Combine(environment.ContentRootPath, settings.PickupDirectory));
-            Directory.CreateDirectory(directory);
-            client.DeliveryMethod = SmtpDeliveryMethod.SpecifiedPickupDirectory;
-            client.PickupDirectoryLocation = directory;
-        }
-        else if (!string.IsNullOrWhiteSpace(settings.Host))
-        {
-            client.Host = settings.Host;
-            client.Port = settings.Port;
-            client.EnableSsl = settings.EnableSsl;
-            if (!string.IsNullOrEmpty(settings.UserName))
-            {
-                client.Credentials = new NetworkCredential(settings.UserName, settings.Password);
-            }
-        }
-        else
-        {
-            logger.LogWarning("No email provider is configured (Email:Provider=Brevo or Smtp:Host); email \"{Subject}\" was not sent", message.Subject);
-            return false;
-        }
-
-        using var mail = new MailMessage { From = new MailAddress(settings.From, settings.FromName), Subject = message.Subject };
+            // Gmail only relays mail from the authenticated account, so the sender is the SMTP user.
+            From = new MailAddress(user ?? settings.From, e.SenderName ?? settings.FromName),
+            Subject = message.Subject,
+        };
         // multipart/alternative: plain text first, HTML last (clients show the last part they support).
         if (message.TextBody is not null)
             mail.AlternateViews.Add(AlternateView.CreateAlternateViewFromString(message.TextBody, System.Text.Encoding.UTF8, "text/plain"));
         mail.AlternateViews.Add(AlternateView.CreateAlternateViewFromString(message.HtmlBody, System.Text.Encoding.UTF8, "text/html"));
         mail.To.Add(message.To);
 
-        await client.SendMailAsync(mail, ct);
-        return true;
-    }
-}
-
-/// <summary>Brevo transactional email over HTTPS (https://developers.brevo.com/reference/sendtransacemail).</summary>
-public sealed class BrevoTransport(HttpClient http, IOptions<EmailOptions> options, IOptions<SmtpOptions> smtp, ILogger<BrevoTransport> logger) : IEmailTransport
-{
-    public async Task<bool> SendAsync(EmailMessage message, CancellationToken ct)
-    {
-        var settings = options.Value;
-        if (string.IsNullOrWhiteSpace(settings.BrevoApiKey))
+        if (!string.IsNullOrWhiteSpace(settings.PickupDirectory))
         {
-            logger.LogWarning("Email:BrevoApiKey is not configured; email \"{Subject}\" was not sent", message.Subject);
+            using var pickup = new SmtpClient
+            {
+                DeliveryMethod = SmtpDeliveryMethod.SpecifiedPickupDirectory,
+                PickupDirectoryLocation = Directory.CreateDirectory(Path.GetFullPath(Path.Combine(environment.ContentRootPath, settings.PickupDirectory))).FullName,
+            };
+            await pickup.SendMailAsync(mail, ct);
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            logger.LogWarning("SMTP is not configured (Email:SmtpHost); email \"{Subject}\" was not sent", message.Subject);
             return false;
         }
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.brevo.com/v3/smtp/email")
+        for (var attempt = 1; ; attempt++)
         {
-            Content = JsonContent.Create(new
+            // TLS is always required (port 587 = STARTTLS); credentials never reach the logs.
+            using var client = new SmtpClient(host, e.SmtpPort ?? settings.Port) { EnableSsl = true, Timeout = 20_000 };
+            if (!string.IsNullOrEmpty(user))
+                client.Credentials = new NetworkCredential(user, e.Password ?? settings.Password);
+            try
             {
-                sender = new { email = settings.From ?? smtp.Value.From, name = settings.FromName ?? smtp.Value.FromName },
-                to = new[] { new { email = message.To } },
-                subject = message.Subject,
-                htmlContent = message.HtmlBody,
-                textContent = message.TextBody,
-            }),
-        };
-        request.Headers.Add("api-key", settings.BrevoApiKey);
-        request.Headers.Accept.ParseAdd("application/json");
-
-        using var response = await http.SendAsync(request, ct);
-        if (!response.IsSuccessStatusCode)
-        {
-            // Brevo's error body describes the problem (unverified sender, quota) and contains no secrets.
-            var detail = await response.Content.ReadAsStringAsync(ct);
-            throw new InvalidOperationException($"Brevo responded {(int)response.StatusCode}: {detail[..Math.Min(detail.Length, 300)]}");
+                await client.SendMailAsync(mail, ct);
+                return true;
+            }
+            catch (SmtpException ex) when (attempt < Attempts && IsTransient(ex))
+            {
+                logger.LogWarning("SMTP attempt {Attempt} for \"{Subject}\" failed ({Status}); retrying", attempt, message.Subject, ex.StatusCode);
+                await Task.Delay(TimeSpan.FromSeconds(2 * attempt), ct);
+            }
         }
-        return true;
     }
+
+    // Busy/unavailable servers and dropped connections are worth a retry; authentication or address errors are not.
+    private static bool IsTransient(SmtpException ex) => ex.StatusCode is SmtpStatusCode.ServiceNotAvailable or SmtpStatusCode.MailboxBusy
+        or SmtpStatusCode.TransactionFailed or SmtpStatusCode.LocalErrorInProcessing or SmtpStatusCode.InsufficientStorage
+        || ex.InnerException is IOException or System.Net.Sockets.SocketException;
 }
