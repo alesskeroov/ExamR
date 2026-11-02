@@ -167,3 +167,6 @@ body { background: var(--app-background); overflow-wrap: anywhere; }
 /* Status pages (404/403/500): one oversized numeral as the only graphic. */
 .status-page { background: var(--app-background); color: var(--app-foreground); }
 .status-code { font-size: clamp(88px, 22vw, 168px); letter-spacing: -.06em; color: var(--app-ink); opacity: .9; }
+
+/* Text scramble: undecoded glyphs in the accent at reduced strength, settled letters in normal ink. */
+.scramble-noise { color: var(--app-accent); opacity: .75; }

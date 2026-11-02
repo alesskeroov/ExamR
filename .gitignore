@@ -442,3 +442,6 @@ samples/*.pdf
 # Internal notes and docs stay local (may contain project details)
 *.md
 !/README.md
+
+# Hand-applied production migration scripts (generated locally)
+azure-migrate-*.sql

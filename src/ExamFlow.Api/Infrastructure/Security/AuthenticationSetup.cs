@@ -12,10 +12,12 @@ namespace ExamFlow.Api.Infrastructure.Security;
 
 public static class AuthenticationSetup
 {
+    public const string VerificationRateLimit = "verification";
     public const string AuthRateLimit = "auth";
     public const string PasswordResetRateLimit = "password-reset";
     public const string SocialRateLimit = "social";
     public const string UploadRateLimit = "upload";
+    public const string LearningAiRateLimit = "learning-ai";
     public const string HubPathPrefix = "/hubs";
     public const string CsrfHeader = "X-ExamR-Request";
 
@@ -113,7 +115,7 @@ public static class AuthenticationSetup
                         var userId = context.Principal?.FindFirst(JwtClaims.UserId)?.Value;
                         var stamp = context.Principal?.FindFirst(JwtClaims.SecurityStamp)?.Value;
                         var user = userId is null ? null : await users.FindByIdAsync(userId);
-                        if (user is null || stamp is null || user.SecurityStamp != stamp)
+                        if (user is null || user.IsDeleted || stamp is null || user.SecurityStamp != stamp)
                         {
                             context.Fail("Token has been revoked.");
                             return;
@@ -178,6 +180,7 @@ public static class AuthenticationSetup
         services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            options.AddPolicy(VerificationRateLimit, context => PerIp(context, permits: 1, TimeSpan.FromMinutes(1)));
             options.AddPolicy(AuthRateLimit, context => PerIp(context, permits: 10, TimeSpan.FromMinutes(1)));
             options.AddPolicy(PasswordResetRateLimit, context => PerIp(context, permits: 5, TimeSpan.FromMinutes(15)));
             options.AddPolicy(SocialRateLimit, context => RateLimitPartition.GetFixedWindowLimiter(
@@ -187,6 +190,9 @@ public static class AuthenticationSetup
             options.AddPolicy(UploadRateLimit, context => RateLimitPartition.GetFixedWindowLimiter(
                 context.User.Identity?.IsAuthenticated == true ? context.User.GetUserId().ToString() : context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(10), QueueLimit = 0 }));
+            // Paid model calls: 6 tutor questions per minute per user (the daily cap and budget sit on top).
+            options.AddPolicy(LearningAiRateLimit, context => RateLimitPartition.GetFixedWindowLimiter(
+                context.User.GetUserId().ToString(), _ => new FixedWindowRateLimiterOptions { PermitLimit = 6, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
             // Generous API-wide ceiling against floods (≈10 requests/second sustained per user or IP); SignalR hubs are exempt.
             options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
                 context.Request.Path.StartsWithSegments(HubPathPrefix)

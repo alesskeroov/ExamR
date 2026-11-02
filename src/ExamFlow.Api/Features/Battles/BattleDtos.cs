@@ -80,7 +80,9 @@ public sealed record BattleHistoryDto(
     int ParticipantCount,
     int Rank,
     int Score,
-    int CorrectCount);
+    int CorrectCount,
+    int? RatingBefore = null,
+    int? RatingAfter = null);
 
 /// <summary>Strongly typed client methods (names are the SignalR event names the React app listens to).</summary>
 public interface IBattleClient

@@ -34,7 +34,7 @@ public static class AuthEndpoints
         group.MapPost("/confirm-email", ConfirmEmail).Validate<ConfirmEmailRequest>()
             .RequireRateLimiting(AuthenticationSetup.PasswordResetRateLimit);
         group.MapPost("/resend-confirmation", ResendConfirmation).Validate<ForgotPasswordRequest>()
-            .RequireRateLimiting(AuthenticationSetup.PasswordResetRateLimit);
+            .RequireRateLimiting(AuthenticationSetup.VerificationRateLimit);
     }
 
     private const string ResendMessage = "Əgər bu email ilə təsdiqlənməmiş hesab varsa, təsdiq linki göndərildi.";
@@ -52,7 +52,7 @@ public static class AuthEndpoints
     private static async Task<IResult> ConfirmEmail(ConfirmEmailRequest request, UserManager<AppUser> users)
     {
         var user = await users.FindByIdAsync(request.UserId.ToString());
-        if (user is null) return InvalidVerifyLink();
+        if (user is null || user.IsDeleted) return InvalidVerifyLink();
         if (user.EmailConfirmed) return TypedResults.Ok(new MessageResponse("Email artıq təsdiqlənib."));
         string token;
         try { token = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(request.Token)); }
@@ -69,7 +69,7 @@ public static class AuthEndpoints
     private static async Task<IResult> ResendConfirmation(ForgotPasswordRequest request, UserManager<AppUser> users, EmailQueue email, IConfiguration configuration)
     {
         var user = await users.FindByEmailAsync(request.Email);
-        if (user is { EmailConfirmed: false } && await VerifyLink(users, configuration, user) is { } link)
+        if (user is { EmailConfirmed: false, IsDeleted: false } && await VerifyLink(users, configuration, user) is { } link)
             email.Enqueue(EmailTemplates.Verify(user.Email!, user.DisplayName, link));
         return TypedResults.Ok(new MessageResponse(ResendMessage));
     }
@@ -104,7 +104,7 @@ public static class AuthEndpoints
         LoginRequest request, UserManager<AppUser> users, SignInManager<AppUser> signIn, TokenService tokens, IConfiguration configuration, EmailQueue email, HttpResponse response)
     {
         var user = await users.FindByEmailAsync(request.Email);
-        if (user is null)
+        if (user is null || user.IsDeleted)
         {
             return InvalidCredentials();
         }
@@ -158,7 +158,7 @@ public static class AuthEndpoints
         UserManager<AppUser> users, CancellationToken ct)
     {
         var user = await users.GetUserAsync(principal);
-        if (user is null) return TypedResults.Unauthorized();
+        if (user is null || user.IsDeleted) return TypedResults.Unauthorized();
         var nickname = request.Nickname.Trim();
         if (!System.Text.RegularExpressions.Regex.IsMatch(nickname, "^[A-Za-z0-9_]{3,24}$"))
             return TypedResults.Problem("Nickname 3–24 simvol olmalı; yalnız hərf, rəqəm və _ istifadə edin.", statusCode: 400);
@@ -186,7 +186,7 @@ public static class AuthEndpoints
         {
             logger.LogError("App:FrontendBaseUrl is not configured; password reset email was not sent");
         }
-        else if (user is not null)
+        else if (user is { IsDeleted: false })
         {
             var token = await users.GeneratePasswordResetTokenAsync(user);
             var link = $"{frontend!.TrimEnd('/')}/reset-password?uid={user.Id}&token={WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token))}";
@@ -196,7 +196,7 @@ public static class AuthEndpoints
         return TypedResults.Ok(new MessageResponse(ForgotPasswordMessage));
     }
 
-    private static async Task<IResult> ResetPassword(ResetPasswordRequest request, UserManager<AppUser> users)
+    private static async Task<IResult> ResetPassword(ResetPasswordRequest request, UserManager<AppUser> users, EmailQueue email, IConfiguration configuration)
     {
         var user = await users.FindByIdAsync(request.UserId.ToString());
         string token;
@@ -209,7 +209,7 @@ public static class AuthEndpoints
             return InvalidResetLink();
         }
 
-        if (user is null)
+        if (user is null || user.IsDeleted)
         {
             return InvalidResetLink();
         }
@@ -226,6 +226,7 @@ public static class AuthEndpoints
         // A successful reset also lifts a lockout caused by wrong passwords.
         await users.SetLockoutEndDateAsync(user, null);
         await users.ResetAccessFailedCountAsync(user);
+        email.Enqueue(EmailTemplates.SecurityNotice(user.Email!, "Şifrəniz bərpa edildi. Bu əməliyyatı siz etməmisinizsə, hesabınızı yoxlayın.", configuration["App:FrontendBaseUrl"] ?? "/"));
         return TypedResults.NoContent();
     }
 
@@ -241,7 +242,7 @@ public static class AuthEndpoints
 
     private static async Task<UserResponse> ToUser(AppUser user, UserManager<AppUser> users) =>
         new(user.Id, user.Email!, user.DisplayName, user.Nickname, AvatarUrl(user), (await users.GetRolesAsync(user)).ToArray(),
-            (await users.GetLoginsAsync(user)).Any(login => login.LoginProvider == GoogleAuthEndpoints.Scheme), user.EmailConfirmed, user.Bio);
+            (await users.GetLoginsAsync(user)).Any(login => login.LoginProvider == GoogleAuthEndpoints.Scheme), user.EmailConfirmed, user.Bio, await users.HasPasswordAsync(user));
 
     private static string? AvatarUrl(AppUser user) => user.AvatarFileName is null ? null : $"/api/profile/avatar/{user.Id}?v={user.AvatarFileName}";
 
@@ -306,7 +307,7 @@ public sealed class UpdateProfileRequest
     public string Nickname { get; init; } = string.Empty;
 }
 
-public sealed record UserResponse(Guid Id, string Email, string DisplayName, string Nickname, string? AvatarUrl, string[] Roles, bool GoogleLinked = false, bool EmailConfirmed = false, string? Bio = null);
+public sealed record UserResponse(Guid Id, string Email, string DisplayName, string Nickname, string? AvatarUrl, string[] Roles, bool GoogleLinked = false, bool EmailConfirmed = false, string? Bio = null, bool HasPassword = true);
 
 public sealed record AuthResponse(DateTimeOffset ExpiresAt, UserResponse User);
 

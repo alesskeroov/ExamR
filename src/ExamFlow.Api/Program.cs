@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using ExamFlow.Api.Features.Auth;
@@ -8,6 +9,7 @@ using ExamFlow.Api.Features.Documents;
 using ExamFlow.Api.Features.Exams;
 using ExamFlow.Api.Features.Health;
 using ExamFlow.Api.Features.Focus;
+using ExamFlow.Api.Features.Learning;
 using ExamFlow.Api.Features.Friends;
 using ExamFlow.Api.Features.Groups;
 using ExamFlow.Api.Features.Questions;
@@ -85,6 +87,18 @@ builder.Services.AddSingleton<ProcessingQueue>();
 builder.Services.AddScoped<DocumentProcessor>();
 builder.Services.AddHostedService<DocumentProcessingService>();
 
+// AI tutor, phase 1: text extraction and chunking in the background (no AI calls).
+builder.Services.Configure<LearningOptions>(builder.Configuration.GetSection(LearningOptions.Section));
+builder.Services.AddSingleton<LearningQueue>();
+builder.Services.AddScoped<LearningProcessor>();
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<IChunkRetriever, LexicalChunkRetriever>();
+builder.Services.AddHostedService<LearningProcessingService>();
+builder.Services.AddOptions<LearningAiOptions>()
+    .Bind(builder.Configuration.GetSection(LearningAiOptions.Section)).ValidateDataAnnotations().ValidateOnStart();
+builder.Services.AddHttpClient<IChatModel, OpenAiChatClient>(client => client.Timeout = TimeSpan.FromSeconds(320));
+builder.Services.AddScoped<LearningAiBudget>();
+
 builder.Services.AddOptions<StudyAiOptions>()
     .Bind(builder.Configuration.GetSection(StudyAiOptions.Section)).ValidateDataAnnotations().ValidateOnStart();
 builder.Services.AddHttpClient<StudyAiClient>(client => client.Timeout = TimeSpan.FromSeconds(100));
@@ -92,8 +106,12 @@ builder.Services.AddHttpClient<StudyAiClient>(client => client.Timeout = TimeSpa
 builder.Services.Configure<ExamOptions>(builder.Configuration.GetSection(ExamOptions.Section));
 
 // Battle mode: SignalR (built into ASP.NET Core) + in-memory rooms on this single server.
-builder.Services.AddSignalR(options => options.MaximumReceiveMessageSize = 8 * 1024)
+builder.Services.AddSignalR(options => { options.MaximumReceiveMessageSize = 8 * 1024; options.AddFilter<ActiveAccountHubFilter>(); })
     .AddJsonProtocol(options => options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+builder.Services.AddOptions<BattleRankOptions>().Bind(builder.Configuration.GetSection("BattleRank"))
+    .PostConfigure(o => o.Thresholds = builder.Configuration.GetSection("BattleRank:Thresholds").Get<int[]>() ?? new BattleRankOptions().Thresholds)
+    .ValidateDataAnnotations()
+    .Validate(o => o.Thresholds.Length == 6 && o.Thresholds[0] == 0 && o.Thresholds.Zip(o.Thresholds.Skip(1)).All(p => p.First < p.Second) && o.InitialRating < o.Thresholds[1], "Rank thresholds must be ordered and include the initial rating in Bronze.").ValidateOnStart();
 builder.Services.AddSingleton<BattleService>();
 builder.Services.AddHostedService<BattleCleanupService>();
 builder.Services.AddSingleton<SocialPresence>();
@@ -195,16 +213,20 @@ var api = app.MapGroup("/api");
 api.MapHealthEndpoints();
 api.MapAuthEndpoints();
 api.MapProfileEndpoints();
+api.MapAccountEndpoints();
 api.MapDocumentEndpoints();
 api.MapDocumentSharingEndpoints();
 api.MapQuestionEndpoints();
 api.MapStudyEndpoints();
 api.MapExamEndpoints();
 api.MapBattleEndpoints();
+api.MapBattleRankEndpoints();
 api.MapFriendsEndpoints();
 api.MapGroupEndpoints();
 api.MapAdminEndpoints();
 api.MapFocusEndpoints();
+api.MapLearningEndpoints();
+api.MapLearningChatEndpoints();
 api.MapGoogleAuthEndpoints();
 app.MapHub<BattleHub>(BattleHub.Path);
 app.MapHub<SocialHub>("/hubs/social", options => options.CloseOnAuthenticationExpiration = true);

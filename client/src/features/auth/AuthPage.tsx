@@ -7,6 +7,7 @@ import { fieldErrors } from '../../lib/form-errors'
 import { cn } from '../../lib/utils'
 import { useForgotPassword, useLogin, useRegister } from './api'
 import { ProductPreview } from '../landing/ProductPreview'
+import { markFreshLogin } from '../../lib/fresh-login'
 import './auth.css'
 import { useTheme } from '../../lib/use-theme'
 
@@ -131,6 +132,8 @@ function SignInForm({ mode, onModeChange }: { mode: 'login' | 'register'; onMode
         ))}
       </div>
 
+      {new URLSearchParams(window.location.search).get('account') === 'password-changed' && <p role="status" className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">Şifrə dəyişdirildi. Yeni şifrə ilə daxil olun.</p>}
+      {new URLSearchParams(window.location.search).get('account') === 'deleted' && <p role="status" className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">Hesab bağlandı və profil anonimləşdirildi.</p>}
       <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
         <FormField
           label="Email"
@@ -176,7 +179,7 @@ function SignInForm({ mode, onModeChange }: { mode: 'login' | 'register'; onMode
           <span key={mode} className="auth-submit-label">{mode === 'login' ? 'Daxil ol' : 'Hesab yarat'}</span>
         </Button>
         <div className="auth-muted flex items-center gap-3 text-xs" aria-hidden><span className="h-px flex-1 bg-current opacity-20" />və ya<span className="h-px flex-1 bg-current opacity-20" /></div>
-        <a href={`/api/auth/google?rememberMe=${mode === 'login' && rememberMe}`} className="auth-google flex h-[46px] w-full items-center justify-center gap-3 rounded-[10px] border text-sm font-medium transition-colors">
+        <a href={`/api/auth/google?rememberMe=${mode === 'login' && rememberMe}`} onClick={markFreshLogin} className="auth-google flex h-[46px] w-full items-center justify-center gap-3 rounded-[10px] border text-sm font-medium transition-colors">
           <GoogleLogo />Google ilə davam et
         </a>
       </form>

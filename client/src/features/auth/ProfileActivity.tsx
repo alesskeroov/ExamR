@@ -1,3 +1,5 @@
+import { RankLeaderboard, RankSummary } from '../battle/RankSummary'
+import { useBattleRank } from '../battle/rank-api'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { Alert } from '../../components/common/Alert'
@@ -18,6 +20,7 @@ export function ProfileActivity({ tab }: { tab: number }) {
 }
 
 function ProfileResults({ tab }: { tab: number }) {
+  const rank = useBattleRank()
   const exams = useAllExams(tab !== 2)
   const battles = useProfileBattles(tab !== 1)
   const completed = exams.data?.filter(exam => exam.status === 'Completed') ?? []
@@ -32,9 +35,10 @@ function ProfileResults({ tab }: { tab: number }) {
     {(tab === 0 || tab === 1) && exams.isError && <Alert title="İmtahanlar yüklənmədi">{exams.error.message}</Alert>}
     {(tab === 0 || tab === 2) && battles.isError && <Alert title="Battle nəticələri yüklənmədi">{battles.error.message}</Alert>}
     {((tab !== 2 && exams.isPending) || (tab !== 1 && battles.isPending)) && <p role="status" className="animate-pulse text-sm text-slate-500">Nəticələr yüklənir…</p>}
+    {(tab === 0 || tab === 2) && <RankSummary />}
     {tab === 0 && <>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {[['Tamamlanan imtahan', exams.data ? completed.length : '—'], ['Orta nəticə', average], ['Battle qələbəsi', wins ?? '—'], ['Battle reytinqi', 'Mövcud deyil']].map(([label, value]) => <div key={label} className={card}><p className="text-xs text-slate-500">{label}</p><p className="mt-2 text-xl font-semibold tabular-nums">{value}</p></div>)}
+        {[['Tamamlanan imtahan', exams.data ? completed.length : '—'], ['Orta nəticə', average], ['Battle qələbəsi', wins ?? '—'], ['Battle reytinqi', rank.data?.rating ?? '—']].map(([label, value]) => <div key={label} className={card}><p className="text-xs text-slate-500">{label}</p><p className="mt-2 text-xl font-semibold tabular-nums">{value}</p></div>)}
       </div>
       <section className={card}><h2 className="font-semibold">Son aktivlik</h2>
         {activities.length ? <ul className="mt-3 divide-y divide-slate-200">{activities.map(activity => <li key={activity.id} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm"><div className="min-w-0"><Link className="font-medium hover:text-indigo-600" to={activity.to}>{activity.label}</Link><p className="mt-1 text-slate-500">{activity.detail}</p></div><time className="text-xs text-slate-500" dateTime={activity.date}>{formatDate(activity.date)}</time></li>)}</ul>
@@ -48,8 +52,9 @@ function ProfileResults({ tab }: { tab: number }) {
     {tab === 2 && battles.data && <>
       <div className="grid grid-cols-3 gap-2">{[['Oynanılan Battle', battles.data.length], ['Qələbə', wins ?? 0], ['Digər nəticələr', battles.data.filter(battle => battle.rank !== 1).length]].map(([label, value]) => <div key={label} className={card}><p className="text-xs text-slate-500">{label}</p><p className="mt-2 text-xl font-semibold">{value}</p></div>)}</div>
       {!battles.data.length ? <EmptyState title="Hələ Battle nəticəniz yoxdur" description="İlk yarışınızdan sonra nəticələr burada görünəcək." action={<Link to="/battle" className="text-indigo-600">Battle-a keç</Link>} />
-        : <section className={card}><h2 className="font-semibold">Son Battle nəticələri</h2><ul className="mt-3 divide-y divide-slate-200">{battles.data.slice(0, 10).map(battle => <li key={battle.battleId} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"><div><p className="font-medium">{battle.source.documentName ?? 'Battle'} · {battle.rank}-ci yer</p><p className="mt-1 text-xs text-slate-500">{formatDate(battle.playedAt)} · {battle.questionCount} sual · {battle.participantCount} iştirakçı</p></div><span className="font-semibold tabular-nums text-indigo-600">{battle.score} xal</span></li>)}</ul><Link to="/exams" className="mt-3 inline-block text-sm text-indigo-600">Bütün nəticələr</Link></section>}
-      <p className="text-xs text-slate-500">Ümumi reytinq sistemi hələ mövcud deyil. Yer hər yarışın öz nəticəsidir.</p>
+        : <section className={card}><h2 className="font-semibold">Son Battle nəticələri</h2><ul className="mt-3 divide-y divide-slate-200">{battles.data.slice(0, 10).map(battle => <li key={battle.battleId} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"><div><p className="font-medium">{battle.source.documentName ?? 'Battle'} · {battle.rank}-ci yer</p><p className="mt-1 text-xs text-slate-500">{formatDate(battle.playedAt)} · {battle.questionCount} sual · {battle.participantCount} iştirakçı</p></div><span className="font-semibold tabular-nums text-indigo-600">{battle.score} xal{battle.ratingAfter != null && battle.ratingBefore != null && <span className="ml-2 text-xs">({battle.ratingAfter - battle.ratingBefore >= 0 ? "+" : ""}{battle.ratingAfter - battle.ratingBefore} reytinq)</span>}</span></li>)}</ul><Link to="/exams" className="mt-3 inline-block text-sm text-indigo-600">Bütün nəticələr</Link></section>}
+      <p className="text-xs text-slate-500">Battle xalı yarışa aiddir; reytinq isə normallaşdırılmış uzunmüddətli göstəricidir.</p>
+      <RankLeaderboard />
     </>}
   </div>
 }

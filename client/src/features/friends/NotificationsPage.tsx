@@ -1,3 +1,5 @@
+import { useDeleteNotifications } from './notification-management'
+import { useConfirm } from '../../lib/use-confirm'
 import { Bell } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { Alert } from '../../components/common/Alert'
@@ -10,18 +12,26 @@ import { useFriendAction, useNotificationAction, useNotifications } from './api'
 const statusLabels: Record<string, string> = { Accepted: 'Qəbul edilib', Rejected: 'Rədd edilib', Expired: 'Vaxtı bitib', Unavailable: 'Artıq aktiv deyil' }
 
 export function NotificationsPage() {
+  const remove = useDeleteNotifications()
+  const confirm = useConfirm()
+  async function deleteItems(id?: string, readOnly = false) {
+    if (await confirm({ title: id ? 'Bildiriş silinsin?' : readOnly ? 'Oxunmuş bildirişlər silinsin?' : 'Bütün bildirişlər silinsin?', description: 'Yalnız sizin bildirişləriniz silinəcək. Dostluqlar və Battle nəticələri dəyişməyəcək.', confirmLabel: 'Sil', danger: true })) remove.mutate({ id, readOnly })
+  }
   const navigate = useNavigate()
   const notifications = useNotifications()
   const action = useNotificationAction()
   const friendAction = useFriendAction()
-  const busy = action.isPending || friendAction.isPending
-  const error = action.error ?? friendAction.error
+  const busy = action.isPending || friendAction.isPending || remove.isPending
+  const error = action.error ?? friendAction.error ?? remove.error
   return <>
     <PageHeader title="Bildirişlər" description="Dostluq, Battle və qrup bildirişləri. Son 100 bildiriş göstərilir." />
-    <div className="mb-5 flex items-center justify-between gap-3">
+    <div className="mb-5 flex flex-wrap items-center gap-3">
       <p className="text-slate-500">{notifications.data?.unreadCount ?? 0} oxunmamış bildiriş</p>
       <Button variant="secondary" disabled={busy || !notifications.data?.unreadCount} onClick={() => action.mutate({ action: 'read' })}>Hamısını oxunmuş et</Button>
+      <Button variant="ghost" disabled={busy || !notifications.data?.items.length} onClick={() => void deleteItems(undefined, true)}>Oxunmuşları sil</Button>
+      <Button variant="ghost" disabled={busy || !notifications.data?.items.length} onClick={() => void deleteItems()}>Hamısını sil</Button>
     </div>
+    {remove.isSuccess && <div role="status" className="mb-4"><Alert tone="info" title="Bildirişlər silindi." /></div>}
     {error && <div className="mb-4"><Alert title="Əməliyyat alınmadı">{error.message}</Alert></div>}
     {notifications.isPending && <p role="status" className="py-8 text-slate-500">Bildirişlər yüklənir…</p>}
     {notifications.isError && <Alert title="Bildirişlər yüklənmədi">{notifications.error.message}</Alert>}
@@ -40,6 +50,7 @@ export function NotificationsPage() {
           {n.expiresAt && <p className="mt-1 text-xs">Son vaxt: {new Date(n.expiresAt).toLocaleTimeString('az-AZ', { hour: '2-digit', minute: '2-digit' })}</p>}
         </div>}
         <div className="mt-4 flex flex-wrap items-center gap-2">
+          <Button variant="ghost" disabled={busy} onClick={() => void deleteItems(n.id)}>Bildirişi sil</Button>
           {pending && n.kind === 'FriendRequest' && <>
             <Button disabled={busy} onClick={() => friendAction.mutate({ id: n.actorId, action: 'accept' })}>Qəbul et</Button>
             <Button variant="secondary" disabled={busy} onClick={() => friendAction.mutate({ id: n.actorId, action: 'reject' })}>Rədd et</Button>

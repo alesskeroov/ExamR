@@ -110,7 +110,7 @@ public static class BattleEndpoints
         var items = rows.Select(r => new BattleHistoryDto(
             r.BattleId, r.RoomCode, r.PlayedAt,
             new ExamSourceDto(r.DocumentId, names.GetValueOrDefault(r.DocumentId), r.RangeFrom, r.RangeTo),
-            r.QuestionCount, r.ParticipantCount, r.Rank, r.Score, r.CorrectCount)).ToList();
+            r.QuestionCount, r.ParticipantCount, r.Rank, r.Score, r.CorrectCount, r.RatingBefore, r.RatingAfter)).ToList();
 
         return TypedResults.Ok(new PagedResult<BattleHistoryDto>(items, pageNumber, size, total));
     }

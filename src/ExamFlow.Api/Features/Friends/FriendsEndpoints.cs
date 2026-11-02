@@ -27,6 +27,8 @@ public static class FriendsEndpoints
 
         var notifications = api.MapGroup("/notifications").RequireAuthorization();
         notifications.MapGet("/", Notifications);
+        notifications.MapDelete("/", DeleteNotifications);
+        notifications.MapDelete("/{id:guid}", DeleteNotification);
         notifications.MapPost("/read", ReadAll);
         notifications.MapPost("/{id:guid}/read", Read);
         notifications.MapPost("/{id:guid}/{action}", Respond);
@@ -236,6 +238,23 @@ public static class FriendsEndpoints
                     : await battles.InvitationLobbyAsync(n.RoomCode!, id, false, ct) is null ? "Unavailable" : "Pending" };
         }
         return TypedResults.Ok(new NotificationsDto(unread, items));
+    }
+
+    private static async Task<IResult> DeleteNotification(Guid id, ClaimsPrincipal user, AppDbContext db, SocialEvents events, CancellationToken ct)
+    {
+        var userId = user.GetUserId();
+        var count = await db.SocialNotifications.Where(n => n.UserId == userId && n.Id == id).ExecuteDeleteAsync(ct);
+        if (count == 0) return TypedResults.NotFound();
+        await events.ChangedAsync(userId, ct);
+        return TypedResults.NoContent();
+    }
+
+    private static async Task<IResult> DeleteNotifications(bool? readOnly, ClaimsPrincipal user, AppDbContext db, SocialEvents events, CancellationToken ct)
+    {
+        var userId = user.GetUserId();
+        await db.SocialNotifications.Where(n => n.UserId == userId && (readOnly != true || n.ReadAt != null)).ExecuteDeleteAsync(ct);
+        await events.ChangedAsync(userId, ct);
+        return TypedResults.NoContent();
     }
 
     private static async Task<IResult> ReadAll(ClaimsPrincipal user, AppDbContext db, SocialEvents events, TimeProvider clock, CancellationToken ct)

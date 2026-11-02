@@ -2,6 +2,7 @@ import { AdminPage } from '../features/admin/AdminPage'
 import { FocusPage } from '../features/focus/FocusPage'
 import { GroupDetailPage, GroupsAdminPage, GroupsPage } from '../features/groups/GroupsPage'
 import { StudyPage } from '../features/study/StudyPage'
+import { TutorPage } from '../features/tutor/TutorPage'
 import { createBrowserRouter } from 'react-router'
 import { ResetPasswordPage } from '../features/auth/ResetPasswordPage'
 import { VerifyEmailPage } from '../features/auth/VerifyEmailPage'
@@ -36,6 +37,7 @@ export const router = createBrowserRouter([
       { index: true, element: <DashboardPage /> },
       { path: 'upload', element: <UploadPage /> },
       { path: 'study', element: <StudyPage /> },
+      { path: 'tutor', element: <TutorPage /> },
       { path: 'focus', element: <FocusPage /> },
       { path: 'questions', element: <QuestionBankPage /> },
       { path: 'exams/new', element: <ExamSetupPage /> },

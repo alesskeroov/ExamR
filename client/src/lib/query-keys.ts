@@ -18,6 +18,14 @@ export const queryKeys = {
     history: (documentId: string) => ['study', documentId, 'history'] as const,
     usage: ['study', 'usage'] as const,
   },
+  tutor: {
+    documents: ['tutor', 'documents'] as const,
+    chats: ['tutor', 'chats'] as const,
+    chat: (id: string) => ['tutor', 'chats', id] as const,
+    chunks: (documentId: string) => ['tutor', 'chunks', documentId] as const,
+    topics: (chatId: string) => ['tutor', 'topics', chatId] as const,
+    usage: ['tutor', 'usage'] as const,
+  },
   health: ['health'] as const,
   me: ['me'] as const,
   social: {
@@ -56,6 +64,9 @@ export const queryKeys = {
     byDocument: (documentId: string, filter: string) => ['questions', 'byDocument', documentId, filter] as const,
   },
   battles: {
+    rank: ["battles", "rank", "me"] as const,
+    playerRanks: (ids: string) => ["battles", "rank", "players", ids] as const,
+    leaderboard: ["battles", "rank", "leaderboard"] as const,
     allHistory: ['battles', 'history', 'all'] as const,
     all: ['battles'] as const,
     rooms: (id: string, includeCompleted: boolean) => ['battles', 'rooms', id, includeCompleted] as const,

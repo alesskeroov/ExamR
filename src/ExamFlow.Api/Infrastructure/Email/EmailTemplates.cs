@@ -57,6 +57,15 @@ public static class EmailTemplates
         footnote: null,
         ignoreNote: "Bu tələbi sən etməmisənsə, məktubu nəzərə alma — şifrən dəyişməyəcək.");
 
+    public static EmailMessage SecurityNotice(string to, string message, string appUrl) => Build(to,
+        "ExamR — hesab təhlükəsizliyi", "Hesabınızda təhlükəsizlik dəyişikliyi edildi.", "Təhlükəsizlik", "Şifrə yeniləndi",
+        [message], [], ("Hesaba keç", appUrl), null);
+
+    public static EmailMessage AccountDeletion(string to, string link) => Build(to,
+        "ExamR — hesabın bağlanmasını təsdiqlə", "Link 30 dəqiqə etibarlıdır.", "Hesab", "Hesabı bağlamaq istəyirsiniz?",
+        ["Bu linki yalnız hesabınızı bağlamaq istəyirsinizsə açın. Şəxsi profil anonimləşdiriləcək və giriş bağlanacaq. Ortaq sənədlər və tarixçə qorunacaq. Link 30 dəqiqə etibarlıdır."],
+        [], ("Tələbi yoxla", link), null, "Bu tələbi siz etməmisinizsə, məktubu nəzərə almayın.");
+
     private static EmailMessage Build(string to, string subject, string preheader, string eyebrow, string title, string[] paragraphs,
         (string Term, string Text)[] list, (string Label, string Url) cta, (string Label, string Url, string Text)? footnote, string? ignoreNote = null)
     {

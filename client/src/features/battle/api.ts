@@ -78,6 +78,8 @@ export interface CreateBattleRequest {
 }
 
 export interface BattleHistoryItem {
+  ratingBefore?: number | null
+  ratingAfter?: number | null
   battleId: string
   roomCode: string
   playedAt: string

@@ -26,6 +26,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<AnswerOption> AnswerOptions => Set<AnswerOption>();
     public DbSet<Exam> Exams => Set<Exam>();
     public DbSet<ExamQuestion> ExamQuestions => Set<ExamQuestion>();
+    public DbSet<BattleRating> BattleRatings => Set<BattleRating>();
     public DbSet<BattleResult> BattleResults => Set<BattleResult>();
     public DbSet<StoredBattleRoom> StoredBattleRooms => Set<StoredBattleRoom>();
     public DbSet<StoredBattleMember> StoredBattleMembers => Set<StoredBattleMember>();
@@ -44,6 +45,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     {
         base.OnModelCreating(builder);
         builder.Entity<AppUser>().HasIndex(u => u.NormalizedNickname).IsUnique();
+        builder.Entity<BattleRating>().HasOne(r => r.User).WithOne().HasForeignKey<BattleRating>(r => r.UserId).OnDelete(DeleteBehavior.Cascade);
+        builder.Entity<BattleRating>().HasIndex(r => new { r.CurrentRating, r.Wins }).IsDescending(true, true);
         builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
     }
 }

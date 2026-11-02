@@ -62,7 +62,7 @@ public static class GoogleAuthEndpoints
             // from Google, so it cannot be re-checked here.
             if (owner is not null) return Fail(owner.Id.ToString() == linkUserId ? "linked" : "google_in_use", link: true);
             var current = await users.FindByIdAsync(linkUserId);
-            if (current is null) return Fail("login_required", link: true);
+            if (current is null || current.IsDeleted) return Fail("login_required", link: true);
             var linked = await users.AddLoginAsync(current, new UserLoginInfo(Scheme, subject, "Google"));
             return Fail(linked.Succeeded ? "linked" : "google_failed", link: true);
         }
@@ -88,7 +88,7 @@ public static class GoogleAuthEndpoints
             await users.AddLoginAsync(owner, new UserLoginInfo(Scheme, subject, "Google"));
         }
 
-        if (await users.IsLockedOutAsync(owner)) return Fail("locked");
+        if (owner.IsDeleted || await users.IsLockedOutAsync(owner)) return Fail("locked");
         var remember = external.Properties?.Items.TryGetValue(Remember, out var r) == true && r == "1";
         AuthCookie.Append(context.Response, tokens.Create(owner, await users.GetRolesAsync(owner), remember), remember);
         return TypedResults.Redirect("/");

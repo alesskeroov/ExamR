@@ -1,4 +1,5 @@
 import { LogIn, Swords, Users } from 'lucide-react'
+import { RankLeaderboard, RankSummary } from './RankSummary'
 import { useId, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { Button } from '../../components/common/Button'
@@ -19,10 +20,12 @@ export function BattleHomePage() {
     <>
       <PageHeader title="Battle" description="Dostlarınızla real vaxtda yarışın: eyni suallar, eyni anda, ən sürətli düzgün cavab qalib gəlir." />
       <Link to="/battle/rooms" className="mb-5 inline-block font-medium text-indigo-600 hover:text-indigo-700">Otaqlarım →</Link>
+      <div className="mb-5"><RankSummary /></div>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <CreateRoomCard />
         <JoinRoomCard />
       </div>
+      <RankLeaderboard />
     </>
   )
 }

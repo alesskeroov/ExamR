@@ -1,9 +1,11 @@
 import { ArrowRight, Check, Database, Server } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
+import { ScrambleText } from '../../components/common/ScrambleText'
+import { clearFreshLogin, isFreshLogin } from '../../lib/fresh-login'
 import { formatDate } from '../../lib/format'
 import { cn } from '../../lib/utils'
-import { useCurrentUser, useResendConfirmation } from '../auth/api'
+import { useCurrentUser } from '../auth/api'
 import { useMyDocuments } from '../documents/api'
 import { useActiveExam, type ExamSummary } from '../exams/api'
 import { sourceName } from '../exams/examSource'
@@ -18,6 +20,9 @@ const pct = (value: number | null) => (value === null ? '—' : `${Math.round(va
 
 export function DashboardPage() {
   const { data: user } = useCurrentUser()
+  // Decode the name only right after signing in; cleared once read so in-app navigation shows it plainly.
+  const [freshLogin] = useState(isFreshLogin)
+  useEffect(() => { if (freshLogin) clearFreshLogin() }, [freshLogin])
   const exams = useAllExams()
   const active = useActiveExam()
   const myDocs = useMyDocuments()
@@ -32,7 +37,7 @@ export function DashboardPage() {
     <header className="mb-8 flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
       <div className="min-w-0">
         <p className="ds-label">{today}</p>
-        <h1 className="mt-2 truncate text-[28px] font-bold leading-tight tracking-[-0.04em] sm:text-[32px]">Salam, {user?.nickname}</h1>
+        <h1 className="mt-2 truncate text-[28px] font-bold leading-tight tracking-[-0.04em] sm:text-[32px]">Salam, {user && <ScrambleText text={user.displayName || user.nickname} play={freshLogin} />}</h1>
       </div>
       <div className="flex gap-2">
         <Link to="/upload" className="inline-flex h-10 items-center rounded-[10px] border border-[var(--app-border)] px-3.5 text-sm font-semibold transition-colors hover:bg-[var(--app-sunken)]">Sənəd yüklə</Link>
@@ -41,7 +46,6 @@ export function DashboardPage() {
     </header>
 
     <div className="grid gap-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:gap-14">
-    {user && user.emailConfirmed === false && <VerifyNotice email={user.email} />}
 
     <section className={cn('border-y border-[var(--app-border)] py-7 sm:py-8 lg:self-start', !loading && !active.data && completed.length === 0 && 'lg:col-span-2')} aria-label="Növbəti addım">
       {loading ? <Skeleton lines={3} /> : active.data
@@ -153,14 +157,4 @@ export function SystemStatus() {
 function StatusItem({ icon, label, value, tone }: { icon: ReactNode; label: string; value: string; tone: Tone }) {
   return <span className="flex items-center gap-2"><span className="ds-muted">{icon}</span><span className="ds-muted">{label}</span>
     <span className="flex items-center gap-1.5 font-semibold"><span className={cn('size-2 rounded-full', toneStyles[tone])} aria-hidden />{value}</span></span>
-}
-
-/** Quiet reminder for unconfirmed addresses; the welcome email already contains the link. */
-function VerifyNotice({ email }: { email: string }) {
-  const resend = useResendConfirmation()
-  return <div className="ds-sunken mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl px-4 py-3 text-sm">
-    <p><span className="font-semibold">Email ünvanını təsdiqlə.</span> <span className="ds-muted">Link {email} ünvanına göndərilib.</span></p>
-    {resend.isSuccess ? <span className="ds-good font-semibold">Yeni link göndərildi</span>
-      : <button type="button" disabled={resend.isPending} onClick={() => resend.mutate(email)} className="ds-link disabled:opacity-60">{resend.isPending ? 'Göndərilir…' : 'Linki yenidən göndər'}</button>}
-  </div>
 }

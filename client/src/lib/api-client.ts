@@ -101,3 +101,40 @@ export async function downloadFile(path: string, fileName: string): Promise<void
   link.remove()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
+
+/**
+ * POST that answers with Server-Sent Events. Errors before the stream starts arrive as ProblemDetails (ApiError);
+ * after that, events are passed to onEvent as they come. Aborting the signal stops the request.
+ */
+export async function postEventStream(path: string, body: unknown, signal: AbortSignal, onEvent: (event: string, data: unknown) => void): Promise<void> {
+  const response = await fetch(`/api${path}`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { Accept: 'text/event-stream', 'Content-Type': 'application/json', [CSRF_HEADER]: '1' },
+    body: JSON.stringify(body),
+    signal,
+  })
+  if (!response.ok || !response.body) {
+    const problem = await response.json().catch(() => undefined) as ProblemDetails | undefined
+    throw new ApiError(response.status, problem)
+  }
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
+  let buffer = ''
+  for (;;) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += value
+    let end
+    while ((end = buffer.indexOf('\n\n')) >= 0) {
+      const block = buffer.slice(0, end)
+      buffer = buffer.slice(end + 2)
+      let event = 'message'
+      let data = ''
+      for (const line of block.split('\n')) {
+        if (line.startsWith('event: ')) event = line.slice(7)
+        else if (line.startsWith('data: ')) data += line.slice(6)
+      }
+      if (data) onEvent(event, JSON.parse(data))
+    }
+  }
+}

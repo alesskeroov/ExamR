@@ -1,3 +1,5 @@
+import { RankBadge } from './RankSummary'
+import { usePlayerRanks } from './rank-api'
 import {
   Check,
   Copy,
@@ -378,6 +380,7 @@ function Countdown({ endsAt, seconds, offset }: { endsAt: string; seconds: numbe
 }
 
 function Leaderboard({ participants, myId, room, isHost }: { participants: BattleParticipant[]; myId: string; room?: Room; isHost?: boolean }) {
+  const ranks = usePlayerRanks(participants.map(p => p.userId))
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <h2 className="mb-3 font-semibold">Liderlər cədvəli</h2>
@@ -390,6 +393,7 @@ function Leaderboard({ participants, myId, room, isHost }: { participants: Battl
             <span className="w-6 text-center font-bold text-slate-500 tabular-nums">{p.rank}</span>
             <Avatar name={p.displayName} small />
             <span className={cn('min-w-0 flex-1 truncate font-medium', !p.isConnected && 'text-slate-400')}>{p.displayName}</span>
+              {ranks.data?.find(r => r.userId === p.userId) && <RankBadge compact rank={ranks.data.find(r => r.userId === p.userId)!.rank} />}
             {p.lastPoints !== null && (
               <span className={cn('text-sm font-semibold tabular-nums', p.lastPoints > 0 ? 'text-emerald-600' : 'text-slate-400')}>
                 +{formatNumber(p.lastPoints)}

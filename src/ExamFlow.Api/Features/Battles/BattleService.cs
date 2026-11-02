@@ -527,6 +527,7 @@ public sealed partial class BattleService(
                 QuestionCount = room.Questions.Count,
                 ParticipantCount = ranked.Count,
                 Rank = i + 1,
+                CorrectTimeMs = p.CorrectTimeMs,
                 Score = p.Score,
                 CorrectCount = p.CorrectCount,
                 PlayedAt = now,

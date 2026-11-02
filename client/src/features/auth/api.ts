@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '../../lib/api-client'
 import { clearToken } from '../../lib/auth-token'
+import { markFreshLogin } from '../../lib/fresh-login'
 import { queryKeys } from '../../lib/query-keys'
 
 export interface User {
@@ -9,6 +10,7 @@ export interface User {
   displayName: string
   nickname: string
   bio?: string | null
+  hasPassword?: boolean
   avatarUrl: string | null
   roles: string[]
   googleLinked?: boolean
@@ -68,6 +70,7 @@ function useSignIn(path: string) {
     onSuccess: ({ user }) => {
       queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== queryKeys.me[0] })
       clearToken()
+      markFreshLogin()
       queryClient.setQueryData(queryKeys.me, normalizeUser(user))
     },
   })

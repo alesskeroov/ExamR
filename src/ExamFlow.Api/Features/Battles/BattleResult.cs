@@ -22,6 +22,10 @@ public class BattleResult
     public int QuestionCount { get; set; }
     public int ParticipantCount { get; set; }
     public int Rank { get; set; }
+    public long CorrectTimeMs { get; set; }
+    public int? RatingBefore { get; set; }
+    public int? RatingAfter { get; set; }
+    public int? RatingOutcome { get; set; }
     public int Score { get; set; }
     public int CorrectCount { get; set; }
     public DateTimeOffset PlayedAt { get; set; }

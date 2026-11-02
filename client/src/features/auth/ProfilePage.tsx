@@ -1,5 +1,9 @@
+import './profile.css'
+import { AccountSettings } from './AccountSettings'
+import { RankBadge } from '../battle/RankSummary'
+import { useBattleRank } from '../battle/rank-api'
 import { Check, ImagePlus, Pencil, Save, Trash2, UserRound } from 'lucide-react'
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type CSSProperties } from 'react'
 import { useBlocker, useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { Alert } from '../../components/common/Alert'
@@ -16,6 +20,7 @@ const tabs = ['Ümumi baxış', 'İmtahanlar', 'Battle', 'Sosial', 'Hesab ayarla
 const field = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20'
 
 export function ProfilePage() {
+  const rank = useBattleRank()
   const client = useQueryClient()
   const current = useCurrentUser()
   const user = current.data
@@ -94,6 +99,7 @@ export function ProfilePage() {
         <div className="min-w-0 flex-1 self-center">
           <p className="text-xs font-medium uppercase tracking-widest text-slate-500">Şəxsi profil</p>
           <h2 className="mt-1 break-words text-xl font-semibold tracking-tight sm:text-2xl">{user.nickname}</h2>
+          {rank.data && <div className="mt-2"><RankBadge rank={rank.data} /></div>}
           <p className="mt-2 whitespace-pre-wrap text-sm text-slate-500">{user.bio || 'Özünüz haqqında qısa məlumat əlavə edin.'}</p>
         </div>
         {!editing && <Button variant="secondary" onClick={edit} className="w-full sm:w-auto"><Pencil className="size-4" aria-hidden />Profili redaktə et</Button>}
@@ -119,17 +125,18 @@ export function ProfilePage() {
         <div className="flex flex-wrap gap-2"><Button type="submit" disabled={!dirty || avatarBusy} loading={saving}><Save className="size-4" aria-hidden />Saxla</Button><Button variant="secondary" disabled={saving || avatarBusy} onClick={() => void cancel()}>Ləğv et</Button></div>
       </form>}
     </section>
-    <div role="tablist" aria-label="Profil bölmələri" className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 sm:grid-cols-5">
+    <div role="tablist" aria-label="Profil bölmələri" className="profile-tabs grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 sm:grid-cols-5">
+      <span aria-hidden className="profile-tab-indicator" data-wide={tab === 4} style={{ '--tab-index': tab, '--tab-x': tab === 4 ? 0 : tab % 2, '--tab-y': Math.floor(tab / 2) } as CSSProperties} />
       {tabs.map((label, index) => <button key={label} role="tab" id={`profile-tab-${index}`} aria-selected={tab === index} aria-controls="profile-panel" tabIndex={tab === index ? 0 : -1}
         onClick={() => setParams(previous => { const next = new URLSearchParams(previous); next.set('tab', String(index)); return next }, { replace: true })}
         onKeyDown={event => {
           const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length : event.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : null
           if (next !== null) { event.preventDefault(); document.getElementById(`profile-tab-${next}`)?.click(); document.getElementById(`profile-tab-${next}`)?.focus() }
         }}
-        className={cn('min-h-11 rounded-lg px-2 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-indigo-500', index === 4 && 'col-span-2 sm:col-span-1', tab === index ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-indigo-600')}>{label}</button>)}
+        className={cn('min-h-11 rounded-lg px-2 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-indigo-500', index === 4 && 'col-span-2 sm:col-span-1', tab === index ? 'text-indigo-600' : 'text-slate-500 hover:text-indigo-600')}>{label}</button>)}
     </div>
-    <div role="tabpanel" id="profile-panel" aria-labelledby={`profile-tab-${tab}`} tabIndex={0}>
-      {tab === 4 ? <><section className="rounded-xl border border-slate-200 bg-white p-5"><h2 className="font-semibold">Hesab məlumatları</h2><dl className="mt-4 space-y-3 text-sm"><div><dt className="text-slate-500">E-mail</dt><dd className="mt-1 break-all">{user.email}</dd></div><div><dt className="text-slate-500">E-mail təsdiqi</dt><dd className="mt-1">{user.emailConfirmed ? 'Təsdiqlənib' : 'Təsdiqlənməyib'}</dd></div></dl></section><GoogleLinkSection /></> : <ProfileActivity tab={tab} />}
+    <div key={tab} className="profile-panel" role="tabpanel" id="profile-panel" aria-labelledby={`profile-tab-${tab}`} tabIndex={0}>
+      {tab === 4 ? <><AccountSettings /><GoogleLinkSection /></> : <ProfileActivity tab={tab} />}
     </div>
   </div>
 }

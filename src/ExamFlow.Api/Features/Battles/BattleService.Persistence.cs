@@ -18,8 +18,19 @@ public sealed partial class BattleService
 
     private async Task PersistAsync(BattleRoom room, CancellationToken ct = default, IReadOnlyList<BattleResult>? results = null)
     {
+        if (results is null) { await PersistCoreAsync(room, ct, null); return; }
+        using var strategyScope = scopes.CreateScope();
+        var strategyDb = strategyScope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await strategyDb.Database.CreateExecutionStrategy().ExecuteAsync(() => PersistCoreAsync(room, ct, results));
+    }
+
+    private async Task PersistCoreAsync(BattleRoom room, CancellationToken ct, IReadOnlyList<BattleResult>? results)
+    {
         using var scope = scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await using var transaction = results is null ? null : await db.Database.BeginTransactionAsync(ct);
+        if (results is not null)
+            await db.Database.ExecuteSqlRawAsync("DECLARE @r int; EXEC @r = sp_getapplock @Resource = 'ExamR.BattleRankSettlement', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 15000; IF @r < 0 THROW 51000, 'Rank settlement lock failed.', 1;", ct);
         var stored = await db.StoredBattleRooms.Include(r => r.Members).SingleOrDefaultAsync(r => r.Id == room.BattleId, ct);
         if (stored is null)
         {
@@ -28,7 +39,16 @@ public sealed partial class BattleService
                 CreatedById = room.CreatedById, CreatedAt = room.CreatedAt };
             db.StoredBattleRooms.Add(stored);
         }
-        else db.Entry(stored).Property(r => r.Version).OriginalValue = room.Version;
+        else
+        {
+            if (results is not null && await db.BattleResults.AnyAsync(r => r.BattleId == room.BattleId, ct))
+            {
+                room.Version = stored.Version;
+                if (transaction is not null) await transaction.CommitAsync(ct);
+                return;
+            }
+            db.Entry(stored).Property(r => r.Version).OriginalValue = room.Version;
+        }
 
         stored.HostUserId = room.HostUserId;
         stored.DocumentId = room.Settings.DocumentId;
@@ -52,9 +72,14 @@ public sealed partial class BattleService
             if (member is null) stored.Members.Add(member = new StoredBattleMember { RoomId = room.BattleId, UserId = id });
             member.IsKicked = room.Kicked.Contains(id);
         }
-        if (results is not null && !await db.BattleResults.AnyAsync(r => r.BattleId == room.BattleId, ct)) db.BattleResults.AddRange(results);
+        if (results is not null && !await db.BattleResults.AnyAsync(r => r.BattleId == room.BattleId, ct))
+        {
+            await BattleRankEngine.ApplyAsync(db, results, scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<BattleRankOptions>>().Value, ct);
+            db.BattleResults.AddRange(results);
+        }
         try { await db.SaveChangesAsync(ct); }
         catch (DbUpdateConcurrencyException) { throw new HubException("Otaq başqa əməliyyatla dəyişib. Səhifəni yeniləyin."); }
+        if (transaction is not null) await transaction.CommitAsync(ct);
         room.Version = stored.Version;
     }
 

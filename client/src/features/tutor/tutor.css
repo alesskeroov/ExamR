@@ -1,0 +1,42 @@
+/* Tutor workspace: fills the viewport under the app header. --tutor-keyboard is the on-screen keyboard overlap
+   (set from visualViewport), so the composer stays visible above it. */
+.tutor-workspace {
+  --tutor-keyboard: 0px;
+  height: calc(100dvh - 3.5rem - var(--tutor-keyboard));
+  margin: -1.5rem -1rem calc(-1.5rem - env(safe-area-inset-bottom));
+}
+@media (min-width: 640px) { .tutor-workspace { margin-inline: -1.5rem; } }
+@media (min-width: 1024px) {
+  .tutor-workspace { height: calc(100dvh - 72px - 4rem); margin: 0; border-radius: 16px; }
+}
+
+.tutor-surface { background: var(--app-surface, #fff); }
+.tutor-sunken { background: var(--app-sunken, #f6f7fb); }
+.tutor-border { border-color: var(--app-border, #e5e7ef); }
+
+.tutor-composer-safe { padding-bottom: max(.75rem, env(safe-area-inset-bottom)); }
+@media (min-width: 1024px) { .tutor-composer-safe { padding-bottom: 1rem; } }
+
+.tutor-enter { animation: tutor-enter .28s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes tutor-enter { from { opacity: 0; transform: translateY(6px); } }
+
+.tutor-caret::after {
+  content: ''; display: inline-block; width: .5em; height: 1.05em; margin-left: 2px; vertical-align: -.15em;
+  border-radius: 2px; background: currentColor; opacity: .55; animation: tutor-blink 1s steps(2) infinite;
+}
+@keyframes tutor-blink { 50% { opacity: 0; } }
+
+.tutor-dots span { display: inline-block; width: 6px; height: 6px; border-radius: 9999px; background: currentColor; animation: tutor-dot 1.2s infinite ease-in-out; }
+.tutor-dots span:nth-child(2) { animation-delay: .15s; }
+.tutor-dots span:nth-child(3) { animation-delay: .3s; }
+@keyframes tutor-dot { 0%, 80%, 100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+
+.tutor-prose p + p, .tutor-prose p + ul, .tutor-prose p + ol, .tutor-prose ul + p, .tutor-prose ol + p { margin-top: .75em; }
+.tutor-prose ul { list-style: disc; padding-left: 1.25em; }
+.tutor-prose ol { list-style: decimal; padding-left: 1.4em; }
+.tutor-prose li + li { margin-top: .3em; }
+.tutor-prose code { font-size: .9em; padding: .1em .35em; border-radius: 6px; background: var(--app-sunken, #f1f2f7); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tutor-enter, .tutor-caret::after, .tutor-dots span { animation: none; }
+}
