@@ -52,15 +52,18 @@ else if (!builder.Environment.IsDevelopment())
 builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection(SmtpOptions.Section));
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.Section));
 builder.Services.AddSingleton<EmailQueue>();
-// Brevo (HTTPS) in production — Render Free blocks outbound SMTP; SMTP / .eml pickup stays for local development.
-var emailProvider = builder.Configuration["Email:Provider"]?.Trim().Trim('"');
-if (string.Equals(emailProvider, "Brevo", StringComparison.OrdinalIgnoreCase))
+// Email:Provider picks the transport: Gmail API (HTTPS, works on Render Free), Brevo (HTTPS) or SMTP (default; .eml pickup locally).
+var emailProvider = builder.Configuration["Email:Provider"]?.Trim().Trim('"') ?? "Smtp";
+if (emailProvider.Equals("Gmail", StringComparison.OrdinalIgnoreCase))
+    builder.Services.AddHttpClient<IEmailTransport, GmailApiTransport>(client => client.Timeout = TimeSpan.FromSeconds(15));
+else if (emailProvider.Equals("Brevo", StringComparison.OrdinalIgnoreCase))
     builder.Services.AddHttpClient<IEmailTransport, BrevoTransport>(client => client.Timeout = TimeSpan.FromSeconds(20));
 else
     builder.Services.AddSingleton<IEmailTransport, SmtpTransport>();
 builder.Services.AddHostedService<SmtpEmailService>();
-// Visible in the host's startup log, so a misconfigured provider is obvious without sending a test email.
-Console.WriteLine($"Email provider: {(string.Equals(emailProvider, "Brevo", StringComparison.OrdinalIgnoreCase) ? "Brevo" : "SMTP")} (Email:Provider='{emailProvider}')");
+// Startup line so a misconfiguration is visible without sending a test email; only whether values are set, never them.
+static string Set(string? value) => string.IsNullOrWhiteSpace(value) ? "missing" : "set";
+Console.WriteLine($"Email provider: {emailProvider} | Gmail client {Set(builder.Configuration["Email:Gmail:ClientId"])}, secret {Set(builder.Configuration["Email:Gmail:ClientSecret"])}, refresh token {Set(builder.Configuration["Email:Gmail:RefreshToken"])}, from {Set(builder.Configuration["Email:From"])}");
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
 builder.Services.ConfigureHttpJsonOptions(options =>
