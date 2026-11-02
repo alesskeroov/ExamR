@@ -6,24 +6,27 @@ import { NotificationBell } from '../features/friends/NotificationBell'
 import { cn } from '../lib/utils'
 import { ThemeToggle } from '../components/common/ThemeToggle'
 
-const navItems: { to: string; label: string; icon: LucideIcon; end?: boolean; adminOnly?: boolean }[] = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/upload', label: 'Sənəd yüklə', icon: FileUp },
-  { to: '/study', label: 'Öyrənmə köməkçisi', icon: Sparkles },
-  { to: '/focus', label: 'Focus Mode', icon: Target },
-  { to: '/questions', label: 'Sual bankı', icon: Library },
-  { to: '/exams/new', label: 'İmtahana başla', icon: ListChecks },
-  { to: '/battle', label: 'Battle', icon: Swords, end: true },
-  { to: '/battle/rooms', label: 'Otaqlarım', icon: DoorOpen },
-  { to: '/friends', label: 'Dostlar', icon: Users },
-  { to: '/groups', label: 'Qruplarım', icon: GraduationCap },
-  { to: '/admin', label: 'Admin Panel', icon: ShieldCheck, adminOnly: true },
-  { to: '/exams', label: 'Tarixçə', icon: History, end: true },
+const navItems: { to: string; label: string; icon: LucideIcon; group: string; end?: boolean; adminOnly?: boolean }[] = [
+  { to: '/', label: 'Dashboard', icon: LayoutDashboard, group: '', end: true },
+  { to: '/upload', label: 'Sənəd yüklə', icon: FileUp, group: 'Hazırlıq' },
+  { to: '/questions', label: 'Sual bankı', icon: Library, group: 'Hazırlıq' },
+  { to: '/study', label: 'Öyrənmə köməkçisi', icon: Sparkles, group: 'Hazırlıq' },
+  { to: '/focus', label: 'Focus Mode', icon: Target, group: 'Hazırlıq' },
+  { to: '/exams/new', label: 'İmtahana başla', icon: ListChecks, group: 'İmtahan' },
+  { to: '/exams', label: 'Tarixçə', icon: History, group: 'İmtahan', end: true },
+  { to: '/battle', label: 'Battle', icon: Swords, group: 'Birlikdə', end: true },
+  { to: '/battle/rooms', label: 'Otaqlarım', icon: DoorOpen, group: 'Birlikdə' },
+  { to: '/friends', label: 'Dostlar', icon: Users, group: 'Birlikdə' },
+  { to: '/groups', label: 'Qruplarım', icon: GraduationCap, group: 'Birlikdə' },
+  { to: '/admin', label: 'Admin Panel', icon: ShieldCheck, group: 'İdarə', adminOnly: true },
 ]
 
 export function AppLayout() {
   const { data: user } = useCurrentUser()
   const [mobileOpen, setMobileOpen] = useState(false)
+  // Any navigation (menu item, profile link, avatar) closes the mobile drawer; no link has to remember to do it.
+  const { pathname } = useLocation()
+  useEffect(() => { setMobileOpen(false) }, [pathname])
   const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 1024px)').matches)
   useEffect(() => {
     const media = window.matchMedia('(min-width: 1024px)')
@@ -75,24 +78,21 @@ export function AppLayout() {
           <Brand />
           <button type="button" onClick={() => setMobileOpen(false)} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden" aria-label="Menyunu bağla"><X className="size-5" /></button>
         </div>
-        <nav aria-label="Əsas naviqasiya" className="app-navigation flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-3">
-          {navItems.filter(item => !item.adminOnly || user?.roles.includes('Admin')).map(({ to, label, icon: Icon, end }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              onClick={() => setMobileOpen(false)}
-              className={({ isActive }) =>
-                cn(
-                  'app-nav-link flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors duration-150',
-                  isActive ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                )
-              }
-            >
-              <Icon className="size-4" aria-hidden />
-              {label}
-            </NavLink>
-          ))}
+        <nav aria-label="Əsas naviqasiya" className="app-navigation flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-3 pt-1">
+          {[...new Set(navItems.map(item => item.group))].map(group => {
+            const items = navItems.filter(item => item.group === group && (!item.adminOnly || user?.roles.includes('Admin')))
+            if (!items.length) return null
+            return <div key={group || 'home'} className="app-nav-group" role="group" aria-label={group || 'Ümumi'}>
+              {group && <p className="ds-label" aria-hidden>{group}</p>}
+              {items.map(({ to, label, icon: Icon, end }) => (
+                <NavLink key={to} to={to} end={end} onClick={() => setMobileOpen(false)}
+                  className="app-nav-link flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] font-medium transition-colors duration-150">
+                  <Icon className="size-4 shrink-0" aria-hidden />
+                  <span className="truncate">{label}</span>
+                </NavLink>
+              ))}
+            </div>
+          })}
         </nav>
         <UserMenu />
       </aside>

@@ -10,6 +10,7 @@ export interface User {
   nickname: string
   avatarUrl: string | null
   roles: string[]
+  googleLinked?: boolean
 }
 
 export function normalizeUser(user: User): User {

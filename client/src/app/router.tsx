@@ -20,6 +20,7 @@ import { ProfilePage } from '../features/auth/ProfilePage'
 import { AppLayout } from './AppLayout'
 import { NotFoundPage } from './NotFoundPage'
 import { RequireAuth } from './RequireAuth'
+import { StatusPage } from './StatusPage'
 
 export const router = createBrowserRouter([
   {
@@ -28,6 +29,8 @@ export const router = createBrowserRouter([
         <AppLayout />
       </RequireAuth>
     ),
+    // Route-level failures (lazy load, render) get the same friendly screen instead of the router's raw error.
+    errorElement: <StatusPage code={500} />,
     children: [
       { index: true, element: <DashboardPage /> },
       { path: 'upload', element: <UploadPage /> },
@@ -48,6 +51,11 @@ export const router = createBrowserRouter([
       { path: 'profile', element: <ProfilePage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
+  },
+  {
+    // Public: the API redirects browser navigations here (?code=404|403|500) instead of returning raw JSON.
+    path: 'error',
+    element: <StatusPage />,
   },
   {
     // Public: opened from the password-reset email.

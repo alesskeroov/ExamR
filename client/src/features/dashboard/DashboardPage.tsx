@@ -1,124 +1,137 @@
-import { BookOpen, CheckCircle2, ChevronRight, Database, FileText, LineChart, ListChecks, Percent, Server, Swords, Timer, Upload, Users } from 'lucide-react'
+import { ArrowRight, Check, Database, Server } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
-import { EmptyState } from '../../components/common/EmptyState'
-import { PageHeader } from '../../components/common/PageHeader'
 import { formatDate } from '../../lib/format'
 import { cn } from '../../lib/utils'
 import { useCurrentUser } from '../auth/api'
-import { useSharedDocuments } from '../documents/api'
+import { useMyDocuments } from '../documents/api'
+import { useActiveExam, type ExamSummary } from '../exams/api'
 import { sourceName } from '../exams/examSource'
-import { useGroups } from '../groups/api'
 import { useAllExams, useHealth } from './api'
 
-const card = 'rounded-xl border border-slate-200 bg-white shadow-sm'
-const skeleton = 'animate-pulse rounded-lg bg-slate-100'
+// Built by hand: many browsers ship without Azerbaijani date names and fall back to "M11 2, Mon".
+const days = ['Bazar', 'Bazar ertəsi', 'Çərşənbə axşamı', 'Çərşənbə', 'Cümə axşamı', 'Cümə', 'Şənbə']
+const months = ['yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun', 'iyul', 'avqust', 'sentyabr', 'oktyabr', 'noyabr', 'dekabr']
+const now = new Date()
+const today = `${days[now.getDay()]}, ${now.getDate()} ${months[now.getMonth()]}`
+const pct = (value: number | null) => (value === null ? '—' : `${Math.round(value)}%`)
 
 export function DashboardPage() {
   const { data: user } = useCurrentUser()
   const exams = useAllExams()
-  const groups = useGroups()
-  const shared = useSharedDocuments()
+  const active = useActiveExam()
+  const myDocs = useMyDocuments()
 
   const completed = (exams.data ?? []).filter(e => e.status === 'Completed')
   const scored = completed.filter(e => e.scorePercent !== null)
-  const average = scored.length ? Math.round(scored.reduce((sum, e) => sum + e.scorePercent!, 0) / scored.length) : null
+  const average = scored.length ? scored.reduce((sum, e) => sum + e.scorePercent!, 0) / scored.length : null
   const answered = completed.reduce((sum, e) => sum + e.questionCount - (e.unanswered ?? 0), 0)
-  const chart = scored.slice(0, 10).reverse()
+  const loading = exams.isPending || active.isPending
 
-  const stats = [
-    { label: 'Tamamlanan imtahanlar', value: completed.length, icon: CheckCircle2, pending: exams.isPending },
-    { label: 'Orta nəticə', value: average === null ? '—' : `${average}%`, icon: Percent, pending: exams.isPending },
-    { label: 'Cavablanan suallar', value: answered, icon: ListChecks, pending: exams.isPending },
-    { label: 'Qruplarım', value: groups.data?.length ?? 0, icon: Users, pending: groups.isPending },
-  ]
-  const actions = [
-    { to: '/exams/new', label: 'İmtahana başla', hint: 'Təsadüfi suallarla vaxtlı imtahan', icon: Timer },
-    { to: '/upload', label: 'Sənəd yüklə', hint: 'PDF və ya DOCX-dən suallar', icon: Upload },
-    { to: '/study', label: 'Öyrənmə köməkçisi', hint: 'Sualları addım-addım məşq et', icon: BookOpen },
-    { to: '/battle', label: 'Battle', hint: 'Dostlarla canlı yarış', icon: Swords },
-  ]
+  return <div>
+    <header className="mb-8 flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+      <div className="min-w-0">
+        <p className="ds-label">{today}</p>
+        <h1 className="mt-2 truncate text-[28px] font-bold leading-tight tracking-[-0.04em] sm:text-[32px]">Salam, {user?.nickname}</h1>
+      </div>
+      <div className="flex gap-2">
+        <Link to="/upload" className="inline-flex h-10 items-center rounded-[10px] border border-[var(--app-border)] px-3.5 text-sm font-semibold transition-colors hover:bg-[var(--app-sunken)]">Sənəd yüklə</Link>
+        <Link to="/exams/new" className="btn-primary inline-flex h-10 items-center rounded-[10px] px-3.5 text-sm font-semibold transition-colors">İmtahana başla</Link>
+      </div>
+    </header>
 
-  return <>
-    <PageHeader title={user ? `Salam, ${user.nickname}` : 'Dashboard'} description="Öyrənmə fəaliyyətin, nəticələrin və yeni materialların bir yerdə." />
-
-    <section aria-label="Statistika" className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-      {stats.map(s => <div key={s.label} className={cn(card, 'flex flex-col items-start gap-2 p-4 transition-shadow hover:shadow-md sm:flex-row sm:items-center sm:gap-4 sm:p-5')}>
-        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-indigo-50 text-indigo-600 sm:size-11"><s.icon className="size-5" aria-hidden /></span>
-        <div className="min-w-0"><p className="text-xs text-slate-500 sm:text-sm">{s.label}</p>
-          {s.pending ? <div className={cn(skeleton, 'mt-1 h-7 w-16')} /> : <p className="text-2xl font-semibold tabular-nums">{s.value}</p>}</div>
-      </div>)}
+    <div className="grid gap-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:gap-14">
+    <section className={cn('border-y border-[var(--app-border)] py-7 sm:py-8 lg:self-start', !loading && !active.data && completed.length === 0 && 'lg:col-span-2')} aria-label="Növbəti addım">
+      {loading ? <Skeleton lines={3} /> : active.data
+        ? <NextStep label="Yarımçıq imtahan" title="Başladığın imtahan hələ bitməyib." body="Vaxt işləməyə davam edir — qaldığın sualdan davam et.">
+            <Link to={`/exams/${active.data.id}`} className="btn-primary inline-flex h-11 items-center gap-2 rounded-[10px] px-4 text-sm font-semibold">Davam et <ArrowRight className="size-4" aria-hidden /></Link>
+          </NextStep>
+        : completed.length
+          ? <LastResult exam={completed[0]} />
+          : <Onboarding hasDocument={(myDocs.data?.totalCount ?? 0) > 0} />}
     </section>
 
-    <section aria-label="Sürətli əməliyyatlar" className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      {actions.map(a => <Link key={a.to} to={a.to} className={cn(card, 'group flex items-center gap-4 p-4 transition-all hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-md')}>
-        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-indigo-600 text-white"><a.icon className="size-5" aria-hidden /></span>
-        <span className="min-w-0 flex-1"><span className="block font-medium">{a.label}</span><span className="block truncate text-xs text-slate-500">{a.hint}</span></span>
-        <ChevronRight className="size-4 text-slate-400 transition-transform group-hover:translate-x-0.5" aria-hidden />
-      </Link>)}
-    </section>
+    {completed.length > 0 && <>
+      <div>
+      <p className="ds-muted mb-6 text-sm">
+        <span className="ds-num font-semibold text-[var(--app-ink)]">{completed.length}</span> imtahan · orta <span className="ds-num font-semibold text-[var(--app-ink)]">{pct(average)}</span> · <span className="ds-num font-semibold text-[var(--app-ink)]">{answered}</span> cavablanmış sual
+      </p>
 
-    <div className="mt-6 grid gap-6 xl:grid-cols-3">
-      <Panel title="İmtahan nəticələri" className="xl:col-span-2">
-        {exams.isPending ? <div className={cn(skeleton, 'h-56')} /> : chart.length === 0
-          ? <EmptyState icon={<LineChart className="size-6" />} title="Hələ nəticə yoxdur" description="İlk imtahanını bitirdikdə nəticələr burada qrafikdə görünəcək." />
-          : <ScoreChart scores={chart.map(e => ({ value: e.scorePercent!, label: sourceName(e.source), date: e.completedAt ?? e.startedAt }))} />}
-      </Panel>
-
-      <Panel title="Qruplarım" link={{ to: '/groups', label: 'Bütün qruplar' }}>
-        {groups.isPending ? <Rows /> : !groups.data?.length ? <p className="text-sm text-slate-500">Hələ heç bir qrupa üzv deyilsən.</p>
-          : <ul className="space-y-2">{groups.data.slice(0, 3).map(g => <li key={g.id}><Link to={`/groups/${g.id}`} className="flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-slate-50">
-            <span className="grid size-9 place-items-center rounded-lg bg-indigo-50 text-indigo-600"><Users className="size-4" aria-hidden /></span>
-            <span className="min-w-0 flex-1 truncate font-medium">{g.name}</span><span className="text-xs text-slate-500">{g.memberCount} üzv</span></Link></li>)}</ul>}
-      </Panel>
-
-      <Panel title="Son imtahanlar" className="xl:col-span-2" link={{ to: '/exams', label: 'Hamısına bax' }}>
-        {exams.isPending ? <Rows /> : completed.length === 0 ? <p className="text-sm text-slate-500">Hələ tamamlanmış imtahan yoxdur.</p>
-          : <ul className="divide-y divide-slate-100">{completed.slice(0, 5).map(e => <li key={e.id}><Link to={`/exams/${e.id}/result`} className="flex items-center gap-3 py-3 transition-colors hover:text-indigo-600">
-            <span className="min-w-0 flex-1"><span className="block truncate font-medium">{sourceName(e.source)}</span><span className="text-xs text-slate-500">{formatDate(e.completedAt ?? e.startedAt)}</span></span>
-            <span className="text-sm text-slate-500 tabular-nums">{e.correct ?? 0}/{e.questionCount}</span>
-            <span className={cn('w-14 rounded-full px-2 py-0.5 text-center text-xs font-semibold tabular-nums', (e.scorePercent ?? 0) >= 50 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700')}>{e.scorePercent === null ? '—' : `${Math.round(e.scorePercent)}%`}</span>
-          </Link></li>)}</ul>}
-      </Panel>
-
-      <Panel title="Yeni paylaşılan sənədlər">
-        {shared.isPending ? <Rows /> : !shared.data?.items.length ? <p className="text-sm text-slate-500">Səninlə hələ sənəd paylaşılmayıb.</p>
-          : <ul className="space-y-2">{shared.data.items.slice(0, 5).map(d => <li key={d.id}><Link to={`/study?document=${d.id}`} className="flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-slate-50">
-            <FileText className="size-4 shrink-0 text-indigo-600" aria-hidden />
-            <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{d.originalFileName}</span>
-              <span className="text-xs text-slate-500">{d.sharingStatus === 'Everyone' ? 'Bütün istifadəçilər' : d.sharingStatus === 'Groups' || d.sharingStatus === 'UsersAndGroups' ? 'Qrup' : 'Şəxsi paylaşım'} · {formatDate(d.createdAt)}</span></span>
-          </Link></li>)}</ul>}
-      </Panel>
+      <section aria-label="Son imtahanlar">
+        <div className="mb-2 flex items-baseline justify-between gap-3 border-b border-[var(--app-ink)] pb-2.5">
+          <h2 className="text-[15px] font-bold">Son imtahanlar</h2>
+          <Link to="/exams" className="ds-link text-[13px]">Hamısı</Link>
+        </div>
+        <ul className="ds-rows">{completed.slice(0, 5).map(e => <li key={e.id}>
+          <Link to={`/exams/${e.id}/result`} className="group flex items-center justify-between gap-4 py-3">
+            <span className="min-w-0">
+              <span className="block truncate text-[14.5px] font-semibold group-hover:underline group-hover:underline-offset-4">{sourceName(e.source)}</span>
+              <span className="ds-muted text-xs">{formatDate(e.completedAt ?? e.startedAt)} · <span className="ds-num">{e.correct ?? 0}/{e.questionCount}</span> düzgün</span>
+            </span>
+            <span className={cn('ds-num shrink-0 text-[15px] font-semibold', (e.scorePercent ?? 0) >= 70 ? 'ds-good' : (e.scorePercent ?? 0) < 50 ? 'ds-bad' : '')}>{pct(e.scorePercent)}</span>
+          </Link>
+        </li>)}</ul>
+      </section>
+      </div>
+    </>}
     </div>
-  </>
+  </div>
 }
 
-function Panel({ title, link, className, children }: { title: string; link?: { to: string; label: string }; className?: string; children: ReactNode }) {
-  return <section className={cn(card, 'p-5', className)}>
-    <div className="mb-4 flex items-center justify-between gap-3"><h2 className="font-semibold">{title}</h2>
-      {link && <Link to={link.to} className="text-sm font-medium text-indigo-600 hover:text-indigo-700">{link.label}</Link>}</div>
-    {children}
-  </section>
+function NextStep({ label, title, body, children }: { label: string; title: string; body: string; children: ReactNode }) {
+  return <div>
+    <p className="ds-label">{label}</p>
+    <h2 className="mt-3 max-w-[22ch] text-[24px] font-bold leading-[1.15] tracking-[-0.035em] sm:text-[30px]">{title}</h2>
+    <p className="ds-muted mt-3 max-w-[48ch] text-[15px] leading-7">{body}</p>
+    <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-3">{children}</div>
+  </div>
 }
 
-function Rows() {
-  return <div className="space-y-3" role="status" aria-label="Yüklənir">{[0, 1, 2].map(i => <div key={i} className={cn(skeleton, 'h-10')} />)}</div>
+function LastResult({ exam }: { exam: ExamSummary }) {
+  const score = exam.scorePercent
+  const verdict = score === null ? 'Nəticə hesablanmadı.' : score >= 85 ? 'Çox yaxşı nəticə.' : score >= 70 ? 'Yaxşı nəticə — bir az daha.' : score >= 50 ? 'Ortadır. Səhvlərə bax.' : 'Bu mövzunu təkrar etmək lazımdır.'
+  return <div>
+    <p className="ds-label">Son imtahan · {formatDate(exam.completedAt ?? exam.startedAt)}</p>
+    <div className="mt-3 flex flex-wrap items-end gap-x-6 gap-y-2">
+      <span className={cn('ds-num text-[56px] font-bold leading-none sm:text-[72px]', score !== null && score < 50 && 'ds-bad')}>{pct(score)}</span>
+      <span className="mb-1.5 min-w-0">
+        <span className="block max-w-[28ch] truncate text-[17px] font-semibold">{sourceName(exam.source)}</span>
+        <span className="ds-muted text-sm"><span className="ds-num">{exam.correct ?? 0}</span> düzgün · <span className="ds-num">{exam.incorrect ?? 0}</span> səhv · <span className="ds-num">{exam.unanswered ?? 0}</span> boş</span>
+      </span>
+    </div>
+    <p className="mt-4 text-[15px] font-medium"><span className="ds-mark">{verdict}</span></p>
+    <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-3">
+      <Link to={exam.source.documentId ? `/exams/new?document=${exam.source.documentId}` : '/exams/new'} className="btn-primary inline-flex h-11 items-center gap-2 rounded-[10px] px-4 text-sm font-semibold">Yenidən sına <ArrowRight className="size-4" aria-hidden /></Link>
+      <Link to={`/exams/${exam.id}/result`} className="ds-link text-sm">Cavablara bax</Link>
+      <Link to="/focus" className="ds-link text-sm">Səhvləri təkrarla</Link>
+    </div>
+  </div>
 }
 
-function ScoreChart({ scores }: { scores: { value: number; label: string; date: string }[] }) {
-  const w = 600, h = 220, px = 36, py = 16
-  const x = (i: number) => scores.length === 1 ? w / 2 : px + (i * (w - px * 2)) / (scores.length - 1)
-  const y = (v: number) => py + ((100 - v) * (h - py * 2)) / 100
-  const points = scores.map((s, i) => `${x(i)},${y(s.value)}`).join(' ')
-  return <svg viewBox={`0 0 ${w} ${h}`} className="h-56 w-full text-indigo-600" role="img" aria-label="Son imtahanların nəticə faizləri">
-    {[0, 25, 50, 75, 100].map(v => <g key={v}><line x1={px} x2={w - px} y1={y(v)} y2={y(v)} className="stroke-slate-200" strokeDasharray="3 4" />
-      <text x={px - 8} y={y(v) + 4} textAnchor="end" className="fill-slate-400 text-[11px]">{v}%</text></g>)}
-    <polyline points={`${x(0)},${y(0)} ${points} ${x(scores.length - 1)},${y(0)}`} className="fill-indigo-500/10" stroke="none" />
-    <polyline points={points} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-    {scores.map((s, i) => <g key={i}><circle cx={x(i)} cy={y(s.value)} r="4.5" className="fill-white" stroke="currentColor" strokeWidth="2.5" />
-      <text x={x(i)} y={h - 2} textAnchor="middle" className="fill-slate-400 text-[11px]">#{i + 1}</text>
-      <title>{`${s.label} · ${formatDate(s.date)} · ${Math.round(s.value)}%`}</title></g>)}
-  </svg>
+function Onboarding({ hasDocument }: { hasDocument: boolean }) {
+  const steps = [
+    { done: hasDocument, title: 'Sənəd yüklə', text: 'Sual-cavab olan PDF və ya DOCX faylı.', to: '/upload' },
+    { done: false, title: 'İlk imtahanı ver', text: 'Sual aralığını və sayını seç, vaxt başlasın.', to: '/exams/new' },
+    { done: false, title: 'Nəticəni təhlil et', text: 'Səhvlərini Focus Mode-da təkrar et.', to: '/focus' },
+  ]
+  const next = steps.findIndex(s => !s.done)
+  return <div>
+    <p className="ds-label">Başlanğıc</p>
+    <h2 className="mt-3 text-[24px] font-bold leading-[1.15] tracking-[-0.035em] sm:text-[30px]">Üç addımda ilk nəticən.</h2>
+    <ol className="mt-6 grid gap-3 lg:grid-cols-3">{steps.map((s, i) => <li key={s.title}>
+      <Link to={s.to} className={cn('group flex items-start gap-4 rounded-xl px-3 py-3 transition-colors hover:bg-[var(--app-sunken)]', i === next && 'ds-sunken')}>
+        <span className={cn('ds-num mt-0.5 grid size-7 shrink-0 place-items-center rounded-full border text-xs font-semibold', s.done ? 'border-transparent bg-[var(--app-ink)] text-[var(--app-on-ink)]' : 'border-[var(--app-border)]')}>
+          {s.done ? <Check className="size-3.5" strokeWidth={3} aria-label="Edilib" /> : i + 1}
+        </span>
+        <span className="min-w-0 flex-1"><span className={cn('block font-semibold', s.done && 'ds-muted line-through')}>{s.title}</span><span className="ds-muted text-sm">{s.text}</span></span>
+        {i === next && <ArrowRight className="mt-1 size-4 shrink-0 transition-transform group-hover:translate-x-0.5" aria-hidden />}
+      </Link>
+    </li>)}</ol>
+  </div>
+}
+
+function Skeleton({ lines }: { lines: number }) {
+  return <div className="grid gap-3 py-2" role="status" aria-label="Yüklənir">{Array.from({ length: lines }, (_, i) => <div key={i} className="h-5 animate-pulse rounded bg-[var(--app-sunken)]" style={{ width: `${90 - i * 15}%` }} />)}</div>
 }
 
 type Tone = 'ok' | 'error' | 'pending'
@@ -129,16 +142,13 @@ export function SystemStatus() {
   const health = useHealth()
   const apiTone: Tone = health.isPending ? 'pending' : health.isError ? 'error' : 'ok'
   const dbTone: Tone = health.isPending ? 'pending' : health.data?.databaseConnected ? 'ok' : 'error'
-  return <section aria-label="Sistem vəziyyəti" className="mb-6 grid gap-4 sm:grid-cols-2">
-    <StatusCard icon={<Server className="size-5" aria-hidden />} label="API" tone={apiTone} value={apiTone === 'ok' ? 'Əlçatandır' : apiTone === 'error' ? 'Əlçatan deyil' : 'Yoxlanılır…'} />
-    <StatusCard icon={<Database className="size-5" aria-hidden />} label="Verilənlər bazası (SQL Server)" tone={dbTone} value={dbTone === 'ok' ? 'Qoşulub' : dbTone === 'error' ? 'Qoşulmayıb' : 'Yoxlanılır…'} />
+  return <section aria-label="Sistem vəziyyəti" className="mb-6 flex flex-wrap gap-x-8 gap-y-3 border-y border-[var(--app-border)] py-3 text-sm">
+    <StatusItem icon={<Server className="size-4" aria-hidden />} label="API" tone={apiTone} value={apiTone === 'ok' ? 'Əlçatandır' : apiTone === 'error' ? 'Əlçatan deyil' : 'Yoxlanılır…'} />
+    <StatusItem icon={<Database className="size-4" aria-hidden />} label="SQL Server" tone={dbTone} value={dbTone === 'ok' ? 'Qoşulub' : dbTone === 'error' ? 'Qoşulmayıb' : 'Yoxlanılır…'} />
   </section>
 }
 
-function StatusCard({ icon, label, value, tone }: { icon: ReactNode; label: string; value: string; tone: Tone }) {
-  return <div className={cn(card, 'flex items-center gap-4 p-5')}>
-    <div className="rounded-lg bg-slate-100 p-2.5 text-slate-600">{icon}</div>
-    <div className="min-w-0"><p className="text-slate-500">{label}</p>
-      <p className="mt-0.5 flex items-center gap-2 font-semibold"><span className={cn('size-2 rounded-full', toneStyles[tone])} aria-hidden />{value}</p></div>
-  </div>
+function StatusItem({ icon, label, value, tone }: { icon: ReactNode; label: string; value: string; tone: Tone }) {
+  return <span className="flex items-center gap-2"><span className="ds-muted">{icon}</span><span className="ds-muted">{label}</span>
+    <span className="flex items-center gap-1.5 font-semibold"><span className={cn('size-2 rounded-full', toneStyles[tone])} aria-hidden />{value}</span></span>
 }

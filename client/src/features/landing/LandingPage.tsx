@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
-import { ArrowRight, Menu, Moon, Plus, Sun, X } from 'lucide-react'
+import { ArrowRight, ArrowUpRight, Menu, Moon, Plus, Sun, X } from 'lucide-react'
 import { Link } from 'react-router'
 import { useTheme } from '../../lib/use-theme'
 import { ProductPreview } from './ProductPreview'
@@ -7,6 +7,7 @@ import './landing.css'
 
 const nav = [['#imkanlar', 'Rejimlər'], ['#nece-isleyir', 'Addımlar'], ['#haqqimizda', 'Niyə ExamR'], ['#suallar', 'Suallar']] as const
 const YEAR = new Date().getFullYear()
+const hints = ['İmtahan, öyrənmə, Battle və statistika', 'Fayldan ilk nəticəyə qədər', 'Layihə niyə yaradılıb', 'Tez-tez verilən suallar']
 const auth = (mode: 'login' | 'register') => `/?auth=${mode}`
 
 export function LandingPage() {
@@ -79,11 +80,12 @@ export function LandingPage() {
           <Logo />
           <nav className="lp-navlinks" aria-label="Bölmələr">{nav.map(([href, label]) => <a key={href} href={href} onClick={e => go(e, href)} aria-current={active === href ? 'true' : undefined}>{label}</a>)}</nav>
           <div className="lp-nav-actions">
-            <button type="button" className="lp-icon-btn" onClick={toggleTheme} aria-pressed={dark} aria-label={dark ? 'İşıqlı rejimə keç' : 'Qaranlıq rejimə keç'}>
+            {/* Desktop: theme as a quiet icon next to the account actions. On phones it lives inside the menu. */}
+            <button type="button" className="lp-icon-btn lp-theme-desktop" onClick={toggleTheme} aria-pressed={dark} aria-label={dark ? 'İşıqlı rejimə keç' : 'Qaranlıq rejimə keç'}>
               {dark ? <Sun className="size-[18px]" aria-hidden /> : <Moon className="size-[18px]" aria-hidden />}
             </button>
             <Link viewTransition to={auth('login')} className="lp-btn lp-btn-quiet lp-nav-login">Daxil ol</Link>
-            <Link viewTransition to={auth('register')} className="lp-btn lp-btn-primary">Qeydiyyat</Link>
+            <Link viewTransition to={auth('register')} className="lp-btn lp-btn-primary lp-nav-register">Qeydiyyat</Link>
             <button type="button" className="lp-icon-btn lp-menu-btn" onClick={() => setMenu(m => !m)} aria-expanded={menu} aria-controls="lp-sheet" aria-label={menu ? 'Menyunu bağla' : 'Menyunu aç'}>
               {menu ? <X className="size-5" aria-hidden /> : <Menu className="size-5" aria-hidden />}
             </button>
@@ -92,14 +94,24 @@ export function LandingPage() {
       </header>
       {/* Outside the header: its backdrop-filter would make it the containing block of this fixed sheet. */}
       <div id="lp-sheet" className="lp-sheet" data-open={menu} inert={!menu}>
-        <nav aria-label="Bölmələr">
+        <nav aria-label="Bölmələr" className="lp-sheet-links">
           {nav.map(([href, label], i) => <a key={href} href={href} onClick={e => go(e, href)} aria-current={active === href ? 'true' : undefined}>
-            <span className="lp-mono">0{i + 1}</span>{label}
+            <span className="min-w-0"><span className="block">{label}</span><small>{hints[i]}</small></span>
+            <ArrowUpRight className="size-5 shrink-0" aria-hidden />
           </a>)}
         </nav>
-        <div className="lp-sheet-actions">
-          <Link viewTransition to={auth('login')} className="lp-btn lp-btn-quiet">Daxil ol</Link>
-          <Link viewTransition to={auth('register')} className="lp-btn lp-btn-primary">Qeydiyyat</Link>
+        <div className="lp-sheet-bottom">
+          <div className="lp-theme-switch" role="radiogroup" aria-label="Görünüş">
+            <span className="lp-theme-switch-label">Görünüş</span>
+            <div>
+              <button type="button" role="radio" aria-checked={!dark} onClick={() => dark && toggleTheme()}><Sun className="size-4" aria-hidden />Açıq</button>
+              <button type="button" role="radio" aria-checked={dark} onClick={() => !dark && toggleTheme()}><Moon className="size-4" aria-hidden />Qaranlıq</button>
+            </div>
+          </div>
+          <div className="lp-sheet-actions">
+            <Link viewTransition to={auth('login')} className="lp-btn lp-btn-quiet">Daxil ol</Link>
+            <Link viewTransition to={auth('register')} className="lp-btn lp-btn-primary">Qeydiyyat</Link>
+          </div>
         </div>
       </div>
 
@@ -191,9 +203,16 @@ export function LandingPage() {
       </main>
 
       <footer className="lp-footer">
-        <div className="lp-wrap lp-footer-grid">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2"><Logo /><span>© {YEAR} ExamR · demo versiya</span><span>Developer: <b className="font-semibold" style={{ color: 'var(--lp-ink)' }}>Rəvan Ələsgərov</b></span></div>
-          <nav aria-label="Alt menyu">{nav.map(([href, label]) => <a key={href} href={href} onClick={e => go(e, href)}>{label}</a>)}<Link viewTransition to={auth('login')}>Daxil ol</Link></nav>
+        <div className="lp-wrap">
+          <div className="lp-footer-grid">
+            <div className="max-w-xs"><Logo /><p className="mt-3 leading-6">Sual-cavab sənədlərindən imtahan, öyrənmə və yarış hazırlayan platforma.</p></div>
+            <nav aria-label="Alt menyu" className="lp-footer-links">
+              {nav.map(([href, label]) => <a key={href} href={href} onClick={e => go(e, href)}>{label}</a>)}
+              <Link viewTransition to={auth('login')}>Daxil ol</Link>
+              <Link viewTransition to={auth('register')}>Qeydiyyat</Link>
+            </nav>
+          </div>
+          <div className="lp-footer-bottom"><span>© {YEAR} ExamR · demo versiya</span><span>Developer: <b className="font-semibold" style={{ color: 'var(--lp-ink)' }}>Rəvan Ələsgərov</b></span></div>
         </div>
       </footer>
     </div>

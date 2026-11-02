@@ -15,6 +15,7 @@ public static class GoogleAuthEndpoints
     public const string Scheme = "Google";
     private const string Remember = "examr.remember";
     private const string LinkUser = "examr.link";
+    public const string LinkUserKey = LinkUser;
 
     public static bool IsConfigured(IConfiguration configuration) =>
         !string.IsNullOrWhiteSpace(configuration["Authentication:Google:ClientId"]) && !string.IsNullOrWhiteSpace(configuration["Authentication:Google:ClientSecret"]);

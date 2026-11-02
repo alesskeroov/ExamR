@@ -26,8 +26,8 @@
 }
 
 /* Shared workspace surfaces; status and primary-action colors retain their meaning. */
-:root { --app-surface: #fff; --app-border: #e6e3db; --app-background: #fbfaf7; --app-foreground: #15172a; --app-ink: #15172a; --app-on-ink: #fbfaf7; --app-accent: #5b45d6; }
-:root[data-theme='dark'] { --app-surface: #171a2c; --app-border: #272b45; --app-background: #0e1020; --app-foreground: #eef0fb; --app-ink: #eef0fb; --app-on-ink: #0e1020; --app-accent: #a796ff; }
+:root { --app-surface: #fff; --app-border: #e6e3db; --app-background: #fbfaf7; --app-foreground: #15172a; --app-ink: #15172a; --app-on-ink: #fbfaf7; --app-accent: #5b45d6; --app-sunken: #f1efe9; --app-muted: #5f6478; --app-faint: #8d91a3; --app-good: #13845f; --app-bad: #c2415b; --app-mark: rgb(255 205 90 / 55%); }
+:root[data-theme='dark'] { --app-surface: #171a2c; --app-border: #272b45; --app-background: #0e1020; --app-foreground: #eef0fb; --app-ink: #eef0fb; --app-on-ink: #0e1020; --app-accent: #a796ff; --app-sunken: #141730; --app-muted: #a3a9c2; --app-faint: #6f7592; --app-good: #5fd3a7; --app-bad: #ff8aa3; --app-mark: rgb(167 150 255 / 30%); }
 html { background: var(--app-background); color: var(--app-foreground); }
 /* Long unbroken strings from parsed PDFs (formulas, URLs) wrap instead of widening the layout. */
 body { background: var(--app-background); overflow-wrap: anywhere; }
@@ -36,8 +36,6 @@ body { background: var(--app-background); overflow-wrap: anywhere; }
 .app-toolbar { border-color: var(--app-border); background: var(--app-surface); }
 .app-sidebar > div:first-child { height: 72px; }
 .app-nav-link { position: relative; }
-.app-nav-link[aria-current='page'] { box-shadow: inset 0 0 0 1px rgb(124 101 233 / 12%); }
-.app-nav-link[aria-current='page']::before { content: ''; position: absolute; left: 0; top: 13px; bottom: 13px; width: 3px; background: #7c65e9; border-radius: 999px; }
 .app-content h1 { letter-spacing: -.035em; }
 .app-content :where(.rounded-xl.border.bg-white) { border-color: var(--app-border); border-radius: 14px; box-shadow: 0 1px 0 rgb(21 23 42 / 4%), 0 18px 50px -34px rgb(21 23 42 / 28%); }
 .app-content :where(input:not([type='checkbox']):not([type='radio']), select, textarea) { border-radius: 10px; }
@@ -126,7 +124,6 @@ body { background: var(--app-background); overflow-wrap: anywhere; }
 .btn-primary:disabled { opacity: .55; }
 .app-brand-mark { background: var(--app-ink); color: var(--app-on-ink); }
 .app-content h1 { letter-spacing: -.04em; }
-.app-nav-link[aria-current='page']::before { background: var(--app-accent); }
 
 /* Landing ⇄ login/register: a short cross-fade with a small lift instead of a hard page swap. */
 ::view-transition-old(root) { animation: vt-out 160ms ease-in both; }
@@ -139,3 +136,34 @@ body { background: var(--app-background); overflow-wrap: anywhere; }
 .app-safe-bottom { padding-bottom: calc(1.5rem + env(safe-area-inset-bottom)); }
 @media (min-width: 1024px) { .app-safe-bottom { padding-bottom: 2rem; } }
 .app-sidebar-footer { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+
+/* ---- "Desk" system: ledger rows instead of cards, mono labels and numerals, colour only where it means something. ---- */
+.ds-label { font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, monospace; font-size: 11px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--app-faint); }
+.ds-num { font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, monospace; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.ds-muted { color: var(--app-muted); }
+.ds-rows > * + * { border-top: 1px solid var(--app-border); }
+.ds-link { color: var(--app-ink); font-weight: 600; text-decoration: underline; text-decoration-color: var(--app-border); text-underline-offset: 4px; transition: text-decoration-color 150ms; }
+.ds-link:hover { text-decoration-color: var(--app-ink); }
+.ds-mark { background: linear-gradient(transparent 60%, var(--app-mark) 60% 92%, transparent 92%); }
+.ds-sunken { background: var(--app-sunken); }
+.ds-good { color: var(--app-good); }
+.ds-bad { color: var(--app-bad); }
+.ds-meter { height: 4px; border-radius: 2px; background: var(--app-border); overflow: hidden; }
+.ds-meter > i { display: block; height: 100%; background: var(--app-ink); border-radius: inherit; }
+
+/* Sidebar: grouped, compact, active item in ink on a sunken tile with a thin signal bar. */
+.app-nav-group + .app-nav-group { margin-top: 14px; }
+.app-nav-group > .ds-label { padding: 0 10px 6px; }
+.app-nav-link { position: relative; color: var(--app-muted); }
+.app-nav-link:hover { color: var(--app-ink); background: var(--app-sunken); }
+.app-nav-link svg { color: var(--app-faint); transition: color 150ms; }
+.app-nav-link[aria-current='page'] { color: var(--app-ink); background: var(--app-sunken); font-weight: 600; }
+.app-nav-link[aria-current='page'] svg { color: var(--app-ink); }
+.app-nav-link[aria-current='page']::before { content: ''; position: absolute; left: -12px; top: 9px; bottom: 9px; width: 2px; border-radius: 2px; background: var(--app-accent); }
+.app-navigation { scrollbar-width: thin; }
+@media (max-width: 1023px) { .app-nav-link { min-height: 44px; } }
+@media (min-width: 1024px) { .ds-ledger > * + * { border-top: 1px solid var(--app-border); } }
+
+/* Status pages (404/403/500): one oversized numeral as the only graphic. */
+.status-page { background: var(--app-background); color: var(--app-foreground); }
+.status-code { font-size: clamp(88px, 22vw, 168px); letter-spacing: -.06em; color: var(--app-ink); opacity: .9; }

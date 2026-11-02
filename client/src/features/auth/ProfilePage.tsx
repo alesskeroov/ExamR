@@ -1,4 +1,4 @@
-import { ImagePlus, Save, Trash2, UserRound } from 'lucide-react'
+import { Check, ImagePlus, Save, Trash2, UserRound } from 'lucide-react'
 import { useRef, useState, type FormEvent } from 'react'
 import { Alert } from '../../components/common/Alert'
 import { Button } from '../../components/common/Button'
@@ -81,10 +81,13 @@ const linkMessages: Record<string, { ok: boolean; text: string }> = {
   linked: { ok: true, text: 'Google hesabı əlaqələndirildi. İndi Google ilə də daxil ola bilərsiniz.' },
   google_in_use: { ok: false, text: 'Bu Google hesabı başqa ExamR hesabına bağlıdır.' },
   google_disabled: { ok: false, text: 'Google ilə giriş hələ konfiqurasiya edilməyib.' },
+  google_cancelled: { ok: false, text: 'Google-da icazə verilmədi və ya əməliyyat ləğv edildi.' },
   login_required: { ok: false, text: 'Əlaqələndirmək üçün yenidən daxil olun.' },
 }
 
 function GoogleLinkSection() {
+  const { data: user } = useCurrentUser()
+  const linked = !!user?.googleLinked
   const [result] = useState(() => {
     const code = new URLSearchParams(window.location.search).get('google')
     if (code) window.history.replaceState(null, '', window.location.pathname)
@@ -92,8 +95,14 @@ function GoogleLinkSection() {
   })
   return <section className="mt-6 max-w-2xl rounded-xl border border-slate-200 bg-white p-5 sm:p-7">
     <h2 className="font-semibold">Google hesabı</h2>
-    <p className="mt-1 text-sm text-slate-500">Hesabınızı Google ilə əlaqələndirin ki, növbəti dəfə bir kliklə daxil olasınız.</p>
-    {result && <div className="mt-4"><Alert tone={result.ok ? 'info' : 'danger'} title={result.text} /></div>}
-    <a href="/api/auth/google?link=true" className="mt-4 inline-flex h-10 items-center rounded-xl border border-slate-300 px-4 text-sm font-medium transition-colors hover:bg-slate-50">Google hesabını əlaqələndir</a>
+    {/* The success message is only needed right after linking; afterwards the status line says it. */}
+    {result && !(result.ok && linked) && <div className="mt-4"><Alert tone={result.ok ? 'info' : 'danger'} title={result.text} /></div>}
+    {linked
+      ? <p className="mt-3 flex items-center gap-2 text-sm"><span className="grid size-5 place-items-center rounded-full bg-emerald-600 text-white" aria-hidden><Check className="size-3" strokeWidth={3} /></span>
+          <span><b className="font-semibold">Əlaqələndirilib.</b> <span className="text-slate-500">Bu hesaba “Google ilə davam et” düyməsi ilə də daxil ola bilərsiniz.</span></span></p>
+      : <>
+          <p className="mt-1 text-sm text-slate-500">Hesabınızı Google ilə əlaqələndirin ki, növbəti dəfə bir kliklə daxil olasınız.</p>
+          <a href="/api/auth/google?link=true" className="mt-4 inline-flex h-10 items-center rounded-xl border border-slate-300 px-4 text-sm font-medium transition-colors hover:bg-slate-50">Google hesabını əlaqələndir</a>
+        </>}
   </section>
 }

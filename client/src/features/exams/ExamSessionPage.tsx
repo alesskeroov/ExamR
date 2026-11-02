@@ -1,5 +1,5 @@
 import { useIsMutating } from '@tanstack/react-query'
-import { AlertTriangle, Check, ChevronLeft, ChevronRight, Clock, Loader2, X } from 'lucide-react'
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Clock, Loader2, Maximize2, Minimize2, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
@@ -133,6 +133,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
             </div>
           </div>
           <ExamTimer expiresAt={session.expiresAt} serverNow={session.serverNow} onExpire={submit} />
+          <FullscreenToggle />
           <NotificationBell />
           <Button onClick={() => setConfirmOpen(true)} loading={finish.isPending} className="h-9 px-3 sm:px-4">
             Bitir
@@ -441,5 +442,25 @@ function FinishDialog({ open, unanswered, onCancel, onConfirm }: FinishDialogPro
         <Button onClick={onConfirm}>Bitir</Button>
       </div>
     </dialog>
+  )
+}
+
+/** Optional distraction-free mode; browsers only allow it after a click, so it is offered rather than forced. */
+function FullscreenToggle() {
+  const [active, setActive] = useState(() => !!document.fullscreenElement)
+  useEffect(() => {
+    const update = () => setActive(!!document.fullscreenElement)
+    document.addEventListener('fullscreenchange', update)
+    return () => document.removeEventListener('fullscreenchange', update)
+  }, [])
+  // Leave fullscreen when the exam screen closes (finish, navigation).
+  useEffect(() => () => { if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined) }, [])
+  if (!document.fullscreenEnabled) return null
+  return (
+    <button type="button" onClick={() => (active ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => undefined)}
+      aria-pressed={active} aria-label={active ? 'Tam ekrandan çıx' : 'Tam ekran'} title={active ? 'Tam ekrandan çıx' : 'Tam ekran'}
+      className="hidden size-9 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 sm:grid">
+      {active ? <Minimize2 className="size-4" aria-hidden /> : <Maximize2 className="size-4" aria-hidden />}
+    </button>
   )
 }

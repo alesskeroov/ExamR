@@ -188,11 +188,12 @@ public static class AuthEndpoints
         var token = tokens.Create(user, roles, rememberMe);
         // The JWT travels only in the HttpOnly cookie; the body carries no token for scripts to read.
         AuthCookie.Append(response, token, rememberMe);
-        return new AuthResponse(token.ExpiresAt, new UserResponse(user.Id, user.Email!, user.DisplayName, user.Nickname, AvatarUrl(user), roles.ToArray()));
+        return new AuthResponse(token.ExpiresAt, await ToUser(user, users));
     }
 
     private static async Task<UserResponse> ToUser(AppUser user, UserManager<AppUser> users) =>
-        new(user.Id, user.Email!, user.DisplayName, user.Nickname, AvatarUrl(user), (await users.GetRolesAsync(user)).ToArray());
+        new(user.Id, user.Email!, user.DisplayName, user.Nickname, AvatarUrl(user), (await users.GetRolesAsync(user)).ToArray(),
+            (await users.GetLoginsAsync(user)).Any(login => login.LoginProvider == GoogleAuthEndpoints.Scheme));
 
     private static string? AvatarUrl(AppUser user) => user.AvatarFileName is null ? null : $"/api/profile/avatar/{user.Id}?v={user.AvatarFileName}";
 
@@ -269,7 +270,7 @@ public sealed class UpdateProfileRequest
     public string Nickname { get; init; } = string.Empty;
 }
 
-public sealed record UserResponse(Guid Id, string Email, string DisplayName, string Nickname, string? AvatarUrl, string[] Roles);
+public sealed record UserResponse(Guid Id, string Email, string DisplayName, string Nickname, string? AvatarUrl, string[] Roles, bool GoogleLinked = false);
 
 public sealed record AuthResponse(DateTimeOffset ExpiresAt, UserResponse User);
 

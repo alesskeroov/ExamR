@@ -98,6 +98,47 @@ var app = builder.Build();
 
 app.UseForwardedHeaders();
 
+// A person who lands on an /api URL in the browser (OAuth callback, an old link) must never see raw ProblemDetails JSON.
+// Only top-level HTML navigations are affected; fetch/XHR clients keep receiving JSON errors as before.
+app.Use(async (context, next) =>
+{
+    var request = context.Request;
+    if (!HttpMethods.IsGet(request.Method) || !request.Headers.Accept.ToString().Contains("text/html", StringComparison.OrdinalIgnoreCase))
+    {
+        await next(context);
+        return;
+    }
+
+    var original = context.Response.Body;
+    await using var buffer = new MemoryStream();
+    context.Response.Body = buffer;
+    try
+    {
+        await next(context);
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogError(ex, "Unhandled error on browser navigation {Path}", request.Path);
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+    }
+    finally
+    {
+        context.Response.Body = original;
+    }
+
+    if (context.Response.StatusCode >= 400)
+    {
+        var code = context.Response.StatusCode is 403 or 404 ? context.Response.StatusCode : context.Response.StatusCode >= 500 ? 500 : 404;
+        var unauthorized = context.Response.StatusCode == StatusCodes.Status401Unauthorized;
+        context.Response.Clear();
+        context.Response.Redirect(unauthorized ? "/?auth=login" : $"/error?code={code}");
+        return;
+    }
+
+    buffer.Position = 0;
+    await buffer.CopyToAsync(original, context.RequestAborted);
+});
+
 // When the UI proxies /api and /hubs from its own domain (Cloudflare Pages → Render), the browser only ever sees that
 // domain: OAuth redirect URIs and cookies must use it rather than the internal onrender.com address.
 if (builder.Configuration["App:PublicOrigin"] is { Length: > 0 } publicOrigin)

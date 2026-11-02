@@ -152,6 +152,16 @@ public static class AuthenticationSetup
                 // The return from accounts.google.com is a top-level GET, which Lax cookies survive (also over local http).
                 options.CorrelationCookie.SameSite = SameSiteMode.Lax;
                 options.ClaimActions.MapJsonKey("email_verified", "email_verified");
+                // Cancelled consent (error=access_denied) or any other Google-side failure: send the user back with a
+                // readable message instead of an unhandled 500.
+                options.Events.OnRemoteFailure = context =>
+                {
+                    var link = context.Properties?.Items.ContainsKey(GoogleAuthEndpoints.LinkUserKey) == true;
+                    var code = context.Request.Query["error"] == "access_denied" ? "google_cancelled" : "google_failed";
+                    context.Response.Redirect(link ? $"/profile?google={code}" : $"/?authError={code}");
+                    context.HandleResponse();
+                    return Task.CompletedTask;
+                };
             });
         }
 

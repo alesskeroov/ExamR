@@ -237,6 +237,8 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
 
 const googleErrors: Record<string, string> = {
   google_disabled: 'Google ilə giriş hələ konfiqurasiya edilməyib.',
+  google_cancelled: 'Google girişi ləğv edildi və ya bu Google hesabına icazə verilmədi.',
+  google_failed: 'Google ilə giriş alınmadı. Yenidən cəhd edin.',
   google_unverified: 'Google hesabınızın emaili təsdiqlənməyib.',
   account_exists: 'Bu email ilə hesab artıq var. Şifrə ilə daxil olun və Google-u Profil səhifəsindən əlaqələndirin.',
   locked: 'Hesab müvəqqəti bloklanıb. Bir az sonra yenidən cəhd edin.',
