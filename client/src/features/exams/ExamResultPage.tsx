@@ -1,3 +1,5 @@
+import './exam-flow.css'
+import { answerDisplayText } from './answer-display'
 import { AlertTriangle, Check, Clock, History, RotateCw, X } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
@@ -10,7 +12,7 @@ import { cn } from '../../lib/utils'
 import { useCreateExam, useExamResult, type ExamOutcome, type ExamResult, type ExamResultQuestion } from './api'
 import { sourceName, sourceRange } from './examSource'
 
-type Filter = 'all' | 'Incorrect' | 'Unanswered' | 'Ungraded'
+type Filter = 'Correct' | 'Incorrect'
 
 export function ExamResultPage() {
   const { id = '' } = useParams()
@@ -30,21 +32,19 @@ export function ExamResultPage() {
 function ResultView({ result }: { result: ExamResult }) {
   const navigate = useNavigate()
   const retake = useCreateExam()
-  const [filter, setFilter] = useState<Filter>('all')
+  const [filter, setFilter] = useState<Filter>('Correct')
 
-  const questions = filter === 'all' ? result.questions : result.questions.filter((q) => q.outcome === filter)
+  const questions = result.questions.filter((q) => q.outcome === filter)
   const minutes = Math.floor(result.durationSeconds / 60)
   const seconds = result.durationSeconds % 60
 
   const filters: { value: Filter; label: string; count: number }[] = [
-    { value: 'all', label: 'Hamısı', count: result.questionCount },
-    { value: 'Incorrect', label: 'Yanlış', count: result.incorrect },
-    { value: 'Unanswered', label: 'Cavabsız', count: result.unanswered },
-    { value: 'Ungraded', label: 'Qiymətləndirilməyən', count: result.ungraded },
+    { value: 'Correct', label: 'Düzgün cavablar', count: result.correct },
+    { value: 'Incorrect', label: 'Səhv cavablar', count: result.incorrect },
   ]
 
   return (
-    <>
+    <div className="exam-flow mx-auto max-w-5xl">
       <PageHeader
         title="İmtahan nəticəsi"
         description={[
@@ -54,7 +54,7 @@ function ResultView({ result }: { result: ExamResult }) {
           result.completionReason === 'TimeExpired' ? 'Vaxt bitdi' : 'Tamamlandı',
         ].filter(Boolean).join(' · ')}
         actions={
-          <>
+          <div className="flex min-w-0 flex-wrap gap-2">
             <Link to="/exams" className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 font-medium text-slate-700 hover:bg-slate-50">
               <History className="size-4" aria-hidden />
               Tarixçə
@@ -79,7 +79,7 @@ function ResultView({ result }: { result: ExamResult }) {
                 Yenidən imtahan ver
               </Button>
             )}
-          </>
+          </div>
         }
       />
 
@@ -89,37 +89,45 @@ function ResultView({ result }: { result: ExamResult }) {
         </div>
       )}
 
-      <section aria-label="Xülasə" className="mb-8 grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section aria-label="Xülasə" className="mb-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+        <div className="flex items-center justify-center gap-4 rounded-xl border border-slate-200 bg-white p-4">
           <ScoreRing percent={result.scorePercent} />
-          <p className="mt-3 flex items-center gap-1.5 text-slate-500">
+          <p className="flex flex-wrap items-center gap-1.5 text-sm text-slate-500">
             <Clock className="size-4" aria-hidden />
             {minutes} dəq {seconds} san
           </p>
         </div>
-        <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <dl className="grid grid-cols-2 gap-3">
           <Stat label="Düzgün" value={result.correct} tone="text-emerald-700" />
-          <Stat label="Yanlış" value={result.incorrect} tone="text-rose-700" />
-          <Stat label="Cavabsız" value={result.unanswered} tone="text-slate-900" />
-          <Stat label="Qiymətləndirilməyən" value={result.ungraded} tone="text-amber-700" hint="Düzgün cavabı məlum deyil" />
+          <Stat label="Səhv" value={result.incorrect} tone="text-rose-700" />
         </dl>
       </section>
 
-      <section aria-labelledby="review-heading" className="flex flex-col gap-4">
+      <section aria-labelledby="review-heading" className="flex min-w-0 flex-col gap-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 id="review-heading" className="text-lg font-semibold">
-            Suallar
+            Cavabların icmalı
           </h2>
-          <div role="tablist" aria-label="Sual filtri" className="flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1">
+          <div role="tablist" aria-label="Sual filtri" className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
             {filters.map((f) => (
               <button
                 key={f.value}
                 type="button"
                 role="tab"
+                id={`exam-filter-${f.value}`}
+                aria-controls="exam-review-panel"
+                tabIndex={filter === f.value ? 0 : -1}
                 aria-selected={filter === f.value}
+                onKeyDown={event => {
+                  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+                  event.preventDefault()
+                  const next: Filter = event.key === 'Home' ? 'Correct' : event.key === 'End' ? 'Incorrect' : filter === 'Correct' ? 'Incorrect' : 'Correct'
+                  setFilter(next)
+                  document.getElementById(`exam-filter-${next}`)?.focus()
+                }}
                 onClick={() => setFilter(f.value)}
                 className={cn(
-                  'h-8 rounded-md px-3 font-medium transition-colors duration-150',
+                  'min-h-11 rounded-lg px-2 py-2 text-sm font-medium transition-colors duration-150',
                   filter === f.value ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900',
                 )}
               >
@@ -129,13 +137,15 @@ function ResultView({ result }: { result: ExamResult }) {
           </div>
         </div>
 
+        <div id="exam-review-panel" role="tabpanel" aria-labelledby={`exam-filter-${filter}`} tabIndex={0} className="space-y-3">
         {questions.length === 0 ? (
           <EmptyState title="Bu filtrə uyğun sual yoxdur" />
         ) : (
           questions.map((q) => <ReviewCard key={q.position} question={q} />)
         )}
+        </div>
       </section>
-    </>
+    </div>
   )
 }
 
@@ -149,7 +159,7 @@ function ScoreRing({ percent }: { percent: number | null }) {
   const color = percent === null ? 'text-slate-300' : value >= 80 ? 'text-emerald-500' : value >= 50 ? 'text-amber-500' : 'text-rose-500'
 
   return (
-    <div className="relative size-36">
+    <div className="relative size-24 shrink-0">
       <svg viewBox="0 0 120 120" className="size-full -rotate-90" aria-hidden>
         <circle cx="60" cy="60" r={radius} fill="none" strokeWidth="10" className="stroke-slate-100" />
         <circle
@@ -166,7 +176,7 @@ function ScoreRing({ percent }: { percent: number | null }) {
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-semibold tabular-nums">{percent === null ? '—' : `${formatNumber(percent)}%`}</span>
+        <span className="text-xl font-semibold tabular-nums">{percent === null ? '—' : `${formatNumber(percent)}%`}</span>
         <span className="text-xs text-slate-500">uğur faizi</span>
       </div>
     </div>
@@ -175,8 +185,8 @@ function ScoreRing({ percent }: { percent: number | null }) {
 
 function Stat({ label, value, tone, hint }: { label: string; value: number; tone: string; hint?: string }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm" title={hint}>
-      <dt className="text-slate-500">{label}</dt>
+    <div className="rounded-xl border border-slate-200 bg-white p-4" title={hint}>
+      <dt className="text-xs text-slate-500">{label}</dt>
       <dd className={cn('mt-1 text-2xl font-semibold tabular-nums', tone)}>{formatNumber(value)}</dd>
     </div>
   )
@@ -193,17 +203,17 @@ function ReviewCard({ question }: { question: ExamResultQuestion }) {
   const badge = outcomeBadge[question.outcome]
 
   return (
-    <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-      <header className="mb-3 flex items-start gap-3">
+    <article className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+      <header className="mb-3 flex flex-wrap items-start gap-2">
         <span className="mt-0.5 shrink-0 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 tabular-nums">
           {question.position + 1}
         </span>
-        <h3 className="flex-1 text-[15px] leading-6 font-medium">{question.text}</h3>
+        <h3 className="exam-question-text min-w-0 basis-[calc(100%-3rem)] flex-1 text-[15px] leading-6 font-medium">{question.text}</h3>
         <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset', badge.className)}>{badge.label}</span>
       </header>
 
       <ul className="flex flex-col gap-1.5">
-        {question.options.map((option) => {
+        {question.options.filter(option => option.id === question.selectedOptionId || option.id === question.correctOptionId).map((option) => {
           const isCorrect = option.id === question.correctOptionId
           const isSelected = option.id === question.selectedOptionId
           const isWrongPick = isSelected && !isCorrect && question.correctOptionId !== null
@@ -212,7 +222,7 @@ function ReviewCard({ question }: { question: ExamResultQuestion }) {
             <li
               key={option.id}
               className={cn(
-                'flex items-start gap-3 rounded-lg border px-3 py-2',
+                'flex items-start gap-2.5 rounded-lg border px-3 py-2.5',
                 isCorrect ? 'border-emerald-200 bg-emerald-50' : isWrongPick ? 'border-rose-200 bg-rose-50' : isSelected ? 'border-slate-300 bg-slate-50' : 'border-transparent',
               )}
             >
@@ -225,14 +235,11 @@ function ReviewCard({ question }: { question: ExamResultQuestion }) {
               >
                 {isCorrect ? <Check className="size-3.5" strokeWidth={3} /> : isWrongPick ? <X className="size-3.5" strokeWidth={3} /> : option.label}
               </span>
-              <span className={cn('flex-1 leading-6', isCorrect ? 'font-medium text-emerald-900' : isWrongPick ? 'text-rose-900' : 'text-slate-700')}>
-                {option.text}
+              <span className={cn('exam-question-text min-w-0 flex-1 text-sm leading-6', isCorrect ? 'font-medium text-emerald-900' : isWrongPick ? 'text-rose-900' : 'text-slate-700')}>
+                <span className="mb-1 block text-xs font-medium text-slate-500">{isSelected && isCorrect ? 'Sizin cavab · düzgün' : isSelected ? 'Sizin cavab' : 'Düzgün cavab'} · {option.label}</span>
+                {answerDisplayText(option.text)}
               </span>
-              {(isSelected || isCorrect) && (
-                <span className="shrink-0 text-xs font-medium text-slate-500">
-                  {isSelected && isCorrect ? 'Sizin cavab · düzgün' : isSelected ? 'Sizin cavab' : 'Düzgün cavab'}
-                </span>
-              )}
+
             </li>
           )
         })}

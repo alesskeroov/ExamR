@@ -1,3 +1,4 @@
+import './exam-flow.css'
 import { Clock, Eye, EyeOff, Loader2, PlayCircle } from 'lucide-react'
 import { useId, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
@@ -11,7 +12,7 @@ import { useActiveExam, useCreateExam, useExamAvailability, type RevealMode } fr
 
 const PRESETS = [10, 20, 30, 50]
 const inputClass =
-  'h-10 rounded-lg border border-slate-300 bg-white px-3 tabular-nums focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none aria-invalid:border-rose-400'
+  'h-11 rounded-lg border border-slate-300 bg-white px-3 tabular-nums focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none aria-invalid:border-rose-400'
 
 export function ExamSetupPage() {
   const navigate = useNavigate()
@@ -70,7 +71,7 @@ export function ExamSetupPage() {
   }
 
   return (
-    <>
+    <div className="exam-flow mx-auto max-w-5xl">
       <PageHeader title="İmtahana başla" description="PDF-i, sual aralığını, sual sayını və cavab rejimini seçin." />
 
       {active.data && (
@@ -89,8 +90,8 @@ export function ExamSetupPage() {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="flex min-w-0 flex-col gap-6">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="flex min-w-0 flex-col gap-4">
           <Section step={1} title="PDF">
             <label htmlFor="document" className="sr-only">
               PDF
@@ -119,7 +120,7 @@ export function ExamSetupPage() {
           </Section>
 
           <Section step={2} title="Sual aralığı">
-            <div className="flex flex-wrap items-end gap-3">
+            <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-2">
               <NumberField label="Başlanğıc sual" value={from} disabled={!documentId || span.isPending} invalid={!!rangeError} onChange={(v) => updateRange('from', v)} />
               <span className="pb-2.5 text-slate-400" aria-hidden>
                 –
@@ -145,7 +146,7 @@ export function ExamSetupPage() {
                   onClick={() => setCount(preset)}
                   aria-pressed={count === preset}
                   className={cn(
-                    'h-10 min-w-14 rounded-lg border px-3 font-medium tabular-nums transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40',
+                    'h-11 min-w-11 rounded-lg border px-3 font-medium tabular-nums transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40',
                     count === preset ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50',
                   )}
                 >
@@ -178,12 +179,12 @@ export function ExamSetupPage() {
           </Section>
         </div>
 
-        <aside className="lg:sticky lg:top-8 lg:self-start">
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="mb-4 font-semibold">Xülasə</h2>
-            <dl className="flex flex-col gap-3">
+        <aside className="min-w-0 lg:sticky lg:top-8 lg:self-start">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+            <h2 className="mb-4 font-semibold">Seçdiyiniz imtahan</h2>
+            <dl className="flex flex-col gap-2.5 text-sm">
               <SummaryRow label="PDF">
-                <span className="block max-w-40 truncate" title={selectedDocument?.originalFileName}>
+                <span className="block max-w-full break-words text-right" title={selectedDocument?.originalFileName}>
                   {selectedDocument?.originalFileName ?? '—'}
                 </span>
               </SummaryRow>
@@ -217,7 +218,7 @@ export function ExamSetupPage() {
           </div>
         </aside>
       </div>
-    </>
+    </div>
   )
 }
 
@@ -241,7 +242,7 @@ interface NumberFieldProps {
 function NumberField({ label, value, disabled, invalid, onChange }: NumberFieldProps) {
   const id = useId()
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex min-w-0 flex-col gap-1.5">
       <label htmlFor={id} className="font-medium text-slate-700">
         {label}
       </label>
@@ -253,7 +254,7 @@ function NumberField({ label, value, disabled, invalid, onChange }: NumberFieldP
         disabled={disabled}
         aria-invalid={invalid}
         onChange={(e) => onChange(e.target.value)}
-        className={cn(inputClass, 'w-32 disabled:bg-slate-50 disabled:text-slate-400')}
+        className={cn(inputClass, 'w-full disabled:bg-slate-50 disabled:text-slate-400')}
       />
     </div>
   )
@@ -262,8 +263,8 @@ function NumberField({ label, value, disabled, invalid, onChange }: NumberFieldP
 function Section({ step, title, children }: { step: number; title: string; children: ReactNode }) {
   const id = useId()
   return (
-    <section aria-labelledby={id} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h2 id={id} className="mb-4 flex items-center gap-2 font-semibold">
+    <section aria-labelledby={id} className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
+      <h2 id={id} className="mb-3 flex items-center gap-2 text-sm font-semibold">
         <span className="flex size-6 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-600">{step}</span>
         {title}
       </h2>
@@ -285,7 +286,7 @@ function ChoiceCard({ name, checked, onChange, icon, title, description }: Choic
   return (
     <label
       className={cn(
-        'flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors duration-150 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-indigo-500',
+        'flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm transition-colors duration-150 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-indigo-500',
         checked ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50',
       )}
     >
@@ -295,7 +296,7 @@ function ChoiceCard({ name, checked, onChange, icon, title, description }: Choic
       </span>
       <span>
         <span className="block font-medium">{title}</span>
-        <span className="block text-slate-500">{description}</span>
+        <span className="mt-1 block text-xs leading-5 text-slate-500">{description}</span>
       </span>
     </label>
   )
@@ -303,9 +304,9 @@ function ChoiceCard({ name, checked, onChange, icon, title, description }: Choic
 
 function SummaryRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-3">
+    <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)] items-start gap-3">
       <dt className="text-slate-500">{label}</dt>
-      <dd className="font-medium tabular-nums">{children}</dd>
+      <dd className="min-w-0 text-right font-medium tabular-nums">{children}</dd>
     </div>
   )
 }

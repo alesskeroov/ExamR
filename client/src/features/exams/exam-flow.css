@@ -1,0 +1,16 @@
+.exam-flow { min-width: 0; overflow-wrap: anywhere; }
+.exam-flow :where(button, a, input, select) { touch-action: manipulation; }
+.exam-flow :where(input, select) { min-width: 0; max-width: 100%; }
+.exam-flow .exam-question-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.exam-session .exam-controls { padding-bottom: max(.75rem, env(safe-area-inset-bottom)); }
+.exam-session .exam-question-map { max-height: min(36dvh, 20rem); overflow-y: auto; overscroll-behavior: contain; padding: .25rem; }
+.exam-session .exam-progress { background: var(--app-sunken); }
+.exam-session .exam-controls { background: var(--app-surface); border-color: var(--app-border); }
+.exam-session .exam-panel-toggle { display: flex; }
+.exam-session .exam-map-content[data-open='false'] { display: none; }
+@media (min-width: 1024px) {
+  .exam-session .exam-panel-toggle { display: none; }
+  .exam-session .exam-map-content[data-open='false'] { display: block; }
+  .exam-session .exam-question-map { max-height: calc(100dvh - 16rem); }
+}
+@media (prefers-reduced-motion: reduce) { .exam-flow * { transition: none !important; scroll-behavior: auto !important; } }
