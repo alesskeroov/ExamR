@@ -15,6 +15,7 @@ public static class AuthenticationSetup
     public const string AuthRateLimit = "auth";
     public const string PasswordResetRateLimit = "password-reset";
     public const string SocialRateLimit = "social";
+    public const string UploadRateLimit = "upload";
     public const string HubPathPrefix = "/hubs";
     public const string CsrfHeader = "X-ExamR-Request";
 
@@ -164,6 +165,17 @@ public static class AuthenticationSetup
             options.AddPolicy(SocialRateLimit, context => RateLimitPartition.GetFixedWindowLimiter(
                 context.User.GetUserId().ToString(), _ => new FixedWindowRateLimiterOptions
                 { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+            // Uploads are expensive (disk + parser): 20 files per 10 minutes per user.
+            options.AddPolicy(UploadRateLimit, context => RateLimitPartition.GetFixedWindowLimiter(
+                context.User.Identity?.IsAuthenticated == true ? context.User.GetUserId().ToString() : context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(10), QueueLimit = 0 }));
+            // Generous API-wide ceiling against floods (≈10 requests/second sustained per user or IP); SignalR hubs are exempt.
+            options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+                context.Request.Path.StartsWithSegments(HubPathPrefix)
+                    ? RateLimitPartition.GetNoLimiter("hubs")
+                    : RateLimitPartition.GetFixedWindowLimiter(
+                        context.User.Identity?.IsAuthenticated == true ? $"u:{context.User.FindFirst(JwtClaims.UserId)?.Value}" : $"ip:{context.Connection.RemoteIpAddress}",
+                        _ => new FixedWindowRateLimiterOptions { PermitLimit = 600, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
         });
 
         return services;

@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using ExamFlow.Api.Features.Auth;
 using ExamFlow.Api.Features.Study;
@@ -34,6 +35,11 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     // Only these public hosts are accepted from X-Forwarded-Host (empty = any; set it in production).
     options.AllowedHosts = builder.Configuration.GetSection("ForwardedHeaders:AllowedHosts").Get<string[]>() ?? [];
 });
+// Data Protection keys sign the OAuth state, external-login cookie and password-reset tokens. In containers the
+// default key folder is lost on restart, so production should persist them (DataProtection:KeysPath on a volume).
+var dataProtection = builder.Services.AddDataProtection().SetApplicationName("ExamR");
+if (builder.Configuration["DataProtection:KeysPath"] is { Length: > 0 } keysPath)
+    dataProtection.PersistKeysToFileSystem(new DirectoryInfo(keysPath));
 builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection(SmtpOptions.Section));
 builder.Services.AddSingleton<EmailQueue>();
 builder.Services.AddHostedService<SmtpEmailService>();

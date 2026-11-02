@@ -21,7 +21,7 @@ public static class DocumentEndpoints
         var group = api.MapGroup("/documents").RequireAuthorization();
 
         // Auth is a bearer token that browsers never attach automatically, so CSRF does not apply.
-        group.MapPost("/", Upload).DisableAntiforgery();
+        group.MapPost("/", Upload).DisableAntiforgery().RequireRateLimiting(AuthenticationSetup.UploadRateLimit);
         group.MapGet("/", List);
         group.MapGet("/{id:guid}", Get);
         group.MapGet("/{id:guid}/download", Download);

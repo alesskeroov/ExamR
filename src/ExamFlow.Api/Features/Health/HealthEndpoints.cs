@@ -6,6 +6,9 @@ public static class HealthEndpoints
 {
     public static void MapHealthEndpoints(this RouteGroupBuilder api)
     {
+        // Liveness: the process answers (no database call), for container/platform restart probes.
+        api.MapGet("/health/live", () => Results.Ok(new { status = "Healthy" }));
+        // Readiness: also checks the database; returns 503 so load balancers stop routing when SQL is down.
         api.MapGet("/health", async (AppDbContext db, CancellationToken ct) =>
         {
             var databaseConnected = await db.Database.CanConnectAsync(ct);
