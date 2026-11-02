@@ -8,6 +8,7 @@ export interface User {
   email: string
   displayName: string
   nickname: string
+  bio?: string | null
   avatarUrl: string | null
   roles: string[]
   googleLinked?: boolean

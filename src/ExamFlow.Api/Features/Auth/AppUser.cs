@@ -6,6 +6,8 @@ namespace ExamFlow.Api.Features.Auth;
 public class AppUser : IdentityUser<Guid>
 {
     public string DisplayName { get; set; } = string.Empty;
+    [MaxLength(160)]
+    public string? Bio { get; set; }
     [MaxLength(24)]
     public string Nickname { get; set; } = string.Empty;
     [MaxLength(24)]

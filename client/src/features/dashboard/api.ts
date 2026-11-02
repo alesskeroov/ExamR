@@ -23,8 +23,8 @@ async function getHealth(): Promise<HealthResponse> {
 }
 
 // Fetches the whole exam history (100 per page) so dashboard totals are exact.
-export function useAllExams() {
-  return useQuery({ queryKey: queryKeys.exams.allHistory, queryFn: async () => {
+export function useAllExams(enabled = true) {
+  return useQuery({ queryKey: queryKeys.exams.allHistory, enabled, staleTime: 30_000, queryFn: async () => {
     const items: ExamSummary[] = []
     for (let page = 1; ; page++) {
       const result = await api.get<PagedResult<ExamSummary>>(`/exams?page=${page}&pageSize=100`)

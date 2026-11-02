@@ -167,6 +167,7 @@ public static class AuthEndpoints
             return TypedResults.Problem("Bu nickname artıq istifadə olunur.", statusCode: 409);
         user.Nickname = nickname;
         user.NormalizedNickname = normalized;
+        if (request.Bio is not null) user.Bio = request.Bio.Trim();
         IdentityResult result;
         try { result = await users.UpdateAsync(user); }
         catch (DbUpdateException) { return TypedResults.Problem("Bu nickname artıq istifadə olunur.", statusCode: 409); }
@@ -240,7 +241,7 @@ public static class AuthEndpoints
 
     private static async Task<UserResponse> ToUser(AppUser user, UserManager<AppUser> users) =>
         new(user.Id, user.Email!, user.DisplayName, user.Nickname, AvatarUrl(user), (await users.GetRolesAsync(user)).ToArray(),
-            (await users.GetLoginsAsync(user)).Any(login => login.LoginProvider == GoogleAuthEndpoints.Scheme), user.EmailConfirmed);
+            (await users.GetLoginsAsync(user)).Any(login => login.LoginProvider == GoogleAuthEndpoints.Scheme), user.EmailConfirmed, user.Bio);
 
     private static string? AvatarUrl(AppUser user) => user.AvatarFileName is null ? null : $"/api/profile/avatar/{user.Id}?v={user.AvatarFileName}";
 
@@ -299,11 +300,13 @@ public sealed class ResetPasswordRequest
 
 public sealed class UpdateProfileRequest
 {
+    [MaxLength(160, ErrorMessage = "Bio maksimum 160 simvol ola bilər.")]
+    public string? Bio { get; init; }
     [Required, MinLength(3), MaxLength(24)]
     public string Nickname { get; init; } = string.Empty;
 }
 
-public sealed record UserResponse(Guid Id, string Email, string DisplayName, string Nickname, string? AvatarUrl, string[] Roles, bool GoogleLinked = false, bool EmailConfirmed = false);
+public sealed record UserResponse(Guid Id, string Email, string DisplayName, string Nickname, string? AvatarUrl, string[] Roles, bool GoogleLinked = false, bool EmailConfirmed = false, string? Bio = null);
 
 public sealed record AuthResponse(DateTimeOffset ExpiresAt, UserResponse User);
 
