@@ -16,14 +16,14 @@ public sealed record LearningDocumentDto(Guid DocumentId, string FileName, strin
     long CharacterCount, int ChunkCount, bool LooksScanned, string? Error, DateTimeOffset CreatedAt, DateTimeOffset? ProcessedAt);
 public sealed record LearningChunkDto(int Ordinal, string Text, int TokenEstimate, int? PageFrom, int? PageTo, string? Section, int ParagraphFrom, int ParagraphTo);
 
-/// <summary>Document intake for the AI tutor (Phase 1: extraction and chunking only, no AI calls). Admin-only for now.</summary>
+/// <summary>Document intake for the AI tutor (extraction and chunking only, no AI calls). Open to every signed-in user; document access rules apply.</summary>
 public static class LearningEndpoints
 {
     private static readonly HashSet<string> Formats = [".pdf", ".docx", ".txt"];
 
     public static void MapLearningEndpoints(this RouteGroupBuilder api)
     {
-        var group = api.MapGroup("/learning").RequireAuthorization(policy => policy.RequireRole(Roles.Admin));
+        var group = api.MapGroup("/learning").RequireAuthorization();
         group.MapPost("/documents", Upload).DisableAntiforgery()
             .RequireRateLimiting(AuthenticationSetup.UploadRateLimit)
             // Raises the body limit for this endpoint only; every other route keeps the global Documents limit.

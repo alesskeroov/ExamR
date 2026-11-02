@@ -35,14 +35,14 @@ public sealed record ChatSourceDto(int Number, int ChunkOrdinal, int? PageFrom, 
 public sealed record ChatMessageDto(Guid Id, string Role, string Content, string Status, bool? Grounded, DateTimeOffset CreatedAt, IReadOnlyList<ChatSourceDto> Sources);
 public sealed record ChatSessionDetailDto(ChatSessionDto Session, IReadOnlyList<ChatMessageDto> Messages);
 
-/// <summary>Document-grounded tutor chat (Phase 3). Admin-only and behind LearningAi:Enabled.</summary>
+/// <summary>Document-grounded tutor chat for every signed-in user, behind LearningAi:Enabled and the shared budget.</summary>
 public static class LearningChatEndpoints
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     public static void MapLearningChatEndpoints(this RouteGroupBuilder api)
     {
-        var group = api.MapGroup("/learning").RequireAuthorization(policy => policy.RequireRole(Roles.Admin));
+        var group = api.MapGroup("/learning").RequireAuthorization();
         group.MapGet("/ai/usage", Usage);
         group.MapPost("/chats", Create).Validate<CreateChatRequest>();
         group.MapGet("/chats", List);
@@ -53,8 +53,9 @@ public static class LearningChatEndpoints
             .RequireRateLimiting(AuthenticationSetup.LearningAiRateLimit);
     }
 
-    private static async Task<IResult> Usage(ClaimsPrincipal user, LearningAiBudget budget, CancellationToken ct) =>
-        TypedResults.Ok(await budget.StatusAsync(user.GetUserId(), ct));
+    // Budget, cost and token figures are for admins; other users only learn whether the tutor is on.
+    private static async Task<IResult> Usage(ClaimsPrincipal user, LearningAiBudget budget, IOptions<LearningAiOptions> options, CancellationToken ct) =>
+        user.IsInRole(Roles.Admin) ? TypedResults.Ok(await budget.StatusAsync(user.GetUserId(), ct)) : (IResult)TypedResults.Ok(new { enabled = options.Value.Enabled });
 
     private static async Task<IResult> Create(CreateChatRequest request, ClaimsPrincipal user, AppDbContext db, IOptions<LearningAiOptions> options,
         TimeProvider clock, CancellationToken ct)
@@ -173,7 +174,9 @@ public static class LearningChatEndpoints
         {
             case BudgetDecision.Busy: return TypedResults.Problem("Əvvəlki cavab hələ hazırlanır. Bir az gözləyin.", statusCode: StatusCodes.Status429TooManyRequests);
             case BudgetDecision.DailyLimit: return TypedResults.Problem("Bugünkü AI sorğu limitinə çatdınız. Sabah yenidən cəhd edin.", statusCode: StatusCodes.Status429TooManyRequests);
-            case BudgetDecision.BudgetExhausted: return TypedResults.Problem("AI büdcəsi bitib. Yeni AI sorğuları dayandırılıb.", statusCode: StatusCodes.Status403Forbidden);
+            case BudgetDecision.BudgetExhausted:
+                return TypedResults.Problem(user.IsInRole(Roles.Admin) ? "AI büdcəsi bitib. Yeni AI sorğuları dayandırılıb." : "AI köməkçisi müvəqqəti əlçatan deyil. Daha sonra yenidən cəhd edin.",
+                    statusCode: StatusCodes.Status403Forbidden);
         }
 
         var sources = retrieval.Chunks.Select((c, i) => new LearningMessageSource

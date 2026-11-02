@@ -1,14 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { ArrowUp, BookOpenText, FileText, GraduationCap, Lock, MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRight, Plus, Square, Trash2, X } from 'lucide-react'
+import { ArrowUp, BookOpenText, FileText, GraduationCap, MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRight, Plus, Square, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { useSearchParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
-import { EmptyState } from '../../components/common/EmptyState'
 import { ApiError, postEventStream } from '../../lib/api-client'
 import { queryKeys } from '../../lib/query-keys'
 import { useConfirm } from '../../lib/use-confirm'
 import { cn } from '../../lib/utils'
-import { useCurrentUser } from '../auth/api'
 import { useAiUsage, useChat, useChats, useCreateChat, useDeleteChat, useTopics, useTutorDocuments, type ChatSession, type ChatSource, type TutorAction, type TutorDifficulty, type TutorMode, type TutorTopic } from './api'
 import { TutorDocumentPicker } from './TutorDocumentPicker'
 import { TutorMessage, type ViewMessage } from './TutorMessage'
@@ -28,9 +26,6 @@ function store(key: string, value: string) {
 }
 
 export function TutorPage() {
-  const { data: user } = useCurrentUser()
-  if (user && !user.roles.includes('Admin'))
-    return <EmptyState icon={<Lock className="size-8" />} title="AI Tutor hələ yalnız adminlər üçündür" description="Bu bölmə sınaq mərhələsindədir və tezliklə hamı üçün açılacaq." />
   return <TutorWorkspace />
 }
 
@@ -218,7 +213,7 @@ function TutorWorkspace() {
   const history = (
     <ChatHistory chats={chats.data?.items ?? []} loading={chats.isLoading} activeId={chatId}
       onSelect={id => setParams({ chat: id })} onNew={newChat} onDelete={removeChat}
-      usage={usage.data ? `${usage.data.remainingUsd.toFixed(2)} $ qalıb · bu gün ${usage.data.requestsToday}/${usage.data.dailyRequestsPerUser}` : null} />
+      usage={usage.data?.remainingUsd != null ? `${usage.data.remainingUsd.toFixed(2)} $ qalıb · bu gün ${usage.data.requestsToday}/${usage.data.dailyRequestsPerUser}` : null} />
   )
 
   return (

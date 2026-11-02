@@ -81,9 +81,11 @@ export function useIndexDocument() {
   })
 }
 
+/** Non-admins receive only `enabled`; budget and usage figures are admin-only. */
 export interface AiUsage {
-  model: string; totalBudgetUsd: number; spentUsd: number; reservedUsd: number; remainingUsd: number
-  requestsToday: number; dailyRequestsPerUser: number; enabled: boolean
+  enabled: boolean
+  model?: string; totalBudgetUsd?: number; spentUsd?: number; reservedUsd?: number; remainingUsd?: number
+  requestsToday?: number; dailyRequestsPerUser?: number
 }
 
 export function useAiUsage() {
