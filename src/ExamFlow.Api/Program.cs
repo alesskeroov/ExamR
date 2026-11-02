@@ -59,8 +59,9 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 // Documents & PDF processing
 builder.Services.Configure<DocumentOptions>(builder.Configuration.GetSection(DocumentOptions.Section));
-// Local disk in development; Cloudflare R2 where the disk is ephemeral (Storage:Provider=R2).
-if (string.Equals(builder.Configuration["Storage:Provider"], "R2", StringComparison.OrdinalIgnoreCase))
+// Local disk in development; Cloudflare R2 or an S3 endpoint (Supabase) where the disk is ephemeral.
+if (builder.Configuration["Storage:Provider"] is { } provider
+    && (provider.Equals("R2", StringComparison.OrdinalIgnoreCase) || provider.Equals("S3", StringComparison.OrdinalIgnoreCase)))
     builder.Services.AddSingleton<IFileStorage, R2FileStorage>();
 else
     builder.Services.AddSingleton<IFileStorage, LocalFileStorage>();
