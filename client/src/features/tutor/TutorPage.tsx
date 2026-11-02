@@ -257,6 +257,7 @@ function TutorWorkspace() {
           ) : (
             <p className="flex-1 truncate px-1 text-sm font-semibold">{chatId ? '' : 'Yeni söhbət'}</p>
           )}
+          <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800" title="AI Tutor sınaq (demo) mərhələsindədir">Demo</span>
           {session && (
             <button type="button" onClick={() => setPreview(p => ({ ...p, open: !p.open }))} aria-pressed={preview.open}
               className={cn('inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium hover:bg-slate-100', preview.open ? 'text-indigo-700' : 'text-slate-600')}>

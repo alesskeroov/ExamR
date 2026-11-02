@@ -6,13 +6,13 @@ import { NotificationBell } from '../features/friends/NotificationBell'
 import { cn } from '../lib/utils'
 import { ThemeToggle } from '../components/common/ThemeToggle'
 
-const navItems: { to: string; label: string; icon: LucideIcon; group: string; end?: boolean; adminOnly?: boolean }[] = [
+const navItems: { to: string; label: string; icon: LucideIcon; group: string; end?: boolean; adminOnly?: boolean; badge?: string }[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, group: '', end: true },
   { to: '/upload', label: 'Sənəd yüklə', icon: FileUp, group: 'Hazırlıq' },
   { to: '/questions', label: 'Sual bankı', icon: Library, group: 'Hazırlıq' },
   { to: '/study', label: 'Öyrənmə köməkçisi', icon: Sparkles, group: 'Hazırlıq' },
   { to: '/focus', label: 'Focus Mode', icon: Target, group: 'Hazırlıq' },
-  { to: '/tutor', label: 'AI Tutor', icon: BotMessageSquare, group: 'Hazırlıq' },
+  { to: '/tutor', label: 'AI Tutor', icon: BotMessageSquare, group: 'Hazırlıq', badge: 'Demo' },
   { to: '/exams/new', label: 'İmtahana başla', icon: ListChecks, group: 'İmtahan' },
   { to: '/exams', label: 'Tarixçə', icon: History, group: 'İmtahan', end: true },
   { to: '/battle', label: 'Battle', icon: Swords, group: 'Birlikdə', end: true },
@@ -85,11 +85,12 @@ export function AppLayout() {
             if (!items.length) return null
             return <div key={group || 'home'} className="app-nav-group" role="group" aria-label={group || 'Ümumi'}>
               {group && <p className="ds-label" aria-hidden>{group}</p>}
-              {items.map(({ to, label, icon: Icon, end }) => (
+              {items.map(({ to, label, icon: Icon, end, badge }) => (
                 <NavLink key={to} to={to} end={end} onClick={() => setMobileOpen(false)}
                   className="app-nav-link flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] font-medium transition-colors duration-150">
                   <Icon className="size-4 shrink-0" aria-hidden />
                   <span className="truncate">{label}</span>
+                  {badge && <span className="ml-auto shrink-0 rounded-full bg-amber-100 px-1.5 py-px text-[10px] font-semibold tracking-wide text-amber-800 uppercase">{badge}</span>}
                 </NavLink>
               ))}
             </div>
