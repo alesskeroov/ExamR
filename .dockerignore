@@ -1,0 +1,11 @@
+**/bin/
+**/obj/
+**/node_modules/
+**/App_Data/
+**/*.user
+**/.env*
+.git/
+client/
+tests/
+samples/
+artifacts/

@@ -12,6 +12,7 @@ using ExamFlow.Api.Features.Friends;
 using ExamFlow.Api.Features.Groups;
 using ExamFlow.Api.Features.Questions;
 using ExamFlow.Api.Infrastructure;
+using ExamFlow.Api.Infrastructure.Data;
 using ExamFlow.Api.Infrastructure.Email;
 using ExamFlow.Api.Infrastructure.Security;
 using ExamFlow.Api.Infrastructure.Storage;
@@ -29,7 +30,13 @@ builder.Services.AddJwtIdentity(builder.Configuration);
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
-    options.ForwardLimit = 1;
+    options.ForwardLimit = builder.Configuration.GetValue<int?>("ForwardedHeaders:ForwardLimit") ?? 1;
+    // Managed hosts (Render) sit behind load balancers whose IPs are not published: trust the configured hop count.
+    if (builder.Configuration.GetValue<bool>("ForwardedHeaders:TrustAllProxies"))
+    {
+        options.KnownNetworks.Clear();
+        options.KnownProxies.Clear();
+    }
     foreach (var proxy in builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [])
         options.KnownProxies.Add(System.Net.IPAddress.Parse(proxy));
     // Only these public hosts are accepted from X-Forwarded-Host (empty = any; set it in production).
@@ -40,6 +47,8 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 var dataProtection = builder.Services.AddDataProtection().SetApplicationName("ExamR");
 if (builder.Configuration["DataProtection:KeysPath"] is { Length: > 0 } keysPath)
     dataProtection.PersistKeysToFileSystem(new DirectoryInfo(keysPath));
+else if (!builder.Environment.IsDevelopment())
+    dataProtection.PersistKeysToDbContext<AppDbContext>();
 builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection(SmtpOptions.Section));
 builder.Services.AddSingleton<EmailQueue>();
 builder.Services.AddHostedService<SmtpEmailService>();
@@ -50,7 +59,11 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 // Documents & PDF processing
 builder.Services.Configure<DocumentOptions>(builder.Configuration.GetSection(DocumentOptions.Section));
-builder.Services.AddSingleton<IFileStorage, LocalFileStorage>();
+// Local disk in development; Cloudflare R2 where the disk is ephemeral (Storage:Provider=R2).
+if (string.Equals(builder.Configuration["Storage:Provider"], "R2", StringComparison.OrdinalIgnoreCase))
+    builder.Services.AddSingleton<IFileStorage, R2FileStorage>();
+else
+    builder.Services.AddSingleton<IFileStorage, LocalFileStorage>();
 builder.Services.AddSingleton<IAnswerDetector, MarkerAnswerDetector>(); // order = priority
 builder.Services.AddSingleton<IAnswerDetector, StyleAnswerDetector>();
 builder.Services.AddSingleton<PdfQuestionParser>();
@@ -83,6 +96,19 @@ builder.Services.Configure<FormOptions>(form => form.MultipartBodyLengthLimit = 
 var app = builder.Build();
 
 app.UseForwardedHeaders();
+
+// When the UI proxies /api and /hubs from its own domain (Cloudflare Pages → Render), the browser only ever sees that
+// domain: OAuth redirect URIs and cookies must use it rather than the internal onrender.com address.
+if (builder.Configuration["App:PublicOrigin"] is { Length: > 0 } publicOrigin)
+{
+    var origin = new Uri(publicOrigin);
+    app.Use((context, next) =>
+    {
+        context.Request.Scheme = origin.Scheme;
+        context.Request.Host = HostString.FromUriComponent(origin);
+        return next(context);
+    });
+}
 
 // Baseline security headers for every API response; HSTS only outside development (localhost runs over http).
 if (!app.Environment.IsDevelopment()) app.UseHsts();
