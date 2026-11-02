@@ -85,7 +85,7 @@ export function FocusPage() {
   // Phase transitions when a running timer reaches zero.
   const finished = state.endAt !== null && remaining === 0
   const finishRef = useRef(finishFocus)
-  finishRef.current = finishFocus
+  useEffect(() => { finishRef.current = finishFocus })
   useEffect(() => {
     if (!finished) return
     if (state.phase === 'focus') finishRef.current(true)
@@ -138,13 +138,13 @@ export function FocusPage() {
 
 function Ring({ progress, label, tone, paused }: { progress: number; label: string; tone: 'focus' | 'break'; paused: boolean }) {
   const r = 88, c = 2 * Math.PI * r
-  return <div className="relative grid size-64 place-items-center sm:size-72" role="timer" aria-live="off" aria-label={`Qalan vaxt ${label}`}>
+  return <div className="relative grid size-56 place-items-center sm:size-72" role="timer" aria-live="off" aria-label={`Qalan vaxt ${label}`}>
     <svg viewBox="0 0 200 200" className="absolute inset-0 -rotate-90">
       <circle cx="100" cy="100" r={r} fill="none" strokeWidth="8" className="stroke-slate-100" />
       <circle cx="100" cy="100" r={r} fill="none" strokeWidth="8" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - progress)}
         className={cn('transition-[stroke-dashoffset] duration-300 ease-linear', tone === 'focus' ? 'stroke-indigo-600' : 'stroke-emerald-500')} />
     </svg>
-    <div className="text-center"><p className={cn('text-5xl font-semibold tabular-nums tracking-tight sm:text-6xl', paused && 'animate-pulse opacity-70')}>{label}</p>
+    <div className="text-center"><p className={cn('text-4xl font-semibold tabular-nums tracking-tight sm:text-6xl', paused && 'animate-pulse opacity-70')}>{label}</p>
       {paused && <p className="mt-1 text-xs font-medium text-slate-500">Pauza</p>}</div>
   </div>
 }

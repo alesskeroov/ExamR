@@ -42,10 +42,10 @@ export function DashboardPage() {
   return <>
     <PageHeader title={user ? `Salam, ${user.nickname}` : 'Dashboard'} description="Öyrənmə fəaliyyətin, nəticələrin və yeni materialların bir yerdə." />
 
-    <section aria-label="Statistika" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      {stats.map(s => <div key={s.label} className={cn(card, 'flex items-center gap-4 p-5 transition-shadow hover:shadow-md')}>
-        <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-indigo-50 text-indigo-600"><s.icon className="size-5" aria-hidden /></span>
-        <div className="min-w-0"><p className="text-sm text-slate-500">{s.label}</p>
+    <section aria-label="Statistika" className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+      {stats.map(s => <div key={s.label} className={cn(card, 'flex flex-col items-start gap-2 p-4 transition-shadow hover:shadow-md sm:flex-row sm:items-center sm:gap-4 sm:p-5')}>
+        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-indigo-50 text-indigo-600 sm:size-11"><s.icon className="size-5" aria-hidden /></span>
+        <div className="min-w-0"><p className="text-xs text-slate-500 sm:text-sm">{s.label}</p>
           {s.pending ? <div className={cn(skeleton, 'mt-1 h-7 w-16')} /> : <p className="text-2xl font-semibold tabular-nums">{s.value}</p>}</div>
       </div>)}
     </section>

@@ -29,7 +29,8 @@
 :root { --app-surface: #fff; --app-border: #e2e5f0; --app-background: #f7f8fc; --app-foreground: #1d2338; }
 :root[data-theme='dark'] { --app-surface: #1b1e2e; --app-border: #34394f; --app-background: #10121d; --app-foreground: #eff0fa; }
 html { background: var(--app-background); color: var(--app-foreground); }
-body { background: var(--app-background); }
+/* Long unbroken strings from parsed PDFs (formulas, URLs) wrap instead of widening the layout. */
+body { background: var(--app-background); overflow-wrap: anywhere; }
 .app-shell { background: radial-gradient(ellipse at 90% 0%, rgb(112 91 226 / 5%), transparent 50%), var(--app-background); }
 .app-shell .app-sidebar { border-color: var(--app-border); box-shadow: 6px 0 28px -20px rgb(47 37 107 / 15%); }
 .app-toolbar { border-color: var(--app-border); background: var(--app-surface); }

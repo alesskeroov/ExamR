@@ -36,10 +36,10 @@ export function QuestionBankPage() {
   return <>
     <PageHeader title="Sual bankı" description="Sənədlərindən və səninlə paylaşılan materiallardan çıxarılmış suallar." />
 
-    <section aria-label="Statistika" className="grid gap-4 sm:grid-cols-3">
+    <section aria-label="Statistika" className="grid grid-cols-3 gap-2 sm:gap-4">
       {[['Ümumi sual', stats.data?.totalQuestions], ['Sənəd', stats.data?.documentCount], ['Seçilmiş suallar', stats.data?.bookmarkCount]].map(([label, value]) =>
-        <div key={label} className={cn(card, 'p-5')}><p className="text-sm text-slate-500">{label}</p>
-          {stats.isPending ? <div className="mt-1 h-7 w-16 animate-pulse rounded-lg bg-slate-100" /> : <p className="text-2xl font-semibold tabular-nums">{value ?? '—'}</p>}</div>)}
+        <div key={label} className={cn(card, 'p-3 sm:p-5')}><p className="text-xs text-slate-500 sm:text-sm">{label}</p>
+          {stats.isPending ? <div className="mt-1 h-7 w-12 animate-pulse rounded-lg bg-slate-100" /> : <p className="text-xl font-semibold tabular-nums sm:text-2xl">{value ?? '—'}</p>}</div>)}
     </section>
 
     <section aria-label="Filtrlər" className={cn(card, 'mt-6 grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[2fr_1.5fr_1fr_1fr_auto]')}>
