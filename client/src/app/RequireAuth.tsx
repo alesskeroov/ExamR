@@ -1,6 +1,8 @@
 import { RefreshCw, ServerCrash, WifiOff } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { AuthPage } from '../features/auth/AuthPage'
+import { LandingPage } from '../features/landing/LandingPage'
+import { useSearchParams } from 'react-router'
 import { useCurrentUser } from '../features/auth/api'
 import { SocialConnection } from '../features/friends/SocialConnection'
 
@@ -19,6 +21,7 @@ function useOnline() {
 export function RequireAuth({ children }: { children: ReactNode }) {
   const { data: user, isPending, isError, fetchStatus, refetch, isFetching } = useCurrentUser()
   const online = useOnline()
+  const [searchParams] = useSearchParams()
 
   // Offline, TanStack Query pauses the request and isPending would stay true forever; it resumes on reconnect.
   if ((isPending && fetchStatus === 'paused') || (isError && !online)) {
@@ -40,7 +43,12 @@ export function RequireAuth({ children }: { children: ReactNode }) {
       description="Bir az sonra yenidən cəhd edin." busy={isFetching} onRetry={() => refetch()} />
   }
 
-  return user ? <><SocialConnection key={user.id} />{children}</> : <AuthPage />
+  if (user) return <><SocialConnection key={user.id} />{children}</>
+  // Signed-out visitors see the public landing page; ?auth=login|register (or a Google error) opens the form.
+  const auth = searchParams.get('auth')
+  return auth === 'login' || auth === 'register' || searchParams.has('authError')
+    ? <AuthPage key={auth} initialMode={auth === 'register' ? 'register' : 'login'} />
+    : <LandingPage />
 }
 
 function StatusScreen({ icon, title, description, busy, onRetry }: { icon: ReactNode; title: string; description: string; busy: boolean; onRetry: () => void }) {
@@ -49,7 +57,7 @@ function StatusScreen({ icon, title, description, busy, onRetry }: { icon: React
       <span className="mb-2 grid size-16 place-items-center rounded-2xl bg-indigo-50 text-indigo-600">{icon}</span>
       <p className="text-lg font-semibold">{title}</p>
       <p className="max-w-sm text-slate-600">{description}</p>
-      <button type="button" disabled={busy} onClick={onRetry} className="mt-2 inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-60">
+      <button type="button" disabled={busy} onClick={onRetry} className="mt-2 inline-flex h-10 items-center gap-2 rounded-xl btn-primary px-4 text-sm font-medium transition-colors disabled:opacity-60">
         <RefreshCw className="size-4" aria-hidden />{busy ? 'Yoxlanılır…' : 'Yenidən cəhd et'}
       </button>
     </div>

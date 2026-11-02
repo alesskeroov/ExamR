@@ -1,17 +1,19 @@
-import { ArrowLeft, ArrowUpRight, BookOpen, Check, ChartNoAxesCombined, Eye, EyeOff, FileText, FlaskConical, MailCheck, Moon, Sun } from 'lucide-react'
-import { useState, type ComponentProps, type FormEvent, type ReactNode } from 'react'
+import { ArrowLeft, Check, Eye, EyeOff, FlaskConical, MailCheck, Moon, Sun } from 'lucide-react'
+import { useEffect, useState, type ComponentProps, type FormEvent, type ReactNode } from 'react'
+import { Link } from 'react-router'
 import { Button } from '../../components/common/Button'
 import { FormField } from '../../components/common/FormField'
 import { fieldErrors } from '../../lib/form-errors'
 import { cn } from '../../lib/utils'
 import { useForgotPassword, useLogin, useRegister } from './api'
+import { ProductPreview } from '../landing/ProductPreview'
 import './auth.css'
 import { useTheme } from '../../lib/use-theme'
 
 type Mode = 'login' | 'register' | 'forgot'
 
-export function AuthPage() {
-  const [mode, setMode] = useState<Mode>('login')
+export function AuthPage({ initialMode = 'login' }: { initialMode?: 'login' | 'register' }) {
+  const [mode, setMode] = useState<Mode>(initialMode)
 
   return (
     <AuthShell>
@@ -27,13 +29,16 @@ export function AuthPage() {
 /** Authentication layout using the shared application theme. */
 export function AuthShell({ children }: { children: ReactNode }) {
   const { dark, toggleTheme } = useTheme()
+  // Client-side navigation keeps the landing scroll position; the form should start at the top.
+  useEffect(() => { window.scrollTo(0, 0) }, [])
   return (
     <div className="auth-page" data-theme={dark ? 'dark' : 'light'}>
       <header className="auth-header mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-6 sm:px-10">
-        <a href="/" className="flex items-center gap-2.5 text-xl font-semibold tracking-tight" aria-label="ExamR ana səhifə">
-          <img src="/favicon.svg" alt="" className="size-9" />ExamR<span className="auth-wordmark-dot" />
-        </a>
-        <div className="flex items-center gap-5">
+        <Link viewTransition to="/" className="flex items-center gap-2.5 text-lg font-bold tracking-[-0.03em]" aria-label="ExamR ana səhifə">
+          <span className="auth-logo-mark grid size-[30px] place-items-center rounded-lg" aria-hidden><svg viewBox="0 0 16 16" className="size-4"><path d="M4 4h8M4 8h5.5M4 12h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></span>ExamR
+        </Link>
+        <div className="flex items-center gap-3">
+          <Link viewTransition to="/" className="auth-link hidden text-sm font-medium sm:inline">← Ana səhifə</Link>
           <button type="button" onClick={toggleTheme} aria-pressed={dark} aria-label={dark ? 'İşıqlı rejimə keç' : 'Qaranlıq rejimə keç'} className="auth-theme-toggle grid size-10 place-items-center rounded-full border transition-colors">
             {dark ? <Sun className="size-[18px]" aria-hidden /> : <Moon className="size-[18px]" aria-hidden />}
           </button>
@@ -41,25 +46,10 @@ export function AuthShell({ children }: { children: ReactNode }) {
       </header>
       <main className="auth-main mx-auto grid w-full max-w-7xl flex-1 items-center gap-10 px-6 pb-10 pt-4 sm:px-10 lg:grid-cols-[1.1fr_1fr] lg:gap-16 lg:py-8">
         <section className="auth-story hidden self-center lg:block" aria-labelledby="auth-story-title">
-          <div className="auth-eyebrow mb-5 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium"><span className="size-1.5 rounded-full bg-indigo-500" />Sənin şəxsi öyrənmə məkanın</div>
-          <h1 id="auth-story-title" className="max-w-lg text-[clamp(2.6rem,4vw,3.6rem)] font-semibold leading-[1.1] tracking-[-0.045em]">Biliklərini gücləndir.<br /><span className="auth-accent">Nəticəni dəyiş.</span></h1>
-          <p className="auth-muted mt-5 max-w-md text-base leading-7">Sənədlərini öyrənmə planına çevir. Öz tempində hazırlaş, sınaqlarla biliklərini yoxla və irəliləyişini izlə.</p>
-          <div className="auth-preview relative mt-9 h-[310px]" aria-hidden="true">
-            <div className="auth-preview-glow" />
-            <div className="auth-mini-card auth-source-card absolute left-0 top-2 flex items-center gap-3 rounded-2xl border p-4">
-              <div className="auth-icon-box grid size-10 place-items-center rounded-xl"><FileText className="size-5" /></div>
-              <div><p className="text-sm font-semibold">Öyrənmə materialları</p><p className="auth-muted mt-1 text-xs">PDF və DOCX · Bir yerdə</p></div><Check className="ml-5 size-4 text-indigo-500" />
-            </div>
-            <div className="auth-mini-card auth-question-card absolute left-8 right-5 top-24 rounded-2xl border p-5">
-              <div className="auth-muted flex items-center justify-between text-[11px] font-medium"><span className="flex items-center gap-1.5"><BookOpen className="size-3.5" />SINAQ İMTAHANI</span><span>04 / 20</span></div>
-              <p className="mt-4 text-sm font-medium">Biliklərini addım-addım möhkəmləndir.</p>
-              <div className="auth-demo-option mt-4 flex items-center gap-2.5 rounded-lg border p-2.5 text-xs"><span className="grid size-5 place-items-center rounded-full bg-indigo-500 text-white"><Check className="size-3" /></span>Hər məşq daha bir addımdır</div>
-              <div className="auth-progress-track mt-4 h-1.5 overflow-hidden rounded-full"><div className="h-full w-2/3 rounded-full bg-indigo-500" /></div>
-            </div>
-            <div className="auth-mini-card auth-result-card absolute bottom-0 right-0 flex items-center gap-3 rounded-2xl border px-4 py-3">
-              <div className="auth-icon-box grid size-10 place-items-center rounded-full"><ChartNoAxesCombined className="size-5" /></div><div><p className="text-xs font-semibold">İrəliləyişin görünür</p><p className="auth-muted mt-1 text-[11px]">Hər gün bir az daha yaxşı</p></div><ArrowUpRight className="size-4 text-indigo-500" />
-            </div>
-          </div>
+          <p className="auth-eyebrow-mono">PDF · DOCX → imtahan</p>
+          <h1 id="auth-story-title" className="mt-4 max-w-lg text-[clamp(2.4rem,3.6vw,3.3rem)] font-bold leading-[1.04] tracking-[-0.045em]">Konspektin artıq <span className="auth-mark">imtahandır.</span></h1>
+          <p className="auth-muted mt-5 max-w-md text-base leading-7">Sənədini yüklə, vaxtlı imtahan ver, səhvlərini təkrar et. Qaldığın yerdən davam et.</p>
+          <div className="mt-10 max-w-[520px]"><ProductPreview /></div>
         </section>
         <section className="auth-form-card mx-auto w-full max-w-[460px] rounded-3xl border p-6 sm:p-9" aria-label="Hesaba giriş və qeydiyyat">
           {/* Shown until the build sets VITE_DEMO_MODE=false. */}
@@ -68,7 +58,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
             <span><strong className="font-semibold">Demo versiya.</strong> ExamR hazırda sınaq mərhələsindədir: bəzi funksiyalar dəyişə və məlumatlar sıfırlana bilər. Həssas və ya şəxsi sənədlər yükləməyin.</span>
           </div>}
           <div className="auth-form-content">{children}</div>
-          <div className="auth-form-footer mt-6 border-t pt-5 text-center text-xs">Öyrənməyə ayırdığın vaxtın dəyəri var.</div>
+          <div className="auth-form-footer mt-6 border-t pt-5 text-center text-xs">Davam etməklə hesabının yalnız sənə görünən şəxsi kitabxanaya sahib olacağını qəbul edirsən. <Link viewTransition to="/" className="auth-link font-medium sm:hidden">← Ana səhifə</Link></div>
         </section>
       </main>
       <footer className="auth-muted mx-auto flex w-full max-w-7xl justify-between gap-4 px-6 py-5 text-[11px] sm:px-10"><span>ExamR · Öyrənməyə davam et.</span><span>Diqqətin biliyində qalsın.</span></footer>
@@ -118,8 +108,8 @@ function SignInForm({ mode, onModeChange }: { mode: 'login' | 'register'; onMode
   return (
     <>
       <div key={mode} data-mode={mode} className="auth-mode-enter mb-6 min-h-[80px]">
-        <p className="auth-accent mb-2 text-xs font-semibold uppercase tracking-[0.16em]">{mode === 'login' ? 'Yenidən xoş gördük' : 'Yeni başlanğıc'}</p>
-        <h2 className="text-2xl font-semibold tracking-tight">{mode === 'login' ? 'Öyrənməyə davam et.' : 'İlk addımını at.'}</h2>
+        <p className="auth-eyebrow-mono mb-3">{mode === 'login' ? 'Yenidən xoş gördük' : 'Yeni başlanğıc'}</p>
+        <h2 className="text-[28px] font-bold leading-tight tracking-[-0.035em]">{mode === 'login' ? 'Öyrənməyə davam et.' : 'İlk addımını at.'}</h2>
         <p className="auth-muted mt-2 text-sm">{mode === 'login' ? 'Hesabına daxil ol, qaldığın yerdən davam et.' : 'ExamR hesabını yarat və hazırlığa başla.'}</p>
       </div>
       <div role="tablist" data-mode={mode} aria-label="Giriş növü" className="auth-tabs mb-6 grid grid-cols-2 rounded-xl p-1">
@@ -205,7 +195,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
         <ArrowLeft className="size-4" aria-hidden />
         Girişə qayıt
       </button>
-      <h2 className="text-2xl font-semibold tracking-tight">Şifrəni bərpa et</h2>
+      <h2 className="text-[28px] font-bold leading-tight tracking-[-0.035em]">Şifrəni bərpa et</h2>
 
       {forgot.isSuccess ? (
         <div role="status" className="mt-4 flex gap-3 rounded-lg bg-emerald-50 px-3 py-3 text-emerald-800">

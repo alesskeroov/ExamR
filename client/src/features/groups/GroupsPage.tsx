@@ -65,7 +65,7 @@ export function GroupDetailPage() {
       <ul className="mb-8 grid gap-3 sm:grid-cols-2">{documents.data?.map(doc => <li key={doc.id} className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-indigo-50 text-indigo-600"><FileText className="size-5" aria-hidden /></span><span className="min-w-0"><span className="block break-words font-medium">{doc.fileName}</span><span className="text-xs text-slate-500">{doc.questionCount} sual</span></span></div>
         <div className="flex flex-wrap gap-2">
-          <Link to={`/study?document=${doc.id}`} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-indigo-600 px-3 text-xs font-medium text-white hover:bg-indigo-700"><BookOpen className="size-3.5" aria-hidden />Öyrənmə köməkçisi</Link>
+          <Link to={`/study?document=${doc.id}`} className="inline-flex h-9 items-center gap-1.5 rounded-xl btn-primary px-3 text-xs font-medium"><BookOpen className="size-3.5" aria-hidden />Öyrənmə köməkçisi</Link>
           <Link to={`/exams/new?document=${doc.id}`} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-300 px-3 text-xs font-medium text-slate-700 hover:bg-slate-50"><Timer className="size-3.5" aria-hidden />İmtahana başla</Link>
         </div>
       </li>)}</ul>

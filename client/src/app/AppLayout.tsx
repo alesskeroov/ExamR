@@ -66,7 +66,7 @@ export function AppLayout() {
       <aside
         inert={!mobileOpen && !isDesktop}
         className={cn(
-          'app-sidebar fixed inset-y-0 left-0 z-40 flex w-72 max-w-[85vw] flex-col border-r border-slate-200 bg-white shadow-xl transition-transform duration-300 ease-out',
+          'app-sidebar fixed top-0 left-0 z-40 flex h-dvh w-72 max-w-[85vw] flex-col border-r border-slate-200 bg-white shadow-xl transition-transform duration-300 ease-out',
           'lg:sticky lg:top-0 lg:z-auto lg:h-dvh lg:w-64 lg:max-w-none lg:shrink-0 lg:translate-x-0 lg:shadow-none lg:transition-none',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
         )}
@@ -102,7 +102,7 @@ export function AppLayout() {
           <Breadcrumb />
           <div className="flex items-center gap-3"><ThemeToggle /><NotificationBell /></div>
         </header>
-        <main className="app-content mx-auto max-w-[1200px] min-w-0 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <main className="app-content app-safe-bottom mx-auto max-w-[1200px] min-w-0 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
           <Outlet />
         </main>
       </div>
@@ -117,7 +117,7 @@ function UserMenu() {
   const nickname = user.nickname || user.displayName || 'İstifadəçi'
 
   return (
-    <div className="flex items-center gap-3 border-t border-slate-200 p-4 lg:mt-auto lg:shrink-0">
+    <div className="app-sidebar-footer flex shrink-0 items-center gap-3 border-t border-slate-200 p-4 lg:mt-auto">
       <NavLink to="/profile" aria-label="Profili redaktə et" title="Profili redaktə et" className="shrink-0 rounded-full focus-visible:outline-2 focus-visible:outline-indigo-600">
         {user.avatarUrl ? <img src={user.avatarUrl} alt="" className="size-8 rounded-full object-cover" /> :
           <span className="flex size-8 items-center justify-center rounded-full bg-indigo-100 font-semibold text-indigo-700" aria-hidden>{nickname.charAt(0).toUpperCase()}</span>}
@@ -130,7 +130,7 @@ function UserMenu() {
         type="button"
         onClick={() => logout.mutate()}
         disabled={logout.isPending}
-        className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+        className="grid size-10 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900"
         aria-label="Çıxış"
         title="Çıxış"
       >
@@ -142,8 +142,8 @@ function UserMenu() {
 
 function Brand() {
   return (
-    <span className="flex items-center gap-2 text-base font-semibold">
-      <img src="/favicon.svg" alt="" className="size-7" />
+    <span className="flex items-center gap-2.5 text-[17px] font-bold tracking-[-0.03em]">
+      <span className="app-brand-mark grid size-[30px] place-items-center rounded-lg" aria-hidden><svg viewBox="0 0 16 16" className="size-4"><path d="M4 4h8M4 8h5.5M4 12h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></span>
       ExamR
     </span>
   )

@@ -26,7 +26,7 @@ export function ExamHistoryPage() {
         actions={
           <Link
             to={tab === 'battle' ? '/battle' : '/exams/new'}
-            className="inline-flex h-10 items-center gap-2 rounded-lg bg-indigo-600 px-4 font-medium text-white hover:bg-indigo-700"
+            className="inline-flex h-10 items-center gap-2 rounded-lg btn-primary px-4 font-medium"
           >
             <PlayCircle className="size-4" aria-hidden />
             {tab === 'battle' ? 'Yeni yarış' : 'Yeni imtahan'}

@@ -1,5 +1,5 @@
 .auth-page {
-  --auth-bg: #f7f8fc;
+  --auth-bg: #fbfaf7;
   --auth-surface: #fff;
   --auth-soft: #f0f0fa;
   --auth-text: #1d2338;
@@ -16,7 +16,7 @@
   background: radial-gradient(ellipse at 10% 35%, rgb(112 91 226 / 7%), transparent 55%), var(--auth-bg);
 }
 .auth-page[data-theme='dark'] {
-  --auth-bg: #10121d;
+  --auth-bg: #0e1020;
   --auth-surface: #1b1e2e;
   --auth-soft: #24283b;
   --auth-text: #eff0fa;
@@ -126,3 +126,25 @@
 .auth-page .auth-google:focus-visible { outline: 2px solid var(--auth-accent); outline-offset: 2px; }
 .auth-page .auth-demo-banner { background: #fff8e6; border-color: #f3dca0; color: #7a5410; }
 .auth-page[data-theme='dark'] .auth-demo-banner { background: #33291a; border-color: #5c4a26; color: #f1d391; }
+
+/* Shared with the landing page: mono eyebrow, highlighter mark, ink logo tile. */
+.auth-eyebrow-mono { font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, monospace; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--auth-accent); }
+.auth-mark { background: linear-gradient(transparent 58%, rgb(255 205 90 / 55%) 58% 92%, transparent 92%); padding: 0 .08em; }
+.auth-page[data-theme='dark'] .auth-mark { background: linear-gradient(transparent 58%, rgb(167 150 255 / 32%) 58% 92%, transparent 92%); }
+.auth-logo-mark { background: var(--auth-text); color: var(--auth-bg); }
+.auth-story .lp-stage { --lp-surface: var(--auth-surface); --lp-sunken: var(--auth-soft); --lp-line: var(--auth-border); --lp-ink: var(--auth-text); --lp-bg: var(--auth-bg); --lp-muted: var(--auth-muted); --lp-faint: var(--auth-muted); --lp-accent: var(--auth-accent); --lp-accent-soft: var(--auth-accent-soft); --lp-accent-ink: #fff; --lp-shadow: var(--auth-shadow); --lp-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, monospace; color: var(--auth-text); }
+/* Primary action matches the landing page: ink at rest, violet on hover. */
+.auth-page .auth-submit { background: var(--auth-text); color: var(--auth-bg); box-shadow: none; }
+.auth-page .auth-submit:hover:not(:disabled) { background: var(--auth-accent); color: #fff; box-shadow: none; }
+.auth-page[data-theme='dark'] .auth-submit:hover:not(:disabled) { color: #14112c; }
+
+/* Form refinements: flatter paper card, ink tab indicator, quieter labels, clear focus. */
+.auth-page .auth-form-card { border-radius: 22px; box-shadow: 0 1px 0 rgb(21 23 42 / 4%), 0 24px 60px -36px rgb(21 23 42 / 30%); }
+.auth-page[data-theme='dark'] .auth-form-card { box-shadow: 0 24px 60px -30px rgb(0 0 0 / 70%); }
+.auth-page .auth-tabs { background: transparent; border: 1px solid var(--auth-border); border-radius: 12px; }
+.auth-page .auth-tabs::before { background: var(--auth-text); box-shadow: none; border-radius: 8px; }
+.auth-page .auth-tab-active { color: var(--auth-bg); }
+.auth-page label { font-size: 13px; font-weight: 600; color: var(--auth-text); }
+.auth-page input:focus { border-color: var(--auth-text); box-shadow: 0 0 0 4px var(--auth-accent-soft); }
+.auth-page .auth-google { border-radius: 10px; font-weight: 600; }
+.auth-page .auth-form-footer { line-height: 1.6; }

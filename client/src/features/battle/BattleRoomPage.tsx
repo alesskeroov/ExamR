@@ -55,7 +55,7 @@ export function BattleRoomPage() {
     return (
       <Centered>
         <Alert title="Otağa qoşulmaq mümkün olmadı">{room.fatal}</Alert>
-        <Link to="/battle" className="mt-4 inline-flex h-10 items-center rounded-lg bg-indigo-600 px-4 font-medium text-white hover:bg-indigo-700">
+        <Link to="/battle" className="mt-4 inline-flex h-10 items-center rounded-lg btn-primary px-4 font-medium">
           Battle səhifəsinə qayıt
         </Link>
       </Centered>
@@ -443,7 +443,7 @@ function FinalResults({ state, myId }: { state: BattleState; myId: string }) {
       <Leaderboard participants={state.participants} myId={myId} />
 
       <div className="flex flex-wrap justify-center gap-3">
-        <Link to="/battle" className="inline-flex h-10 items-center rounded-lg bg-indigo-600 px-4 font-medium text-white hover:bg-indigo-700">
+        <Link to="/battle" className="inline-flex h-10 items-center rounded-lg btn-primary px-4 font-medium">
           Yeni yarış
         </Link>
         <Link to="/exams?tab=battle" className="inline-flex h-10 items-center rounded-lg border border-slate-300 bg-white px-4 font-medium text-slate-700 hover:bg-slate-50">

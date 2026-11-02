@@ -79,7 +79,7 @@ export function ExamSetupPage() {
             tone="info"
             title="Davam edən imtahanınız var"
             action={
-              <Link to={`/exams/${active.data.id}`} className="inline-flex h-9 items-center rounded-lg bg-indigo-600 px-4 font-medium text-white hover:bg-indigo-700">
+              <Link to={`/exams/${active.data.id}`} className="inline-flex h-9 items-center rounded-lg btn-primary px-4 font-medium">
                 Davam et
               </Link>
             }

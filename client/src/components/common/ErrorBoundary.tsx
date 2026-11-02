@@ -18,7 +18,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { failed: 
       <div role="alert" className="flex min-h-dvh flex-col items-center justify-center gap-3 px-4 text-center">
         <p className="text-lg font-semibold">Gözlənilməz xəta baş verdi</p>
         <p className="max-w-sm text-slate-600">Səhifəni yeniləyin. Problem təkrarlansa, bir az sonra yenidən cəhd edin.</p>
-        <button type="button" onClick={() => window.location.reload()} className="mt-2 h-10 rounded-xl bg-indigo-600 px-4 text-sm font-medium text-white hover:bg-indigo-700">
+        <button type="button" onClick={() => window.location.reload()} className="mt-2 h-10 rounded-xl btn-primary px-4 text-sm font-medium">
           Səhifəni yenilə
         </button>
       </div>

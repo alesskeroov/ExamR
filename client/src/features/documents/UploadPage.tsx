@@ -117,7 +117,7 @@ function RecentDocuments({ admin, selectedId, onSelect, onDeleted }: { admin: bo
           const zone = document.getElementById('document-upload')
           zone?.scrollIntoView({ behavior: 'smooth', block: 'start' })
           zone?.querySelector<HTMLInputElement>('input[type="file"]:not(:disabled)')?.click()
-        }} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700">Yeni sənəd yüklə</button>
+        }} className="rounded-lg btn-primary px-4 py-2 text-sm font-medium transition-colors">Yeni sənəd yüklə</button>
       </div>
       {remove.error && <div className="mb-3"><Alert title={remove.error.message} /></div>}
       {isPending ? (
