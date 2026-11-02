@@ -44,11 +44,19 @@ public static class AuthenticationSetup
                 options.ClaimsIdentity.UserIdClaimType = JwtClaims.UserId;
                 options.ClaimsIdentity.UserNameClaimType = JwtClaims.Name;
                 options.ClaimsIdentity.RoleClaimType = JwtClaims.Role;
+                // Email confirmation links live 24 hours; password-reset tokens keep the default 30-minute provider.
+                options.Tokens.EmailConfirmationTokenProvider = EmailConfirmationTokenProvider.ProviderName;
             })
             .AddRoles<IdentityRole<Guid>>()
             .AddEntityFrameworkStores<AppDbContext>()
             .AddSignInManager()
-            .AddDefaultTokenProviders();
+            .AddDefaultTokenProviders()
+            .AddTokenProvider<EmailConfirmationTokenProvider>(EmailConfirmationTokenProvider.ProviderName);
+        services.Configure<EmailConfirmationTokenProviderOptions>(options =>
+        {
+            options.Name = EmailConfirmationTokenProvider.ProviderName;
+            options.TokenLifespan = TimeSpan.FromHours(24);
+        });
 
         // Password reset links are valid for 30 minutes and single-use (the security stamp changes on reset).
         services.Configure<DataProtectionTokenProviderOptions>(options => options.TokenLifespan = TimeSpan.FromMinutes(30));
@@ -195,4 +203,16 @@ public static class AuthenticationSetup
         RateLimitPartition.GetFixedWindowLimiter(
             context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions { PermitLimit = permits, Window = window });
+}
+
+public sealed class EmailConfirmationTokenProviderOptions : DataProtectionTokenProviderOptions;
+
+/// <summary>Data-protection tokens with their own lifespan, used only for email confirmation.</summary>
+public sealed class EmailConfirmationTokenProvider(
+    Microsoft.AspNetCore.DataProtection.IDataProtectionProvider dataProtectionProvider,
+    Microsoft.Extensions.Options.IOptions<EmailConfirmationTokenProviderOptions> options,
+    ILogger<DataProtectorTokenProvider<AppUser>> logger)
+    : DataProtectorTokenProvider<AppUser>(dataProtectionProvider, options, logger)
+{
+    public const string ProviderName = "EmailConfirmation";
 }

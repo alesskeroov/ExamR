@@ -4,6 +4,7 @@ import { GroupDetailPage, GroupsAdminPage, GroupsPage } from '../features/groups
 import { StudyPage } from '../features/study/StudyPage'
 import { createBrowserRouter } from 'react-router'
 import { ResetPasswordPage } from '../features/auth/ResetPasswordPage'
+import { VerifyEmailPage } from '../features/auth/VerifyEmailPage'
 import { BattleHomePage } from '../features/battle/BattleHomePage'
 import { BattleRoomPage } from '../features/battle/BattleRoomPage'
 import { MyRoomsPage } from '../features/battle/MyRoomsPage'
@@ -56,6 +57,11 @@ export const router = createBrowserRouter([
     // Public: the API redirects browser navigations here (?code=404|403|500) instead of returning raw JSON.
     path: 'error',
     element: <StatusPage />,
+  },
+  {
+    // Public: opened from the verification / welcome email.
+    path: 'verify-email',
+    element: <VerifyEmailPage />,
   },
   {
     // Public: opened from the password-reset email.

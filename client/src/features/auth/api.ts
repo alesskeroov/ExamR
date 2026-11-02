@@ -11,6 +11,7 @@ export interface User {
   avatarUrl: string | null
   roles: string[]
   googleLinked?: boolean
+  emailConfirmed?: boolean
 }
 
 export function normalizeUser(user: User): User {
@@ -97,5 +98,19 @@ export function useForgotPassword() {
 export function useResetPassword() {
   return useMutation({
     mutationFn: (request: ResetPasswordRequest) => api.post<void>('/auth/reset-password', request),
+  })
+}
+
+export function useResendConfirmation() {
+  return useMutation({
+    mutationFn: (email: string) => api.post<{ message: string }>('/auth/resend-confirmation', { email }),
+  })
+}
+
+export function useConfirmEmail() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: { userId: string; token: string }) => api.post<{ message: string }>('/auth/confirm-email', request),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.me }),
   })
 }

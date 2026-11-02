@@ -31,6 +31,47 @@ public static class AuthEndpoints
             .RequireRateLimiting(AuthenticationSetup.PasswordResetRateLimit);
         group.MapPost("/reset-password", ResetPassword).Validate<ResetPasswordRequest>()
             .RequireRateLimiting(AuthenticationSetup.PasswordResetRateLimit);
+        group.MapPost("/confirm-email", ConfirmEmail).Validate<ConfirmEmailRequest>()
+            .RequireRateLimiting(AuthenticationSetup.PasswordResetRateLimit);
+        group.MapPost("/resend-confirmation", ResendConfirmation).Validate<ForgotPasswordRequest>()
+            .RequireRateLimiting(AuthenticationSetup.PasswordResetRateLimit);
+    }
+
+    private const string ResendMessage = "Əgər bu email ilə təsdiqlənməmiş hesab varsa, təsdiq linki göndərildi.";
+
+    // Links always point at the configured frontend and carry only server-generated, URL-safe values (no open redirect).
+    private static string? FrontendLink(IConfiguration configuration, string path) =>
+        configuration["App:FrontendBaseUrl"] is { Length: > 0 } frontend ? $"{frontend.TrimEnd('/')}{path}" : null;
+
+    private static async Task<string?> VerifyLink(UserManager<AppUser> users, IConfiguration configuration, AppUser user)
+    {
+        var token = await users.GenerateEmailConfirmationTokenAsync(user);
+        return FrontendLink(configuration, $"/verify-email?uid={user.Id}&token={WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token))}");
+    }
+
+    private static async Task<IResult> ConfirmEmail(ConfirmEmailRequest request, UserManager<AppUser> users)
+    {
+        var user = await users.FindByIdAsync(request.UserId.ToString());
+        if (user is null) return InvalidVerifyLink();
+        if (user.EmailConfirmed) return TypedResults.Ok(new MessageResponse("Email artıq təsdiqlənib."));
+        string token;
+        try { token = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(request.Token)); }
+        catch (FormatException) { return InvalidVerifyLink(); }
+        // Validates signature, 24-hour lifetime and the security stamp; a confirmed account rejects reuse above.
+        var result = await users.ConfirmEmailAsync(user, token);
+        return result.Succeeded ? TypedResults.Ok(new MessageResponse("Email ünvanın təsdiqləndi.")) : InvalidVerifyLink();
+    }
+
+    private static IResult InvalidVerifyLink() =>
+        TypedResults.Problem("Təsdiq linki etibarsızdır və ya vaxtı bitib. Yeni link tələb et.", statusCode: StatusCodes.Status400BadRequest);
+
+    // Same answer whether or not the account exists, so the endpoint cannot be used to discover registered emails.
+    private static async Task<IResult> ResendConfirmation(ForgotPasswordRequest request, UserManager<AppUser> users, EmailQueue email, IConfiguration configuration)
+    {
+        var user = await users.FindByEmailAsync(request.Email);
+        if (user is { EmailConfirmed: false } && await VerifyLink(users, configuration, user) is { } link)
+            email.Enqueue(EmailTemplates.Verify(user.Email!, user.DisplayName, link));
+        return TypedResults.Ok(new MessageResponse(ResendMessage));
     }
 
     private static async Task<IResult> Register(RegisterRequest request, UserManager<AppUser> users, TokenService tokens, IConfiguration configuration, EmailQueue email, HttpResponse response)
@@ -53,6 +94,9 @@ public static class AuthEndpoints
 
         await users.AddToRoleAsync(user, Roles.User);
         await ConfiguredAdmins.SendConfirmationAsync(users, configuration, email, user);
+        // Queued, so a provider outage never fails the registration itself.
+        if (FrontendLink(configuration, "/") is { } appUrl)
+            email.Enqueue(EmailTemplates.Welcome(user.Email!, user.DisplayName, appUrl, await VerifyLink(users, configuration, user)));
         return TypedResults.Ok(await IssueToken(user, users, tokens, configuration, response));
     }
 
@@ -72,6 +116,9 @@ public static class AuthEndpoints
         }
 
         if (!result.Succeeded) return InvalidCredentials();
+        // Optional policy (Email:RequireConfirmedEmail); off by default so existing accounts keep working.
+        if (configuration.GetValue<bool>("Email:RequireConfirmedEmail") && !user.EmailConfirmed)
+            return TypedResults.Problem("Email ünvanın hələ təsdiqlənməyib. Gələnlər qutundakı linkə bax və ya yeni link istə.", statusCode: StatusCodes.Status403Forbidden);
         await ConfiguredAdmins.SendConfirmationAsync(users, configuration, email, user);
         return TypedResults.Ok(await IssueToken(user, users, tokens, configuration, response, request.RememberMe));
     }
@@ -142,7 +189,7 @@ public static class AuthEndpoints
         {
             var token = await users.GeneratePasswordResetTokenAsync(user);
             var link = $"{frontend!.TrimEnd('/')}/reset-password?uid={user.Id}&token={WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token))}";
-            email.Enqueue(new EmailMessage(user.Email!, "ExamR — şifrənin yenilənməsi", ResetEmailBody(user.DisplayName, link)));
+            email.Enqueue(EmailTemplates.PasswordReset(user.Email!, user.DisplayName, link));
         }
 
         return TypedResults.Ok(new MessageResponse(ForgotPasswordMessage));
@@ -193,23 +240,9 @@ public static class AuthEndpoints
 
     private static async Task<UserResponse> ToUser(AppUser user, UserManager<AppUser> users) =>
         new(user.Id, user.Email!, user.DisplayName, user.Nickname, AvatarUrl(user), (await users.GetRolesAsync(user)).ToArray(),
-            (await users.GetLoginsAsync(user)).Any(login => login.LoginProvider == GoogleAuthEndpoints.Scheme));
+            (await users.GetLoginsAsync(user)).Any(login => login.LoginProvider == GoogleAuthEndpoints.Scheme), user.EmailConfirmed);
 
     private static string? AvatarUrl(AppUser user) => user.AvatarFileName is null ? null : $"/api/profile/avatar/{user.Id}?v={user.AvatarFileName}";
-
-    private static string ResetEmailBody(string displayName, string link)
-    {
-        var name = WebUtility.HtmlEncode(displayName);
-        var href = WebUtility.HtmlEncode(link);
-        return $"""
-            <div style="font-family:Arial,sans-serif;font-size:15px;color:#0f172a;max-width:480px">
-              <p>Salam, {name}!</p>
-              <p>ExamR hesabınız üçün şifrənin yenilənməsi tələb olundu.</p>
-              <p><a href="{href}" style="display:inline-block;background:#4f46e5;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Yeni şifrə təyin et</a></p>
-              <p style="color:#64748b">Link 30 dəqiqə etibarlıdır və yalnız bir dəfə istifadə oluna bilər. Bu tələbi siz etməmisinizsə, bu emaili nəzərə almayın.</p>
-            </div>
-            """;
-    }
 
     private static IResult IdentityErrors(IdentityResult result) =>
         TypedResults.ValidationProblem(result.Errors
@@ -270,8 +303,17 @@ public sealed class UpdateProfileRequest
     public string Nickname { get; init; } = string.Empty;
 }
 
-public sealed record UserResponse(Guid Id, string Email, string DisplayName, string Nickname, string? AvatarUrl, string[] Roles, bool GoogleLinked = false);
+public sealed record UserResponse(Guid Id, string Email, string DisplayName, string Nickname, string? AvatarUrl, string[] Roles, bool GoogleLinked = false, bool EmailConfirmed = false);
 
 public sealed record AuthResponse(DateTimeOffset ExpiresAt, UserResponse User);
 
 public sealed record MessageResponse(string Message);
+
+public sealed class ConfirmEmailRequest
+{
+    [Required]
+    public Guid UserId { get; init; }
+
+    [Required, MaxLength(2048)]
+    public string Token { get; init; } = string.Empty;
+}

@@ -198,9 +198,13 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
       <h2 className="text-[28px] font-bold leading-tight tracking-[-0.035em]">Şifrəni bərpa et</h2>
 
       {forgot.isSuccess ? (
-        <div role="status" className="mt-4 flex gap-3 rounded-lg bg-emerald-50 px-3 py-3 text-emerald-800">
-          <MailCheck className="mt-0.5 size-5 shrink-0" aria-hidden />
-          <p>{forgot.data.message}</p>
+        <div className="mt-4 flex flex-col gap-4">
+          <div role="status" className="flex gap-3 rounded-lg bg-emerald-50 px-3 py-3 text-emerald-800">
+            <MailCheck className="mt-0.5 size-5 shrink-0" aria-hidden />
+            <p>{forgot.data.message} Spam qovluğunu da yoxla.</p>
+          </div>
+          <ResendButton onResend={() => forgot.mutate(email)} busy={forgot.isPending} />
+          <button type="button" onClick={() => forgot.reset()} className="auth-link text-sm font-medium">Başqa email daxil et</button>
         </div>
       ) : (
         <form
@@ -251,4 +255,17 @@ function GoogleLogo() {
     <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z" />
     <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" />
   </svg>
+}
+
+/** Resend with a 60-second cooldown so a double click cannot flood the mailbox (the API rate-limits as well). */
+export function ResendButton({ onResend, busy }: { onResend: () => void; busy: boolean }) {
+  const [left, setLeft] = useState(60)
+  useEffect(() => {
+    if (left <= 0) return
+    const timer = setTimeout(() => setLeft(s => s - 1), 1000)
+    return () => clearTimeout(timer)
+  }, [left])
+  return <Button variant="secondary" className="w-full" disabled={left > 0} loading={busy} onClick={() => { onResend(); setLeft(60) }}>
+    {left > 0 ? `Yenidən göndər (${left} san)` : 'Linki yenidən göndər'}
+  </Button>
 }

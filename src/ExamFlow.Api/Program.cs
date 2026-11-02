@@ -50,7 +50,13 @@ if (builder.Configuration["DataProtection:KeysPath"] is { Length: > 0 } keysPath
 else if (!builder.Environment.IsDevelopment())
     dataProtection.PersistKeysToDbContext<AppDbContext>();
 builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection(SmtpOptions.Section));
+builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.Section));
 builder.Services.AddSingleton<EmailQueue>();
+// Brevo (HTTPS) in production — Render Free blocks outbound SMTP; SMTP / .eml pickup stays for local development.
+if (string.Equals(builder.Configuration["Email:Provider"], "Brevo", StringComparison.OrdinalIgnoreCase))
+    builder.Services.AddHttpClient<IEmailTransport, BrevoTransport>(client => client.Timeout = TimeSpan.FromSeconds(20));
+else
+    builder.Services.AddSingleton<IEmailTransport, SmtpTransport>();
 builder.Services.AddHostedService<SmtpEmailService>();
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();

@@ -30,7 +30,7 @@ export function ResetPasswordPage() {
 
   return (
     <AuthShell>
-      <h2 className="text-2xl font-semibold tracking-tight">Yeni şifrə təyin et</h2>
+      <h2 className="text-[28px] font-bold leading-tight tracking-[-0.035em]">Yeni şifrə təyin et</h2>
 
       {!userId || !token ? (
         <p role="alert" className="mt-4 rounded-lg bg-rose-50 px-3 py-2 text-rose-700">
@@ -42,7 +42,7 @@ export function ResetPasswordPage() {
             <CheckCircle2 className="mt-0.5 size-5 shrink-0" aria-hidden />
             Şifrə yeniləndi. Bütün cihazlardan çıxış edildi — yeni şifrə ilə daxil olun.
           </p>
-          <Link to="/" className="inline-flex h-10 items-center justify-center rounded-lg bg-indigo-600 font-medium text-white hover:bg-indigo-700">
+          <Link to="/?auth=login" className="auth-submit inline-flex h-[46px] items-center justify-center font-semibold">
             Girişə keç
           </Link>
         </div>
@@ -70,7 +70,7 @@ export function ResetPasswordPage() {
           {errors.general && (
             <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-rose-700">
               {errors.general}{' '}
-              <Link to="/" className="font-semibold underline">
+              <Link to="/?auth=login" className="font-semibold underline">
                 Yeni link tələb et
               </Link>
             </p>

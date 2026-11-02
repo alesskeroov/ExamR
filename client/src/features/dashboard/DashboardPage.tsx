@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { formatDate } from '../../lib/format'
 import { cn } from '../../lib/utils'
-import { useCurrentUser } from '../auth/api'
+import { useCurrentUser, useResendConfirmation } from '../auth/api'
 import { useMyDocuments } from '../documents/api'
 import { useActiveExam, type ExamSummary } from '../exams/api'
 import { sourceName } from '../exams/examSource'
@@ -41,6 +41,8 @@ export function DashboardPage() {
     </header>
 
     <div className="grid gap-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:gap-14">
+    {user && user.emailConfirmed === false && <VerifyNotice email={user.email} />}
+
     <section className={cn('border-y border-[var(--app-border)] py-7 sm:py-8 lg:self-start', !loading && !active.data && completed.length === 0 && 'lg:col-span-2')} aria-label="Növbəti addım">
       {loading ? <Skeleton lines={3} /> : active.data
         ? <NextStep label="Yarımçıq imtahan" title="Başladığın imtahan hələ bitməyib." body="Vaxt işləməyə davam edir — qaldığın sualdan davam et.">
@@ -151,4 +153,14 @@ export function SystemStatus() {
 function StatusItem({ icon, label, value, tone }: { icon: ReactNode; label: string; value: string; tone: Tone }) {
   return <span className="flex items-center gap-2"><span className="ds-muted">{icon}</span><span className="ds-muted">{label}</span>
     <span className="flex items-center gap-1.5 font-semibold"><span className={cn('size-2 rounded-full', toneStyles[tone])} aria-hidden />{value}</span></span>
+}
+
+/** Quiet reminder for unconfirmed addresses; the welcome email already contains the link. */
+function VerifyNotice({ email }: { email: string }) {
+  const resend = useResendConfirmation()
+  return <div className="ds-sunken mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl px-4 py-3 text-sm">
+    <p><span className="font-semibold">Email ünvanını təsdiqlə.</span> <span className="ds-muted">Link {email} ünvanına göndərilib.</span></p>
+    {resend.isSuccess ? <span className="ds-good font-semibold">Yeni link göndərildi</span>
+      : <button type="button" disabled={resend.isPending} onClick={() => resend.mutate(email)} className="ds-link disabled:opacity-60">{resend.isPending ? 'Göndərilir…' : 'Linki yenidən göndər'}</button>}
+  </div>
 }
