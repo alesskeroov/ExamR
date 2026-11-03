@@ -4,11 +4,11 @@
 @theme {
   --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
   --color-slate-50: #f6f4ee;
-  --color-indigo-50: #eeebff;
-  --color-indigo-100: #e4dfff;
-  --color-indigo-500: #7c65e9;
-  --color-indigo-600: #6750dd;
-  --color-indigo-700: #5740ca;
+  --color-indigo-50: #eef0fb;
+  --color-indigo-100: #e2e6f8;
+  --color-indigo-500: #5866d6;
+  --color-indigo-600: #4652c6;
+  --color-indigo-700: #3a45ab;
 }
 
 @layer base {
@@ -23,11 +23,16 @@
   :focus-visible {
     @apply outline-2 outline-offset-2 outline-indigo-500;
   }
+
+  /* Tailwind v4 dropped the pointer cursor on buttons; clickable controls should still look clickable. */
+  button:not(:disabled), [role='button']:not([aria-disabled='true']), summary, label[for] {
+    cursor: pointer;
+  }
 }
 
 /* Shared workspace surfaces; status and primary-action colors retain their meaning. */
-:root { --app-surface: #fff; --app-border: #e6e3db; --app-background: #fbfaf7; --app-foreground: #15172a; --app-ink: #15172a; --app-on-ink: #fbfaf7; --app-accent: #5b45d6; --app-sunken: #f1efe9; --app-muted: #5f6478; --app-faint: #8d91a3; --app-good: #13845f; --app-bad: #c2415b; --app-mark: rgb(255 205 90 / 55%); }
-:root[data-theme='dark'] { --app-surface: #171a2c; --app-border: #272b45; --app-background: #0e1020; --app-foreground: #eef0fb; --app-ink: #eef0fb; --app-on-ink: #0e1020; --app-accent: #a796ff; --app-sunken: #141730; --app-muted: #a3a9c2; --app-faint: #6f7592; --app-good: #5fd3a7; --app-bad: #ff8aa3; --app-mark: rgb(167 150 255 / 30%); }
+:root { --app-surface: #fff; --app-border: #e6e3db; --app-background: #fbfaf7; --app-foreground: #15172a; --app-ink: #15172a; --app-on-ink: #fbfaf7; --app-accent: #4652c6; --app-sunken: #f1efe9; --app-muted: #5f6478; --app-faint: #8d91a3; --app-good: #13845f; --app-bad: #c2415b; --app-mark: rgb(255 205 90 / 55%); }
+:root[data-theme='dark'] { --app-surface: #171a2c; --app-border: #272b45; --app-background: #0e1020; --app-foreground: #eef0fb; --app-ink: #eef0fb; --app-on-ink: #0e1020; --app-accent: #a3adff; --app-sunken: #141730; --app-muted: #a3a9c2; --app-faint: #6f7592; --app-good: #5fd3a7; --app-bad: #ff8aa3; --app-mark: rgb(163 173 255 / 30%); }
 html { background: var(--app-background); color: var(--app-foreground); }
 /* Long unbroken strings from parsed PDFs (formulas, URLs) wrap instead of widening the layout. */
 body { background: var(--app-background); overflow-wrap: anywhere; }
@@ -39,17 +44,17 @@ body { background: var(--app-background); overflow-wrap: anywhere; }
 .app-content h1 { letter-spacing: -.035em; }
 .app-content :where(.rounded-xl.border.bg-white) { border-color: var(--app-border); border-radius: 14px; box-shadow: 0 1px 0 rgb(21 23 42 / 4%), 0 18px 50px -34px rgb(21 23 42 / 28%); }
 .app-content :where(input:not([type='checkbox']):not([type='radio']), select, textarea) { border-radius: 10px; }
-.app-theme-toggle:hover { border-color: #7c65e9; }
+.app-theme-toggle:hover { border-color: #5866d6; }
 :root[data-theme='dark'] .app-content :where(.rounded-xl.border.bg-white) { box-shadow: 0 8px 28px -20px rgb(0 0 0 / 45%); }
 :root[data-theme="dark"] [class~="bg-amber-100"] { background-color: #433820; }
 :root[data-theme="dark"] [class~="bg-amber-50"] { background-color: #342d1e; }
 :root[data-theme="dark"] [class~="bg-amber-50/50"] { background-color: color-mix(in srgb, #342d1e 50%, transparent); }
 :root[data-theme="dark"] [class~="bg-emerald-50"] { background-color: #17352e; }
 :root[data-theme="dark"] [class~="bg-emerald-50/60"] { background-color: color-mix(in srgb, #17352e 60%, transparent); }
-:root[data-theme="dark"] [class~="bg-indigo-100"] { background-color: #352b58; }
-:root[data-theme="dark"] [class~="bg-indigo-50"] { background-color: #292440; }
-:root[data-theme="dark"] [class~="bg-indigo-50/50"] { background-color: color-mix(in srgb, #292440 50%, transparent); }
-:root[data-theme="dark"] [class~="bg-indigo-50/60"] { background-color: color-mix(in srgb, #292440 60%, transparent); }
+:root[data-theme="dark"] [class~="bg-indigo-100"] { background-color: #2c3358; }
+:root[data-theme="dark"] [class~="bg-indigo-50"] { background-color: #22273f; }
+:root[data-theme="dark"] [class~="bg-indigo-50/50"] { background-color: color-mix(in srgb, #22273f 50%, transparent); }
+:root[data-theme="dark"] [class~="bg-indigo-50/60"] { background-color: color-mix(in srgb, #22273f 60%, transparent); }
 :root[data-theme="dark"] [class~="bg-rose-50"] { background-color: #392330; }
 :root[data-theme="dark"] [class~="bg-rose-50/50"] { background-color: color-mix(in srgb, #392330 50%, transparent); }
 :root[data-theme="dark"] [class~="bg-rose-50/60"] { background-color: color-mix(in srgb, #392330 60%, transparent); }
@@ -112,7 +117,7 @@ body { background: var(--app-background); overflow-wrap: anywhere; }
 /* Full-screen loader: breathing logo + sliding progress bar instead of a spinner. */
 .app-loader-logo { animation: app-breathe 1.6s ease-in-out infinite; }
 .app-loader-bar { position: relative; }
-.app-loader-bar::after { content: ''; position: absolute; inset: 0; width: 40%; border-radius: inherit; background: #6750dd; animation: app-slide 1.2s cubic-bezier(.65, 0, .35, 1) infinite; }
+.app-loader-bar::after { content: ''; position: absolute; inset: 0; width: 40%; border-radius: inherit; background: #4652c6; animation: app-slide 1.2s cubic-bezier(.65, 0, .35, 1) infinite; }
 @keyframes app-breathe { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(.92); opacity: .7; } }
 @keyframes app-slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
 @media (prefers-reduced-motion: reduce) { .app-loader-logo, .app-loader-bar::after { animation: none; } }

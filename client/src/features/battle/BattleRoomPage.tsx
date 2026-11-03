@@ -167,7 +167,7 @@ function Lobby({ state, room, isHost, myId }: { state: BattleState; room: Room; 
 
   return (
     <>
-      <section className="rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 p-6 text-center text-white shadow-sm sm:p-8">
+      <section className="rounded-2xl bg-[#1d2140] p-6 text-center text-white shadow-sm sm:p-8">
         <p className="text-indigo-100">Otaq kodu</p>
         <p className="mt-1 font-mono text-5xl font-bold tracking-[0.25em] sm:text-6xl">{state.code}</p>
         <button
@@ -420,7 +420,7 @@ function FinalResults({ state, myId }: { state: BattleState; myId: string }) {
 
   return (
     <>
-      <section className="rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 p-6 text-white shadow-sm">
+      <section className="rounded-2xl bg-[#1d2140] p-6 text-white shadow-sm">
         <h1 className="text-center text-2xl font-bold">Yarış bitdi!</h1>
         {mine && (
           <p className="mt-1 text-center text-indigo-100">

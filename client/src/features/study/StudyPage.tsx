@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
-import { ArrowRight, BookOpen, Check, ListChecks, Sparkles, X } from 'lucide-react'
+import { ArrowRight, BookOpen, Check, ListChecks, X } from 'lucide-react'
 import { Alert } from '../../components/common/Alert'
 import { Button } from '../../components/common/Button'
 import { EmptyState } from '../../components/common/EmptyState'
@@ -16,7 +16,7 @@ export function StudyPage() {
   const document = documents.data?.find(d => d.id === documentId)
   return <div className="mx-auto max-w-4xl space-y-6">
     <header>
-      <h1 className="flex items-center gap-2 text-2xl font-semibold"><Sparkles className="size-6 text-indigo-600" />Öyrənmə köməkçisi</h1>
+      <h1 className="flex items-center gap-2 text-2xl font-semibold"><BookOpen className="size-6 text-indigo-600" />Öyrənmə köməkçisi</h1>
       <p className="mt-2 text-slate-500">Sənədindəki açıq suallarla öyrən və variantlı məşqlərlə biliklərini yoxla.</p>
     </header>
     <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">

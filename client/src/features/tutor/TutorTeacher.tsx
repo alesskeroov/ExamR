@@ -1,4 +1,4 @@
-import { CheckCircle2, ChevronDown, CircleHelp, Eye, Lightbulb, ListChecks, ListOrdered, Sparkles, StepForward } from 'lucide-react'
+import { CheckCircle2, ChevronDown, CircleHelp, Eye, Lightbulb, ListChecks, ListOrdered, Feather, Play, StepForward } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { cn } from '../../lib/utils'
 import type { TutorAction, TutorDifficulty, TutorTopic } from './api'
@@ -75,12 +75,12 @@ export function TutorTeacher({ topics, loading, current, difficulty, busy, onDif
       {current && (
         <div className="-mx-1 mt-2 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none]" role="toolbar" aria-label="Müəllim əməliyyatları">
           {current.status === 'NotStarted'
-            ? <Chip icon={<Sparkles />} label="Öyrənməyə başla" primary disabled={busy} onClick={() => onAction('Teach', current.key)} />
+            ? <Chip icon={<Play />} label="Öyrənməyə başla" primary disabled={busy} onClick={() => onAction('Teach', current.key)} />
             : <Chip icon={<StepForward />} label={current.currentStep + 1 >= current.steps ? 'Növbəti mövzu' : 'Növbəti hissə'} disabled={busy} onClick={() => onAction('Next', current.key)} />}
           <Chip icon={<CircleHelp />} label="Məni yoxla" disabled={busy} onClick={() => onAction('Quiz', current.key)} />
           <Chip icon={<ListChecks />} label="Variantlı test" disabled={busy} onClick={() => onAction('MultipleChoice', current.key)} />
           {awaiting && <Chip icon={<Lightbulb />} label="İpucu" disabled={busy} onClick={() => onAction('Hint', current.key)} />}
-          <Chip icon={<Sparkles />} label="Sadə izah et" disabled={busy} onClick={() => onAction('Simplify', current.key)} />
+          <Chip icon={<Feather />} label="Sadə izah et" disabled={busy} onClick={() => onAction('Simplify', current.key)} />
           {awaiting && <Chip icon={<Eye />} label="Doğru cavab" disabled={busy} onClick={() => onAction('Reveal', current.key)} />}
         </div>
       )}

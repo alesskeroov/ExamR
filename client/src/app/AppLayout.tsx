@@ -1,4 +1,4 @@
-import { BotMessageSquare, GraduationCap, ShieldCheck, Sparkles, DoorOpen, FileUp, History, LayoutDashboard, Library, ListChecks, LogOut, Menu, Swords, Target, Users, X, type LucideIcon } from 'lucide-react'
+import { BookOpen, GraduationCap, MessagesSquare, ShieldCheck, DoorOpen, FileUp, History, LayoutDashboard, Library, ListChecks, LogOut, Menu, Swords, Target, Users, X, type LucideIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useSearchParams } from 'react-router'
 import { useCurrentUser, useLogout } from '../features/auth/api'
@@ -11,9 +11,9 @@ const navItems: { to: string; label: string; icon: LucideIcon; group: string; en
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, group: '', end: true },
   { to: '/upload', label: 'Sənəd yüklə', icon: FileUp, group: 'Hazırlıq' },
   { to: '/questions', label: 'Sual bankı', icon: Library, group: 'Hazırlıq' },
-  { to: '/study', label: 'Öyrənmə köməkçisi', icon: Sparkles, group: 'Hazırlıq' },
+  { to: '/study', label: 'Öyrənmə köməkçisi', icon: BookOpen, group: 'Hazırlıq' },
   { to: '/focus', label: 'Focus Mode', icon: Target, group: 'Hazırlıq' },
-  { to: '/tutor', label: 'AI Tutor', icon: BotMessageSquare, group: 'Hazırlıq', badge: 'Demo' },
+  { to: '/tutor', label: 'AI Tutor', icon: MessagesSquare, group: 'Hazırlıq', badge: 'Demo' },
   { to: '/exams/new', label: 'İmtahana başla', icon: ListChecks, group: 'İmtahan' },
   { to: '/exams', label: 'Tarixçə', icon: History, group: 'İmtahan', end: true },
   { to: '/battle', label: 'Battle', icon: Swords, group: 'Birlikdə', end: true },
