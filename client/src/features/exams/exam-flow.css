@@ -29,21 +29,9 @@
 .exam-session .exam-question-enter { animation: exam-question-in 140ms ease-out; }
 @keyframes exam-question-in { from { opacity: .4; } }
 
-/* Notification panel: anchored under the bell on wide screens, a full-width sheet under the header on phones. */
-.exam-session .exam-notify { position: relative; }
-.exam-session .exam-notify-panel {
-  position: absolute; right: 0; top: calc(100% + 8px); z-index: 40; width: min(22rem, calc(100vw - 1.5rem));
-  border: 1px solid var(--app-border); border-radius: 12px; background: var(--app-surface);
-  box-shadow: 0 16px 40px -20px rgb(21 23 42 / 35%); animation: exam-pop 170ms ease-out; transform-origin: top right;
-}
 @keyframes exam-pop { from { opacity: 0; transform: translateY(-4px) scale(.98); } }
-@media (max-width: 639px) {
-  .exam-session .exam-notify { position: static; }
-  .exam-session .exam-notify-panel { position: fixed; left: .75rem; right: .75rem; top: 4.25rem; width: auto; }
-}
-
 .exam-session .exam-dialog[open] { animation: exam-pop 170ms ease-out; }
 @media (prefers-reduced-motion: reduce) {
-  .exam-session .exam-question-enter, .exam-session .exam-notify-panel, .exam-session .exam-dialog[open] { animation: none; }
+  .exam-session .exam-question-enter, .exam-session .exam-dialog[open] { animation: none; }
 }
 @media (min-width: 1024px) { .exam-session .exam-controls { background: transparent; padding-bottom: 0; } }

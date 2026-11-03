@@ -7,7 +7,7 @@ import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-r
 import { Alert } from '../../components/common/Alert'
 import { Button } from '../../components/common/Button'
 import { cn } from '../../lib/utils'
-import { ExamNotifications } from './ExamNotifications'
+import { NotificationBell } from '../friends/NotificationBell'
 import {
   answerMutationKey,
   useAnswerQuestion,
@@ -92,7 +92,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (confirmOpen || event.ctrlKey || event.metaKey || event.altKey) return
-      if (event.target instanceof HTMLElement && event.target.closest('input, textarea, select, .exam-notify')) return
+      if (event.target instanceof HTMLElement && event.target.closest('input, textarea, select, .notify-root')) return
       if (event.key === 'ArrowLeft') goTo(index - 1)
       else if (event.key === 'ArrowRight') goTo(index + 1)
       else {
@@ -141,7 +141,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
           </div>
           <ExamTimer expiresAt={session.expiresAt} serverNow={session.serverNow} onExpire={submit} />
           <FullscreenToggle />
-          <ExamNotifications />
+          <NotificationBell safe />
           <Button variant="secondary" onClick={() => setConfirmOpen(true)} loading={finish.isPending} className="h-10 shrink-0 px-3 text-sm sm:px-4">
             <Flag className="hidden size-4 sm:block" aria-hidden />
             Bitir

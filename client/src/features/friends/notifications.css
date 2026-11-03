@@ -1,0 +1,15 @@
+/* Notification panel: anchored under the bell on wide screens, a full-width sheet under the header on phones. */
+.notify-panel {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 50; width: min(24rem, calc(100vw - 1.5rem));
+  border: 1px solid var(--app-border, #e6e3db); border-radius: 12px; background: var(--app-surface, #fff);
+  box-shadow: 0 16px 40px -20px rgb(21 23 42 / 35%);
+  animation: notify-pop 170ms ease-out; transform-origin: top right;
+}
+.notify-list { max-height: min(60dvh, 26rem); overflow-y: auto; overscroll-behavior: contain; }
+@keyframes notify-pop { from { opacity: 0; transform: translateY(-4px) scale(.98); } }
+@media (max-width: 639px) {
+  .notify-root { position: static !important; }
+  .notify-panel { position: fixed; left: .75rem; right: .75rem; top: var(--notify-sheet-top, 4rem); width: auto; }
+  .notify-list { max-height: min(55dvh, 26rem); }
+}
+@media (prefers-reduced-motion: reduce) { .notify-panel { animation: none; } }

@@ -99,7 +99,7 @@ export function BattleRoomPage() {
             </p>
           </div>
           <ConnectionBadge status={room.status} />
-          <NotificationBell />
+          <NotificationBell safe />
           <Button variant="ghost" className="h-9 px-2 sm:px-3" onClick={leave}>
             <LogOut className="size-4" aria-hidden />
             <span className="hidden sm:inline">Çıx</span>

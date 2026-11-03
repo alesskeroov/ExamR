@@ -74,56 +74,83 @@ public static class EmailTemplates
         (string Term, string Text)[] list, (string Label, string Url) cta, (string Label, string Url, string Text)? footnote, string? ignoreNote = null)
     {
         static string E(string value) => WebUtility.HtmlEncode(value);
+        const string Ink = "#15172a", Muted = "#5f6478", Faint = "#8d91a3", Line = "#e8e9ef", Accent = "#4652c6", Page = "#f4f5f8";
         // Paragraphs are server-written; the only dynamic piece inside them is the name, encoded by the callers below.
-        var body = string.Concat(paragraphs.Select(p => $"""<p style="margin:0 0 14px;font-size:15px;line-height:24px;color:#3d4256">{p}</p>"""));
+        var body = string.Concat(paragraphs.Select(p => $"""<p class="muted" style="margin:0 0 14px;font-size:15px;line-height:24px;color:{Muted}">{p}</p>"""));
+        // Feature rows: a tinted check badge (text, not SVG — Gmail strips SVG) next to a bold term and its description.
         var rows = string.Concat(list.Select(item => $"""
-            <tr><td style="padding:10px 0;border-top:1px solid #e6e3db;font-size:14px;line-height:20px;color:#15172a"><strong>{E(item.Term)}</strong> <span style="color:#6a6f82">— {E(item.Text)}</span></td></tr>
+            <tr>
+              <td width="34" valign="top" style="padding:0 0 14px">
+                <div class="tint" style="width:24px;height:24px;border-radius:12px;background:#eef0fb;color:{Accent};font-size:13px;line-height:24px;text-align:center;font-weight:700">&#10003;</div>
+              </td>
+              <td valign="top" style="padding:2px 0 14px;font-size:14px;line-height:20px;color:{Ink}">
+                <strong class="ink" style="color:{Ink}">{E(item.Term)}</strong><br><span class="muted" style="color:{Muted}">{E(item.Text)}</span>
+              </td>
+            </tr>
             """));
-        var listHtml = list.Length == 0 ? "" : $"""<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:6px 0 22px;border-bottom:1px solid #e6e3db">{rows}</table>""";
+        var listHtml = list.Length == 0 ? "" : $"""<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 18px">{rows}</table>""";
         var foot = footnote is { } f ? $"""
-            <tr><td class="card" style="padding:20px 32px 26px;border-top:1px solid #e6e3db">
-              <p style="margin:0 0 10px;font-size:13px;line-height:20px;color:#6a6f82">{E(f.Text)}</p>
-              <a href="{E(f.Url)}" style="font-size:14px;font-weight:600;color:#15172a;text-decoration:underline">{E(f.Label)} →</a>
+            <tr><td class="panel" style="padding:16px 18px;background:#f7f8fb;border-radius:10px">
+              <p class="muted" style="margin:0 0 8px;font-size:13px;line-height:20px;color:{Muted}">{E(f.Text)}</p>
+              <a href="{E(f.Url)}" style="font-size:14px;font-weight:600;color:{Accent};text-decoration:none">{E(f.Label)} &rarr;</a>
             </td></tr>
+            <tr><td style="height:20px;line-height:20px">&nbsp;</td></tr>
             """ : "";
-        var ignore = ignoreNote is null ? "" : $"""<p style="margin:22px 0 0;font-size:13px;line-height:20px;color:#8d91a3">{E(ignoreNote)}</p>""";
+        var ignore = ignoreNote is null ? "" : $"""<p class="faint" style="margin:20px 0 0;font-size:13px;line-height:20px;color:{Faint}">{E(ignoreNote)}</p>""";
+        var year = DateTime.UtcNow.Year;
 
         var html = $$"""
             <!doctype html>
             <html lang="az"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
             <meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><title>{{E(subject)}}</title>
             <style>
+              body { -webkit-text-size-adjust:100%; }
+              a.cta:hover { background:#3a45ab !important; }
               @media (prefers-color-scheme: dark) {
-                .bg { background:#0e1020 !important; } .card { background:#171a2c !important; border-color:#272b45 !important; }
-                .ink, .card p, .card td { color:#eef0fb !important; } .btn { background:#eef0fb !important; } .btn a { color:#0e1020 !important; }
+                body, .bg { background:#0e1020 !important; } .card { background:#171a2c !important; border-color:#272b45 !important; }
+                .ink { color:#eef0fb !important; } .muted { color:#a3a9c2 !important; } .faint { color:#6f7592 !important; }
+                .panel { background:#141730 !important; } .tint { background:#22273f !important; color:#a3adff !important; }
+                .rule { border-color:#272b45 !important; } .mark { background:#eef0fb !important; color:#0e1020 !important; }
               }
-              @media (max-width: 600px) { .card { padding-left:22px !important; padding-right:22px !important; } }
+              @media (max-width: 600px) {
+                .card-pad { padding:28px 22px 24px !important; } .rule { padding-left:22px !important; padding-right:22px !important; }
+                .cta { display:block !important; text-align:center !important; }
+                h1 { font-size:22px !important; line-height:28px !important; }
+              }
             </style></head>
-            <body style="margin:0;padding:0;background:#fbfaf7">
-            <div style="display:none;max-height:0;overflow:hidden;opacity:0">{{E(preheader)}}</div>
-            <table role="presentation" class="bg" width="100%" cellpadding="0" cellspacing="0" style="background:#fbfaf7">
-              <tr><td align="center" style="padding:32px 12px">
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
-                  <tr><td style="padding:0 4px 18px">
+            <body style="margin:0;padding:0;background:{{Page}}">
+            <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all">{{E(preheader)}}&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;</div>
+            <table role="presentation" class="bg" width="100%" cellpadding="0" cellspacing="0" style="background:{{Page}}">
+              <tr><td align="center" style="padding:36px 12px 28px">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+                  <tr><td style="padding:0 2px 20px">
                     <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-                      <td style="width:26px;height:26px;background:#15172a;border-radius:7px;text-align:center;vertical-align:middle;font-size:13px;line-height:26px;color:#fbfaf7;font-weight:700">≡</td>
-                      <td class="ink" style="padding-left:9px;font-size:17px;font-weight:700;letter-spacing:-0.3px;color:#15172a">ExamR</td>
+                      <td class="mark" style="width:30px;height:30px;background:{{Ink}};border-radius:8px;text-align:center;vertical-align:middle;font-size:15px;line-height:30px;color:#ffffff;font-weight:700">&#8801;</td>
+                      <td class="ink" style="padding-left:10px;font-size:18px;font-weight:700;letter-spacing:-0.3px;color:{{Ink}}">ExamR</td>
                     </tr></table>
                   </td></tr>
-                  <tr><td class="card" style="background:#ffffff;border:1px solid #e6e3db;border-radius:14px;padding:34px 32px 30px">
-                    <p style="margin:0 0 12px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#5b45d6">{{E(eyebrow)}}</p>
-                    <h1 class="ink" style="margin:0 0 18px;font-size:26px;line-height:32px;letter-spacing:-0.6px;color:#15172a">{{E(title)}}</h1>
-                    {{body}}
-                    {{listHtml}}
-                    <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:8px"><tr>
-                      <td class="btn" style="background:#15172a;border-radius:10px">
-                        <a href="{{E(cta.Url)}}" style="display:inline-block;padding:13px 22px;font-size:15px;font-weight:600;color:#fbfaf7;text-decoration:none">{{E(cta.Label)}}</a>
+                  <tr><td class="card" style="background:#ffffff;border:1px solid {{Line}};border-radius:16px;overflow:hidden">
+                    <div style="height:4px;line-height:4px;font-size:0;background:{{Accent}}">&nbsp;</div>
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td class="card-pad" style="padding:36px 36px 30px">
+                      <p style="margin:0 0 10px;font-size:12px;font-weight:600;letter-spacing:0.6px;text-transform:uppercase;color:{{Accent}}">{{E(eyebrow)}}</p>
+                      <h1 class="ink" style="margin:0 0 16px;font-size:26px;line-height:33px;font-weight:700;letter-spacing:-0.5px;color:{{Ink}}">{{E(title)}}</h1>
+                      {{body}}
+                      {{listHtml}}
+                      <table role="presentation" cellpadding="0" cellspacing="0" style="margin:10px 0 4px"><tr><td style="border-radius:10px;background:{{Accent}}">
+                        <a class="cta" href="{{E(cta.Url)}}" style="display:inline-block;padding:14px 26px;font-size:15px;font-weight:600;line-height:20px;color:#ffffff;text-decoration:none;border-radius:10px;background:{{Accent}}">{{E(cta.Label)}} &rarr;</a>
                       </td></tr></table>
-                    <p style="margin:18px 0 0;font-size:12px;line-height:18px;color:#8d91a3">Düymə işləmirsə, bu linki brauzerə kopyala:<br><span style="word-break:break-all;color:#6a6f82">{{E(cta.Url)}}</span></p>
-                    {{ignore}}
+                      {{ignore}}
+                    </td></tr></table>
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td class="rule" style="border-top:1px solid {{Line}};padding:16px 36px 20px">
+                      <p class="faint" style="margin:0;font-size:12px;line-height:18px;color:{{Faint}}">Düymə işləmirsə, bu linki brauzerə kopyalayın:<br><a href="{{E(cta.Url)}}" style="word-break:break-all;color:{{Muted}};text-decoration:underline">{{E(cta.Url)}}</a></p>
+                    </td></tr></table>
                   </td></tr>
+                  <tr><td style="height:20px;line-height:20px">&nbsp;</td></tr>
                   {{foot}}
-                  <tr><td style="padding:18px 4px 0;font-size:12px;line-height:18px;color:#8d91a3">ExamR · sənədindən imtahana. Bu məktub hesabınla bağlı əməliyyat üçün avtomatik göndərilib.</td></tr>
+                  <tr><td align="center" style="padding:4px 12px 0">
+                    <p class="faint" style="margin:0 0 6px;font-size:12px;line-height:18px;color:{{Faint}}"><strong class="muted" style="color:{{Muted}}">ExamR</strong> · sənədindən imtahana</p>
+                    <p class="faint" style="margin:0;font-size:11px;line-height:17px;color:{{Faint}}">Bu məktub ExamR hesabınızla bağlı əməliyyat üçün avtomatik göndərilib. Cavab yazmağa ehtiyac yoxdur.<br>&copy; {{year}} ExamR</p>
+                  </td></tr>
                 </table>
               </td></tr>
             </table>
