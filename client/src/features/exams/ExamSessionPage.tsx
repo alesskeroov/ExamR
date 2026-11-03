@@ -1,13 +1,13 @@
 import './exam-flow.css'
 import { answerDisplayText } from './answer-display'
 import { useIsMutating } from '@tanstack/react-query'
-import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Loader2, Maximize2, Minimize2, X } from 'lucide-react'
+import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Flag, Loader2, Maximize2, Minimize2, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
 import { Button } from '../../components/common/Button'
 import { cn } from '../../lib/utils'
-import { NotificationBell } from '../friends/NotificationBell'
+import { ExamNotifications } from './ExamNotifications'
 import {
   answerMutationKey,
   useAnswerQuestion,
@@ -92,7 +92,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (confirmOpen || event.ctrlKey || event.metaKey || event.altKey) return
-      if (event.target instanceof HTMLElement && event.target.closest('input, textarea, select')) return
+      if (event.target instanceof HTMLElement && event.target.closest('input, textarea, select, .exam-notify')) return
       if (event.key === 'ArrowLeft') goTo(index - 1)
       else if (event.key === 'ArrowRight') goTo(index + 1)
       else {
@@ -117,16 +117,16 @@ function ExamRunner({ session }: { session: ExamSession }) {
   return (
     <div className="exam-flow exam-session min-h-dvh bg-slate-50">
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex min-h-16 max-w-[1100px] flex-wrap items-center gap-2 px-3 py-2 sm:flex-nowrap sm:px-4 lg:px-6">
+        <div className="exam-shell mx-auto flex min-h-16 items-center gap-2 px-3 py-2 sm:gap-3 sm:px-4 lg:px-6">
           <Link to="/" className="hidden items-center gap-2 font-semibold sm:flex" aria-label="ExamR ana səhifə">
             <img src="/favicon.svg" alt="" className="size-7" />
           </Link>
-          <div className="min-w-0 flex-1 basis-[calc(100%-12rem)]">
+          <div className="min-w-0 flex-1">
             <div className="flex items-baseline justify-between gap-2 text-slate-600">
-              <span className="font-medium text-slate-900 tabular-nums">
-                Sual {index + 1} / {total}
+              <span className="truncate font-medium whitespace-nowrap text-slate-900 tabular-nums">
+                <span className="hidden min-[400px]:inline">Sual </span>{index + 1} / {total}
               </span>
-              <span className="hidden tabular-nums sm:inline">{answered} cavablanıb</span>
+              <span className="hidden truncate whitespace-nowrap tabular-nums sm:inline">{answered} / {total} cavablanıb</span>
             </div>
             <div
               className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100"
@@ -141,14 +141,15 @@ function ExamRunner({ session }: { session: ExamSession }) {
           </div>
           <ExamTimer expiresAt={session.expiresAt} serverNow={session.serverNow} onExpire={submit} />
           <FullscreenToggle />
-          <span className="hidden sm:block"><NotificationBell /></span>
-          <Button onClick={() => setConfirmOpen(true)} loading={finish.isPending} className="h-11 shrink-0 px-3 text-sm sm:px-4">
+          <ExamNotifications />
+          <Button variant="secondary" onClick={() => setConfirmOpen(true)} loading={finish.isPending} className="h-10 shrink-0 px-3 text-sm sm:px-4">
+            <Flag className="hidden size-4 sm:block" aria-hidden />
             Bitir
           </Button>
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-[1100px] gap-3 px-3 pt-4 pb-28 lg:pb-6 lg:grid-cols-[minmax(0,1fr)_232px] lg:gap-5 lg:px-6">
+      <main className="exam-shell exam-layout mx-auto grid gap-3 px-3 pt-4 pb-28 sm:px-4 lg:gap-6 lg:px-6 lg:pt-6 lg:pb-8">
         <div className="flex min-w-0 flex-col gap-4">
           {finish.isError && <Alert title="İmtahan bitirilmədi">{finish.error.message}</Alert>}
 
@@ -161,20 +162,23 @@ function ExamRunner({ session }: { session: ExamSession }) {
             onChoose={choose}
           />
 
-          <div className="exam-controls fixed inset-x-0 bottom-0 z-10 grid grid-cols-2 gap-2 border-t px-3 pt-3 lg:static lg:mx-0 lg:rounded-xl lg:border lg:p-3">
-            <Button variant="secondary" disabled={index === 0} onClick={() => goTo(index - 1)}>
+          <div className="exam-controls fixed inset-x-0 bottom-0 z-10 grid grid-cols-2 gap-2 border-t px-3 pt-3 lg:static lg:flex lg:items-center lg:border-0 lg:bg-transparent lg:p-0">
+            <Button variant="secondary" disabled={index === 0} onClick={() => goTo(index - 1)} className="exam-nav-button lg:order-1">
               <ChevronLeft className="size-4" aria-hidden />
               Əvvəlki
             </Button>
+            <div className="col-span-2 min-w-0 lg:order-2 lg:flex-1"><SaveStatus saving={saving} error={answer.isError ? answer.error.message : null} /></div>
             {index < total - 1 ? (
-              <Button variant="secondary" onClick={() => goTo(index + 1)}>
+              <Button onClick={() => goTo(index + 1)} className="exam-nav-button row-start-1 lg:order-3">
                 Növbəti
                 <ChevronRight className="size-4" aria-hidden />
               </Button>
             ) : (
-              <Button onClick={() => setConfirmOpen(true)}>Bitir</Button>
+              <Button onClick={() => setConfirmOpen(true)} className="exam-nav-button row-start-1 lg:order-3">
+                <Flag className="size-4" aria-hidden />
+                Bitir
+              </Button>
             )}
-            <div className="col-span-2 min-w-0"><SaveStatus saving={saving} error={answer.isError ? answer.error.message : null} /></div>
           </div>
         </div>
 
@@ -183,6 +187,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
 
       <FinishDialog
         open={confirmOpen}
+        answered={answered}
         unanswered={total - answered}
         onCancel={() => setConfirmOpen(false)}
         onConfirm={() => {
@@ -207,13 +212,13 @@ function QuestionPanel({ question, number, immediate, locked, onChoose }: Questi
   const headingId = `question-${question.examQuestionId}`
 
   return (
-    <section aria-labelledby={headingId} className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
-      <p className="mb-2 text-xs font-medium text-slate-500">Sual {number}</p>
-      <h1 id={headingId} className="exam-question-text text-base leading-7 font-semibold text-slate-900 sm:text-lg">
+    <section aria-labelledby={headingId} className="exam-question-enter min-w-0 rounded-xl border border-slate-200 bg-white p-4 sm:p-6 lg:p-7">
+      <p className="mb-2 text-xs font-medium tracking-wide text-slate-500 uppercase">Sual {number}</p>
+      <h1 id={headingId} className="exam-question-text max-w-[72ch] text-base leading-7 font-semibold text-slate-900 sm:text-[17px] lg:text-lg lg:leading-8">
         {question.text}
       </h1>
 
-      <div role="radiogroup" aria-labelledby={headingId} className="mt-4 flex flex-col gap-2">
+      <div role="radiogroup" aria-labelledby={headingId} className="mt-5 flex flex-col gap-2 sm:gap-2.5">
         {question.options.map((option) => {
           const selected = question.selectedOptionId === option.id
           const isCorrect = reveal?.correctOptionId === option.id
@@ -228,21 +233,21 @@ function QuestionPanel({ question, number, immediate, locked, onChoose }: Questi
               aria-disabled={locked || undefined}
               onClick={() => onChoose(option.id)}
               className={cn(
-                'flex min-h-11 w-full items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left text-sm text-slate-700 transition-colors duration-150 motion-reduce:transition-none sm:gap-3 sm:px-4 sm:text-[15px]',
+                'exam-option flex min-h-12 w-full items-start gap-3 rounded-xl border px-3 py-3 text-left text-sm text-slate-700 sm:px-4 sm:text-[15px]',
                 isCorrect && 'border-emerald-300 bg-emerald-50/60',
                 isWrongPick && 'border-rose-300 bg-rose-50/60',
-                !reveal && selected && 'border-indigo-400 bg-indigo-50/60',
-                !reveal && !selected && 'border-slate-200 hover:border-slate-400 hover:bg-slate-50',
+                !reveal && selected && 'border-indigo-500 bg-indigo-50 text-slate-900',
+                !reveal && !selected && 'border-slate-200 hover:border-slate-300 hover:bg-slate-50',
                 reveal && !isCorrect && !isWrongPick && 'border-slate-200',
                 locked && 'cursor-default',
               )}
             >
               <span
                 className={cn(
-                  'flex size-6 shrink-0 items-center justify-center rounded-md border text-xs font-medium',
+                  'flex size-6 shrink-0 items-center justify-center rounded-md border text-xs font-semibold transition-colors duration-150',
                   isCorrect ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
                     : isWrongPick ? 'border-rose-200 bg-rose-50 text-rose-800'
-                      : selected ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                      : selected ? 'border-indigo-600 bg-indigo-600 text-white'
                         : 'border-slate-200 bg-slate-50 text-slate-500',
                 )}
                 aria-hidden
@@ -256,7 +261,7 @@ function QuestionPanel({ question, number, immediate, locked, onChoose }: Questi
               </span>
               {isCorrect && <Check className="mt-1 size-4 shrink-0 text-emerald-700" aria-hidden />}
               {isWrongPick && <X className="mt-1 size-4 shrink-0 text-rose-700" aria-hidden />}
-              {selected && !reveal && <Check className="mt-1 size-4 shrink-0 text-indigo-600" aria-hidden />}
+              <Check className={cn('mt-1 size-4 shrink-0 text-indigo-600', !(selected && !reveal) && 'invisible')} aria-hidden />
             </button>
           )
         })}
@@ -310,13 +315,16 @@ interface QuestionNavigatorProps {
 
 function QuestionNavigator({ questions, current, immediate, onSelect, open, onToggle }: QuestionNavigatorProps) {
   return (
-    <nav aria-label="Suallar" className="order-first min-w-0 rounded-xl border border-slate-200 bg-white p-3 lg:order-last lg:sticky lg:top-24 lg:self-start">
+    <nav aria-label="Suallar" className="order-first min-w-0 rounded-xl border border-slate-200 bg-white p-3 lg:order-last lg:sticky lg:top-24 lg:self-start lg:p-4">
       <button type="button" className="exam-panel-toggle min-h-11 w-full items-center justify-between gap-2 text-sm font-medium" aria-expanded={open} aria-controls="exam-question-map" onClick={onToggle}>
         <span>Suallar · {current + 1}/{questions.length}</span><span className="inline-flex items-center gap-2 text-xs text-slate-500">{questions.filter(q => q.selectedOptionId).length} cavablanıb<ChevronDown className={cn('size-4 transition-transform', open && 'rotate-180')} aria-hidden /></span>
       </button>
-      <h2 className="mb-3 hidden text-sm font-semibold lg:block">Suallar</h2>
+      <div className="mb-3 hidden items-baseline justify-between lg:flex">
+        <h2 className="text-sm font-semibold">Suallar</h2>
+        <span className="text-xs text-slate-500 tabular-nums">{questions.filter(q => !q.selectedOptionId).length} boş</span>
+      </div>
       <div id="exam-question-map" className="exam-map-content" data-open={open}>
-      <ol className="exam-question-map grid grid-cols-[repeat(auto-fill,minmax(44px,1fr))] gap-1.5">
+      <ol className="exam-question-map grid grid-cols-[repeat(auto-fill,minmax(42px,1fr))] gap-1.5">
         {questions.map((q, i) => {
           const reveal = immediate ? q.reveal : null
           const state = !q.selectedOptionId
@@ -333,13 +341,13 @@ function QuestionNavigator({ questions, current, immediate, onSelect, open, onTo
                 aria-current={i === current ? 'step' : undefined}
                 aria-label={`Sual ${i + 1}${q.selectedOptionId ? ', cavablanıb' : ''}`}
                 className={cn(
-                  'flex h-11 w-full items-center justify-center rounded-md border text-xs font-semibold tabular-nums transition-colors duration-150',
-                  state === 'empty' && 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
+                  'flex h-10 w-full items-center justify-center rounded-md border text-xs font-semibold tabular-nums transition-colors duration-150 lg:h-9',
+                  state === 'empty' && 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50',
                   state === 'answered' && 'border-indigo-600 bg-indigo-600 text-white',
                   state === 'correct' && 'border-emerald-600 bg-emerald-600 text-white',
                   state === 'wrong' && 'border-rose-600 bg-rose-600 text-white',
                   state === 'ungraded' && 'border-amber-400 bg-amber-100 text-amber-900',
-                  i === current && 'ring-2 ring-indigo-500 ring-offset-2',
+                  i === current && 'ring-2 ring-[var(--app-ink)] ring-offset-2 ring-offset-[var(--app-surface)]',
                 )}
               >
                 {i + 1}
@@ -402,12 +410,12 @@ function ExamTimer({ expiresAt, serverNow, onExpire }: { expiresAt: string; serv
   return (
     <div
       className={cn(
-        'flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-semibold tabular-nums',
+        'flex min-w-[5.25rem] shrink-0 items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 font-semibold whitespace-nowrap tabular-nums transition-colors duration-300',
         seconds <= 60 ? 'bg-rose-50 text-rose-700' : seconds <= 300 ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-700',
       )}
     >
-      <Clock className="size-4" aria-hidden />
-      <span>{label}</span>
+      <Clock className="size-4 shrink-0" aria-hidden />
+      <span aria-label={`Qalan vaxt ${label}`}>{label}</span>
       {/* Announce only at the 5- and 1-minute marks, not every second. */}
       <span className="sr-only" aria-live="polite">
         {minutesLeft === 5 || minutesLeft === 1 ? `${minutesLeft} dəqiqə qalıb` : ''}
@@ -418,12 +426,13 @@ function ExamTimer({ expiresAt, serverNow, onExpire }: { expiresAt: string; serv
 
 interface FinishDialogProps {
   open: boolean
+  answered: number
   unanswered: number
   onCancel: () => void
   onConfirm: () => void
 }
 
-function FinishDialog({ open, unanswered, onCancel, onConfirm }: FinishDialogProps) {
+function FinishDialog({ open, answered, unanswered, onCancel, onConfirm }: FinishDialogProps) {
   const ref = useRef<HTMLDialogElement>(null)
 
   useEffect(() => {
@@ -441,19 +450,24 @@ function FinishDialog({ open, unanswered, onCancel, onConfirm }: FinishDialogPro
         onCancel()
       }}
       aria-labelledby="finish-title"
-      className="m-auto w-[calc(100%-2rem)] max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl backdrop:bg-slate-900/40"
+      aria-describedby="finish-description"
+      className="exam-dialog m-auto w-[calc(100%-2rem)] max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl backdrop:bg-slate-900/40 sm:p-6"
     >
       <h2 id="finish-title" className="text-lg font-semibold">
         İmtahanı bitirmək istəyirsiniz?
       </h2>
-      <p className="mt-2 text-slate-600">
-        {unanswered > 0 ? `${unanswered} sual cavabsızdır. Bitirdikdən sonra cavabları dəyişmək mümkün olmayacaq.` : 'Bütün suallar cavablanıb.'}
+      <dl className="mt-4 grid grid-cols-2 gap-2 text-center">
+        <div className="rounded-lg bg-slate-50 px-3 py-2"><dt className="text-xs text-slate-500">Cavablanıb</dt><dd className="text-lg font-semibold tabular-nums">{answered}</dd></div>
+        <div className={cn('rounded-lg px-3 py-2', unanswered > 0 ? 'bg-amber-50' : 'bg-slate-50')}><dt className="text-xs text-slate-500">Boş</dt><dd className={cn('text-lg font-semibold tabular-nums', unanswered > 0 && 'text-amber-800')}>{unanswered}</dd></div>
+      </dl>
+      <p id="finish-description" className="mt-3 text-sm text-slate-600">
+        {unanswered > 0 ? `${unanswered} sual cavabsızdır. Bitirdikdən sonra cavabları dəyişmək mümkün olmayacaq.` : 'Bütün suallar cavablanıb. Bitirdikdən sonra cavabları dəyişmək mümkün olmayacaq.'}
       </p>
-      <div className="mt-6 flex justify-end gap-2">
-        <Button variant="secondary" onClick={onCancel}>
-          Davam et
+      <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <Button variant="secondary" onClick={onCancel} autoFocus>
+          İmtahana qayıt
         </Button>
-        <Button onClick={onConfirm}>Bitir</Button>
+        <Button onClick={onConfirm}>Bəli, bitir</Button>
       </div>
     </dialog>
   )
