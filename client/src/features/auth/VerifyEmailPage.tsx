@@ -4,7 +4,7 @@ import { Link, useSearchParams } from 'react-router'
 import { FormField } from '../../components/common/FormField'
 import { Button } from '../../components/common/Button'
 import { AuthShell } from './AuthPage'
-import { useConfirmEmail, useResendConfirmation } from './api'
+import { useConfirmEmail, useCurrentUser, useResendConfirmation } from './api'
 
 /** Opened from the verification email: confirms once, then offers the next step or a fresh link. */
 export function VerifyEmailPage() {
@@ -12,6 +12,7 @@ export function VerifyEmailPage() {
   const userId = params.get('uid') ?? ''
   const token = params.get('token') ?? ''
   const confirm = useConfirmEmail()
+  const { data: user } = useCurrentUser()
   const resend = useResendConfirmation()
   const [email, setEmail] = useState('')
   const sent = useRef(false)
@@ -33,7 +34,10 @@ export function VerifyEmailPage() {
           <p role="status" className="flex gap-3 rounded-lg bg-emerald-50 px-3 py-3 text-emerald-800">
             <CheckCircle2 className="mt-0.5 size-5 shrink-0" aria-hidden />{confirm.data.message}
           </p>
-          <Link to="/" className="auth-submit inline-flex h-[46px] items-center justify-center font-semibold">ExamR-ə keç</Link>
+          {/* Signed in (fresh confirmation or an existing session) → dashboard; otherwise the sign-in form. */}
+          {user
+            ? <Link to="/" replace className="auth-submit inline-flex h-[46px] items-center justify-center font-semibold">ExamR-ə keç</Link>
+            : <Link to="/?auth=login" replace className="auth-submit inline-flex h-[46px] items-center justify-center font-semibold">Daxil ol</Link>}
         </div>
       ) : failed ? (
         <div className="flex flex-col gap-4">

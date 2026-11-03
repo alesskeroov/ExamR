@@ -49,11 +49,13 @@ public static class AuthEndpoints
         return FrontendLink(configuration, $"/verify-email?uid={user.Id}&token={WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token))}");
     }
 
-    private static async Task<IResult> ConfirmEmail(ConfirmEmailRequest request, UserManager<AppUser> users, EmailQueue email, IConfiguration configuration)
+    private static async Task<IResult> ConfirmEmail(ConfirmEmailRequest request, UserManager<AppUser> users, EmailQueue email, IConfiguration configuration,
+        TokenService tokens, HttpResponse response)
     {
         var user = await users.FindByIdAsync(request.UserId.ToString());
         if (user is null || user.IsDeleted) return InvalidVerifyLink();
-        if (user.EmailConfirmed) return TypedResults.Ok(new MessageResponse("Email artıq təsdiqlənib."));
+        // Already confirmed: no session is issued here, the link cannot be reused to sign in.
+        if (user.EmailConfirmed) return TypedResults.Ok(new ConfirmEmailResponse("Email artıq təsdiqlənib.", null));
         string token;
         try { token = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(request.Token)); }
         catch (FormatException) { return InvalidVerifyLink(); }
@@ -63,7 +65,10 @@ public static class AuthEndpoints
         // Sent only on the unconfirmed → confirmed transition: a confirmed account returns early above, and a parallel
         // second click fails ConfirmEmailAsync on the concurrency stamp, so the welcome goes out once.
         if (FrontendLink(configuration, "/") is { } appUrl) email.Enqueue(EmailTemplates.Welcome(user.Email!, user.DisplayName, appUrl));
-        return TypedResults.Ok(new MessageResponse("Email ünvanınız təsdiqləndi. İndi hesabınıza daxil ola bilərsiniz."));
+        // The single-use link proves ownership of the address, so the first confirmation also signs the user in
+        // (browser-session cookie, as without Remember Me).
+        var session = await IssueToken(user, users, tokens, configuration, response);
+        return TypedResults.Ok(new ConfirmEmailResponse("Email ünvanınız təsdiqləndi.", session.User));
     }
 
     private static IResult InvalidVerifyLink() =>
@@ -272,6 +277,7 @@ public static class AuthEndpoints
 }
 
 public sealed record RegisterResponse(string Email, string Message);
+public sealed record ConfirmEmailResponse(string Message, UserResponse? User);
 
 public sealed class RegisterRequest
 {

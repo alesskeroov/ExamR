@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { ArrowRight, ArrowUpRight, Menu, Moon, Plus, Sun, X } from 'lucide-react'
-import { Link } from 'react-router'
+import { Link, useLocation } from 'react-router'
 import { useTheme } from '../../lib/use-theme'
 import { ProductPreview } from './ProductPreview'
 import './landing.css'
@@ -219,8 +219,16 @@ export function LandingPage() {
   )
 }
 
+/** On the landing page itself the logo scrolls back to the top, like most sites. */
 function Logo() {
-  return <Link viewTransition to="/" className="lp-logo" aria-label="ExamR ana səhifə">
+  const { pathname, search } = useLocation()
+  return <Link viewTransition to="/" className="lp-logo" aria-label="ExamR ana səhifə"
+    onClick={event => {
+      if (pathname !== '/' || search) return
+      event.preventDefault()
+      window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+      window.history.replaceState(null, '', '/')
+    }}>
     <span className="lp-logo-mark" aria-hidden><svg viewBox="0 0 16 16" className="size-4"><path d="M4 4h8M4 8h5.5M4 12h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></span>
     ExamR
   </Link>

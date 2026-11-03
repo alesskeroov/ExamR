@@ -1,3 +1,4 @@
+import { VerifiedBadge } from '../../components/common/VerifiedBadge'
 import './profile.css'
 import { AccountSettings } from './AccountSettings'
 import { RankBadge } from '../battle/RankSummary'
@@ -98,7 +99,7 @@ export function ProfilePage() {
           : <span className="grid size-16 shrink-0 place-items-center rounded-full bg-indigo-50 text-indigo-600 sm:size-20"><UserRound className="size-8" aria-hidden /></span>}
         <div className="min-w-0 flex-1 self-center">
           <p className="text-xs font-medium uppercase tracking-widest text-slate-500">Şəxsi profil</p>
-          <h2 className="mt-1 break-words text-xl font-semibold tracking-tight sm:text-2xl">{user.nickname}</h2>
+          <h2 className="mt-1 break-words text-xl font-semibold tracking-tight sm:text-2xl">{user.nickname}{(user.emailConfirmed || user.googleLinked) && <VerifiedBadge className="ml-1.5" />}</h2>
           {rank.data && <div className="mt-2"><RankBadge rank={rank.data} /></div>}
           <p className="mt-2 whitespace-pre-wrap text-sm text-slate-500">{user.bio || 'Özünüz haqqında qısa məlumat əlavə edin.'}</p>
         </div>

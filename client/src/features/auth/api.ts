@@ -120,7 +120,13 @@ export function useResendConfirmation() {
 export function useConfirmEmail() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (request: { userId: string; token: string }) => api.post<{ message: string }>('/auth/confirm-email', request),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.me }),
+    mutationFn: (request: { userId: string; token: string }) => api.post<{ message: string; user: User | null }>('/auth/confirm-email', request),
+    // The first confirmation also opens a session; an already-confirmed link does not, so then re-check /auth/me.
+    onSuccess: ({ user }) => {
+      if (user) {
+        markFreshLogin()
+        queryClient.setQueryData(queryKeys.me, normalizeUser(user))
+      } else void queryClient.invalidateQueries({ queryKey: queryKeys.me })
+    },
   })
 }

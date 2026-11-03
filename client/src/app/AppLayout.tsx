@@ -4,6 +4,7 @@ import { Link, NavLink, Outlet, useLocation, useSearchParams } from 'react-route
 import { useCurrentUser, useLogout } from '../features/auth/api'
 import { NotificationBell } from '../features/friends/NotificationBell'
 import { cn } from '../lib/utils'
+import { VerifiedBadge } from '../components/common/VerifiedBadge'
 import { ThemeToggle } from '../components/common/ThemeToggle'
 
 const navItems: { to: string; label: string; icon: LucideIcon; group: string; end?: boolean; adminOnly?: boolean; badge?: string }[] = [
@@ -125,7 +126,10 @@ function UserMenu() {
           <span className="flex size-8 items-center justify-center rounded-full bg-indigo-100 font-semibold text-indigo-700" aria-hidden>{nickname.charAt(0).toUpperCase()}</span>}
       </NavLink>
       <span className="min-w-0 flex-1">
-        <NavLink to="/profile" className="block truncate font-medium hover:text-indigo-700">{nickname}</NavLink>
+        <span className="flex min-w-0 items-center gap-1">
+          <NavLink to="/profile" className="truncate font-medium hover:text-indigo-700">{nickname}</NavLink>
+          {(user.emailConfirmed || user.googleLinked) && <VerifiedBadge />}
+        </span>
         <span className="block truncate text-xs text-slate-500">{user.email}</span>
       </span>
       <button
@@ -142,12 +146,20 @@ function UserMenu() {
   )
 }
 
+/** Logo = home: opens the dashboard, or scrolls it back to the top when already there. */
 function Brand() {
+  const { pathname } = useLocation()
   return (
-    <span className="flex items-center gap-2.5 text-[17px] font-bold tracking-[-0.03em]">
+    <Link to="/" aria-label="ExamR — Dashboard" title="Dashboard"
+      onClick={event => {
+        if (pathname !== '/') return
+        event.preventDefault()
+        window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+      }}
+      className="flex items-center gap-2.5 rounded-lg text-[17px] font-bold tracking-[-0.03em] transition-opacity duration-150 hover:opacity-80">
       <span className="app-brand-mark grid size-[30px] place-items-center rounded-lg" aria-hidden><svg viewBox="0 0 16 16" className="size-4"><path d="M4 4h8M4 8h5.5M4 12h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></span>
       ExamR
-    </span>
+    </Link>
   )
 }
 
