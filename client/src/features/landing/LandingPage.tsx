@@ -191,13 +191,16 @@ export function LandingPage() {
           </div>
         </section>
 
-        <section className="lp-wrap pb-16" aria-label="Başla">
+        <section className="lp-wrap lp-close-section" aria-label="Başla">
           <div className="lp-close" data-reveal>
-            <div>
-              <p className="lp-eyebrow" style={{ color: 'inherit', opacity: .6 }}>imtahanına neçə gün qalıb?</p>
-              <p className="mt-3 text-[clamp(1.6rem,4vw,2.4rem)] font-bold leading-tight tracking-[-0.035em]">Sual-cavab faylın hazırdırsa, qalanını ExamR edir.</p>
+            <p className="lp-close-pill">İmtahanına neçə gün qalıb?</p>
+            <h2 className="lp-close-title">Sual-cavab faylın hazırdırsa, qalanını ExamR edir.</h2>
+            <p className="lp-close-text">Faylı yüklə, bir neçə dəqiqəyə ilk imtahanını ver və zəif mövzularını gör.</p>
+            <div className="lp-close-actions">
+              <Link viewTransition to={auth('register')} className="lp-btn lp-btn-primary">Pulsuz başla <ArrowRight className="lp-arrow size-4" aria-hidden /></Link>
+              <Link viewTransition to={auth('login')} className="lp-btn lp-close-secondary">Daxil ol</Link>
             </div>
-            <Link viewTransition to={auth('register')} className="lp-btn lp-btn-primary">Hesab aç <ArrowRight className="lp-arrow size-4" aria-hidden /></Link>
+            <p className="lp-close-note">Pulsuz · kart tələb olunmur · Google ilə də giriş</p>
           </div>
         </section>
       </main>
@@ -205,14 +208,25 @@ export function LandingPage() {
       <footer className="lp-footer">
         <div className="lp-wrap">
           <div className="lp-footer-grid">
-            <div className="max-w-xs"><Logo /><p className="mt-3 leading-6">Sual-cavab sənədlərindən imtahan, öyrənmə və yarış hazırlayan platforma.</p></div>
-            <nav aria-label="Alt menyu" className="lp-footer-links">
+            <div className="lp-footer-brand">
+              <Logo />
+              <p>Sual-cavab sənədlərindən imtahan, öyrənmə və yarış hazırlayan platforma.</p>
+              <span className="lp-footer-badge"><span aria-hidden className="lp-footer-dot" />Demo versiya · aktiv inkişafda</span>
+            </div>
+            <nav aria-label="Məhsul" className="lp-footer-col">
+              <p className="lp-footer-heading">Məhsul</p>
               {nav.map(([href, label]) => <a key={href} href={href} onClick={e => go(e, href)}>{label}</a>)}
-              <Link viewTransition to={auth('login')}>Daxil ol</Link>
+            </nav>
+            <nav aria-label="Hesab" className="lp-footer-col">
+              <p className="lp-footer-heading">Hesab</p>
               <Link viewTransition to={auth('register')}>Qeydiyyat</Link>
+              <Link viewTransition to={auth('login')}>Daxil ol</Link>
             </nav>
           </div>
-          <div className="lp-footer-bottom"><span>© {YEAR} ExamR · demo versiya</span><span>Developer: <b className="font-semibold" style={{ color: 'var(--lp-ink)' }}>Rəvan Ələsgərov</b></span></div>
+          <div className="lp-footer-bottom">
+            <span>© {YEAR} ExamR. Bütün hüquqlar qorunur.</span>
+            <span>Hazırlayan: <b>Rəvan Ələsgərov</b></span>
+          </div>
         </div>
       </footer>
     </div>
