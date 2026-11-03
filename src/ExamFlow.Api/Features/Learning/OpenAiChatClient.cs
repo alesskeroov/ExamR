@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
 
@@ -14,18 +15,24 @@ public sealed record ChatModelUsage(int InputTokens, int CachedInputTokens, int 
 /// <summary>A streamed piece: text delta, or the final usage (sent last).</summary>
 public sealed record ChatModelChunk(string? Delta, ChatModelUsage? Usage);
 
-public enum ChatModelFailure { NotConfigured, RateLimited, QuotaExceeded, Unavailable, Rejected, Timeout }
+public enum ChatModelFailure { NotConfigured, RateLimited, QuotaExceeded, Unavailable, Rejected, Timeout, InvalidOutput }
 
 /// <summary>Carries only a category; provider messages and keys never reach users or logs.</summary>
-public sealed class ChatModelException(ChatModelFailure failure, int? statusCode = null) : Exception($"Chat model call failed: {failure} ({statusCode})")
+public sealed class ChatModelException(ChatModelFailure failure, int? statusCode = null, ChatModelUsage? usage = null) : Exception($"Chat model call failed: {failure} ({statusCode})")
 {
     public ChatModelFailure Failure { get; } = failure;
+    /// <summary>Tokens already billed when the failure happened after the model answered (e.g. invalid JSON).</summary>
+    public ChatModelUsage? Usage { get; } = usage;
 }
 
 public interface IChatModel
 {
     string Model { get; }
     IAsyncEnumerable<ChatModelChunk> StreamAsync(IReadOnlyList<ChatModelMessage> messages, int maxOutputTokens, CancellationToken ct);
+
+    /// <summary>One non-streamed answer constrained to a JSON schema (OpenAI structured outputs).</summary>
+    Task<(JsonElement Json, ChatModelUsage Usage)> CompleteJsonAsync(IReadOnlyList<ChatModelMessage> messages, string schemaName, JsonObject schema,
+        int maxOutputTokens, string model, CancellationToken ct);
 }
 
 /// <summary>OpenAI Chat Completions over plain HTTP + SSE (no SDK dependency).</summary>
@@ -72,6 +79,53 @@ public sealed class OpenAiChatClient(HttpClient http, IOptions<LearningAiOptions
 
             var chunk = Parse(data.ToString());
             if (chunk is not null) yield return chunk;
+        }
+    }
+
+    public async Task<(JsonElement Json, ChatModelUsage Usage)> CompleteJsonAsync(IReadOnlyList<ChatModelMessage> messages, string schemaName, JsonObject schema,
+        int maxOutputTokens, string model, CancellationToken ct)
+    {
+        var key = ApiKey(configuration) ?? throw new ChatModelException(ChatModelFailure.NotConfigured);
+        var settings = options.Value;
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(settings.TimeoutSeconds));
+
+        var body = JsonSerializer.Serialize(new
+        {
+            model,
+            messages = messages.Select(m => new { role = m.Role, content = m.Content }),
+            max_completion_tokens = maxOutputTokens,
+            temperature = 0.2,
+            response_format = new { type = "json_schema", json_schema = new { name = schemaName, strict = true, schema } },
+        }, Json);
+
+        using var response = await SendAsync(new Uri(new Uri(settings.BaseUrl), "chat/completions"), key, body, timeout.Token, ct);
+        string raw;
+        try { raw = await response.Content.ReadAsStringAsync(timeout.Token); }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { throw new ChatModelException(ChatModelFailure.Timeout); }
+
+        using var doc = JsonDocument.Parse(raw);
+        var root = doc.RootElement;
+        ChatModelUsage? usage = null;
+        if (root.TryGetProperty("usage", out var u) && u.ValueKind == JsonValueKind.Object)
+        {
+            var cached = u.TryGetProperty("prompt_tokens_details", out var d) && d.ValueKind == JsonValueKind.Object && d.TryGetProperty("cached_tokens", out var c) ? c.GetInt32() : 0;
+            usage = new ChatModelUsage(u.GetProperty("prompt_tokens").GetInt32(), cached, u.GetProperty("completion_tokens").GetInt32());
+        }
+        try
+        {
+            var choice = root.GetProperty("choices")[0];
+            // Cut off by the token limit or refused: the JSON would be incomplete, so it is never used.
+            if (choice.TryGetProperty("finish_reason", out var finish) && finish.GetString() != "stop")
+                throw new ChatModelException(ChatModelFailure.InvalidOutput, null, usage);
+            var content = choice.GetProperty("message").GetProperty("content").GetString() ?? "";
+            using var parsed = JsonDocument.Parse(content);
+            return (parsed.RootElement.Clone(), usage ?? new ChatModelUsage(0, 0, 0));
+        }
+        catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException or IndexOutOfRangeException)
+        {
+            logger.LogWarning("OpenAI returned output that is not valid JSON for {Schema}", schemaName);
+            throw new ChatModelException(ChatModelFailure.InvalidOutput, null, usage);
         }
     }
 

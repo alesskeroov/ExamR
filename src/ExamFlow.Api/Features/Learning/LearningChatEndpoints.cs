@@ -140,6 +140,16 @@ public static class LearningChatEndpoints
             // Follow-ups ("explain more") rarely repeat the topic words; fall back to the previous question's sources.
             if (!retrieval.Found && recent.FirstOrDefault(t => t.Role == LearningMessageRole.User) is { } previous)
                 retrieval = await retriever.SearchAsync(session.LearningDocumentId, previous.Content, o.ContextChunks, ct);
+            // Overview questions ("main topics", "key definitions") name no document terms: give an even sample of the document.
+            if (!retrieval.Found && TutorPrompt.IsOverviewQuestion(question))
+            {
+                var all = await TeachingStep.ChunksAsync(db, session.LearningDocumentId, ct);
+                var step = Math.Max(1.0, all.Count / (double)o.ContextChunks);
+                var sample = Enumerable.Range(0, Math.Min(o.ContextChunks, all.Count)).Select(i => all[(int)(i * step)]).ToList();
+                if (sample.Count > 0)
+                    retrieval = new RetrievalResult(true, sample.Select(c => new RetrievedChunk(c.Ordinal, 0, 0, c.PageFrom, c.PageTo, c.Section,
+                        c.ParagraphFrom, c.ParagraphTo, c.Text)).ToList(), "overview");
+            }
         }
         // Button lines are Azerbaijani; the student's own words (or their last typed turn) decide the reply language.
         var language = TutorPrompt.DetectLanguage(teaching is null || typed ? question

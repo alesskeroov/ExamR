@@ -11,14 +11,18 @@ public sealed record AiBudgetStatus(string Model, decimal TotalBudgetUsd, decima
 
 public static class AiCost
 {
-    public static decimal Of(ChatModelUsage usage, LearningAiOptions o) =>
-        (Math.Max(0, usage.InputTokens - usage.CachedInputTokens) * o.InputUsdPerMillion
-         + usage.CachedInputTokens * o.CachedInputUsdPerMillion
-         + usage.OutputTokens * o.OutputUsdPerMillion) / 1_000_000m;
+    public static decimal Of(ChatModelUsage usage, LearningAiOptions o, string? model = null) =>
+        model is not null && model == o.LightModel && model != o.Model
+            ? (Math.Max(0, usage.InputTokens - usage.CachedInputTokens) * o.LightInputUsdPerMillion
+               + usage.CachedInputTokens * o.LightCachedInputUsdPerMillion
+               + usage.OutputTokens * o.LightOutputUsdPerMillion) / 1_000_000m
+            : (Math.Max(0, usage.InputTokens - usage.CachedInputTokens) * o.InputUsdPerMillion
+               + usage.CachedInputTokens * o.CachedInputUsdPerMillion
+               + usage.OutputTokens * o.OutputUsdPerMillion) / 1_000_000m;
 
     /// <summary>Worst case for one call: the whole prompt uncached plus every allowed output token.</summary>
-    public static decimal Reserve(int estimatedInputTokens, LearningAiOptions o) =>
-        Of(new ChatModelUsage(estimatedInputTokens, 0, o.MaxOutputTokens), o);
+    public static decimal Reserve(int estimatedInputTokens, LearningAiOptions o, int? maxOutputTokens = null, string? model = null) =>
+        Of(new ChatModelUsage(estimatedInputTokens, 0, maxOutputTokens ?? o.MaxOutputTokens), o, model);
 }
 
 /// <summary>
@@ -30,7 +34,7 @@ public sealed class LearningAiBudget(AppDbContext db, IOptions<LearningAiOptions
     // A reservation older than this belongs to a crashed request and stops holding budget.
     private static readonly TimeSpan StaleReservation = TimeSpan.FromMinutes(10);
 
-    public async Task<(BudgetDecision Decision, LearningAiUsage? Usage)> ReserveAsync(Guid userId, Guid sessionId, decimal amount, CancellationToken ct)
+    public async Task<(BudgetDecision Decision, LearningAiUsage? Usage)> ReserveAsync(Guid userId, Guid? sessionId, decimal amount, CancellationToken ct, string? model = null)
     {
         var o = options.Value;
         return await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
@@ -54,7 +58,7 @@ public sealed class LearningAiBudget(AppDbContext db, IOptions<LearningAiOptions
 
             var row = new LearningAiUsage
             {
-                Id = Guid.NewGuid(), UserId = userId, SessionId = sessionId, Model = o.Model, Status = LearningUsageStatus.Reserved,
+                Id = Guid.NewGuid(), UserId = userId, SessionId = sessionId, Model = model ?? o.Model, Status = LearningUsageStatus.Reserved,
                 ReservedUsd = amount, CreatedAt = now,
             };
             usage.Add(row);
@@ -76,7 +80,7 @@ public sealed class LearningAiBudget(AppDbContext db, IOptions<LearningAiOptions
             row.InputTokens = used.InputTokens;
             row.CachedInputTokens = used.CachedInputTokens;
             row.OutputTokens = used.OutputTokens;
-            row.CostUsd = AiCost.Of(used, options.Value);
+            row.CostUsd = AiCost.Of(used, options.Value, row.Model);
         }
         row.CompletedAt = clock.GetUtcNow();
         await db.SaveChangesAsync(CancellationToken.None);

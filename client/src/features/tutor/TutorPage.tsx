@@ -1,22 +1,22 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { ArrowUp, BookOpenText, FileText, GraduationCap, MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRight, Plus, Square, Trash2, X } from 'lucide-react'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { ArrowUp, BookOpenText, CircleHelp, FileText, Layers, MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRight, Plus, Square, Timer, Trash2, X, type LucideIcon } from 'lucide-react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { useSearchParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
 import { ApiError, postEventStream } from '../../lib/api-client'
 import { queryKeys } from '../../lib/query-keys'
 import { useConfirm } from '../../lib/use-confirm'
 import { cn } from '../../lib/utils'
-import { useAiUsage, useChat, useChats, useCreateChat, useDeleteChat, useTopics, useTutorDocuments, type ChatSession, type ChatSource, type TutorAction, type TutorDifficulty, type TutorMode, type TutorTopic } from './api'
+import { useAiUsage, useChat, useChats, useCreateChat, useDeleteChat, useTutorDocuments, type ChatSession, type ChatSource } from './api'
 import { TutorDocumentPicker } from './TutorDocumentPicker'
 import { TutorMessage, type ViewMessage } from './TutorMessage'
 import { TutorPreview } from './TutorPreview'
-import { TutorTeacher } from './TutorTeacher'
+import { TutorLastMinute } from './TutorLastMinute'
+import { TutorQuiz } from './TutorQuiz'
+import { TutorShared } from './TutorShared'
 import './tutor.css'
 
-const modeKey = 'examr-tutor-mode'
 const sidebarKey = 'examr-tutor-sidebar'
-const difficultyKey = 'examr-tutor-difficulty'
 
 function readStored(key: string) {
   try { return localStorage.getItem(key) } catch { return null }
@@ -29,18 +29,28 @@ export function TutorPage() {
   return <TutorWorkspace />
 }
 
-interface TeachRequest { action: TutorAction; topicKey?: string }
-interface LiveTurn { user: ViewMessage; answer: ViewMessage; question: string; teach?: TeachRequest; stored: boolean }
+interface LiveTurn { user: ViewMessage; answer: ViewMessage; question: string; stored: boolean }
 
-// Shown at once for button actions; the server's own wording replaces it after the answer is saved.
-const actionLabels: Partial<Record<TutorAction, string>> = {
-  Teach: 'Mövzunu öyrət', Next: 'Növbəti hissəyə keç', Quiz: 'Məni yoxla', MultipleChoice: 'Variantlı sual hazırla',
-  Hint: 'İpucu ver', Simplify: 'Daha sadə izah et', Reveal: 'Doğru cavabı göstər',
-}
+type Tab = 'learn' | 'quiz' | 'shared' | 'last'
+const tabs: { id: Tab; label: string; icon: LucideIcon }[] = [
+  { id: 'learn', label: 'Öyrən', icon: BookOpenText },
+  { id: 'quiz', label: 'Məni yoxla', icon: CircleHelp },
+  { id: 'shared', label: 'Ortaq cavab', icon: Layers },
+  { id: 'last', label: 'Son dəqiqə', icon: Timer },
+]
+// Follow-ups for the last answer; retrieval falls back to the previous question, so they stay on the same topic.
+const followUps = [
+  { label: 'Daha sadə izah et', prompt: 'Son cavabı daha sadə sözlərlə izah et.' },
+  { label: 'Geniş izah et', prompt: 'Son cavabı daha geniş izah et.' },
+  { label: 'Açar sözlər', prompt: 'Bu mövzunun açar sözlərini qısa siyahı ilə ver.' },
+]
 
 function TutorWorkspace() {
   const [params, setParams] = useSearchParams()
   const chatId = params.get('chat')
+  const tabParam = params.get('tab')
+  const tab: Tab = tabs.some(t => t.id === tabParam) ? tabParam as Tab : 'learn'
+  const setTab = (next: Tab) => setParams(next === 'learn' ? { chat: chatId ?? '' } : { chat: chatId ?? '', tab: next }, { replace: true })
   const client = useQueryClient()
   const confirm = useConfirm()
   const chats = useChats()
@@ -52,12 +62,6 @@ function TutorWorkspace() {
 
   const [sidebarOpen, setSidebarOpen] = useState(() => readStored(sidebarKey) !== 'closed')
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [mode, setMode] = useState<TutorMode>(() => (readStored(modeKey) === 'StepByStep' ? 'StepByStep' : 'Free'))
-  const [difficulty, setDifficulty] = useState<TutorDifficulty>(() => {
-    const saved = readStored(difficultyKey)
-    return saved === 'Easy' || saved === 'Hard' ? saved : 'Medium'
-  })
-  const [topicKey, setTopicKey] = useState<string | null>(null)
   const [preview, setPreview] = useState<{ open: boolean; source: ChatSource | null }>({ open: false, source: null })
   const [live, setLive] = useState<LiveTurn | null>(null)
   const abort = useRef<AbortController | null>(null)
@@ -69,20 +73,12 @@ function TutorWorkspace() {
   const docInfo = documents.data?.find(d => d.documentId === session?.documentId)
   const format = docInfo?.format ?? session?.documentName.split('.').pop()?.toLowerCase() ?? ''
   const streaming = live?.answer.status === 'Streaming'
-  const teacher = mode === 'StepByStep'
-  const topics = useTopics(chatId, teacher && !!session)
-  const currentTopic: TutorTopic | null = useMemo(() => {
-    const list = topics.data ?? []
-    return list.find(t => t.key === topicKey) ?? list.find(t => t.awaitingAnswer) ?? list.find(t => t.status === 'InProgress')
-      ?? list.find(t => t.status !== 'Mastered') ?? list[0] ?? null
-  }, [topics.data, topicKey])
 
   // Switching chats drops any in-flight answer of the previous one and closes the mobile drawer.
   const [shownChat, setShownChat] = useState(chatId)
   if (shownChat !== chatId) {
     setShownChat(chatId)
     setLive(null)
-    setTopicKey(null)
     setDrawerOpen(false)
     setPreview({ open: false, source: null })
   }
@@ -126,18 +122,16 @@ function TutorWorkspace() {
   }, [messages])
 
   const toggleSidebar = () => setSidebarOpen(open => { store(sidebarKey, open ? 'closed' : 'open'); return !open })
-  const chooseMode = (next: TutorMode) => { setMode(next); store(modeKey, next) }
-  const chooseDifficulty = (next: TutorDifficulty) => { setDifficulty(next); store(difficultyKey, next) }
-  const openSource = useCallback((source: ChatSource) => setPreview({ open: true, source }), [])
+  const openSource = (source: ChatSource) => setPreview({ open: true, source })
 
-  const send = useCallback(async (text: string, teach?: TeachRequest) => {
+  const send = async (text: string) => {
     if (!chatId || streaming) return
     const controller = new AbortController()
     abort.current = controller
     stickToBottom.current = true
     const turn: LiveTurn = {
-      question: text, teach, stored: false,
-      user: { key: 'live-user', role: 'User', content: text || (teach && actionLabels[teach.action]) || '', status: 'Completed', grounded: null, sources: [] },
+      question: text, stored: false,
+      user: { key: 'live-user', role: 'User', content: text, status: 'Completed', grounded: null, sources: [] },
       answer: { key: 'live-answer', role: 'Assistant', content: '', status: 'Streaming', grounded: null, sources: [] },
     }
     setLive(turn)
@@ -146,8 +140,7 @@ function TutorWorkspace() {
 
     let stored = false
     try {
-      const body = teach ? { content: text, mode, action: teach.action, topicKey: teach.topicKey, difficulty } : { content: text, mode, difficulty }
-      await postEventStream(`/learning/chats/${chatId}/messages`, body, controller.signal, (event, data) => {
+      await postEventStream(`/learning/chats/${chatId}/messages`, { content: text }, controller.signal, (event, data) => {
         const payload = data as Record<string, unknown>
         if (event === 'meta') {
           stored = true
@@ -159,15 +152,7 @@ function TutorWorkspace() {
         }
         else if (event === 'delta') patch(a => ({ ...a, content: a.content + (payload.text as string) }))
         else if (event === 'error') patch(a => ({ ...a, error: payload.detail as string }))
-        else if (event === 'done') {
-          patch(a => ({ ...a, status: payload.status as ViewMessage['status'] }))
-          // Teacher progress comes with the answer, so the topic list updates without another request.
-          const topic = payload.topic as TutorTopic | null | undefined
-          if (topic) {
-            client.setQueryData<TutorTopic[]>(queryKeys.tutor.topics(chatId), list => list?.map(t => (t.key === topic.key ? topic : t)))
-            setTopicKey(topic.key)
-          }
-        }
+        else if (event === 'done') patch(a => ({ ...a, status: payload.status as ViewMessage['status'] }))
       })
       patch(a => (a.status === 'Streaming' ? { ...a, status: 'Completed' } : a))
     } catch (error) {
@@ -185,9 +170,7 @@ function TutorWorkspace() {
       setLive(null)
     }
     // Not stored (rejected before streaming: limit, budget, network): keep it on screen with a retry button.
-  }, [chatId, streaming, mode, difficulty, client])
-
-  const teach = (action: TutorAction, key?: string) => { if (key) setTopicKey(key); void send('', { action, topicKey: key }) }
+  }
 
   const stop = () => abort.current?.abort()
 
@@ -203,8 +186,8 @@ function TutorWorkspace() {
   const newChat = () => { setParams({}); setDrawerOpen(false) }
   const retryFor = (index: number) => {
     if (live && index >= messages.length - 2) {
-      const { question, teach: request } = live
-      return () => { if (!live.stored) setLive(null); void send(question, request) }
+      const { question } = live
+      return () => { if (!live.stored) setLive(null); void send(question) }
     }
     const question = [...messages.slice(0, index)].reverse().find(m => m.role === 'User')?.content
     return question ? () => void send(question) : undefined
@@ -270,10 +253,31 @@ function TutorWorkspace() {
           <div className="px-3 pt-3"><Alert tone="info" title="AI köməkçisi hazırda söndürülüb">Tarixçəyə baxmaq olar, yeni suallar isə qəbul edilmir.</Alert></div>
         )}
 
+        {session && (
+          <nav aria-label="AI Tutor bölmələri" className="tutor-border shrink-0 border-b px-2 sm:px-3">
+            <div role="tablist" className="tutor-tabs mx-auto flex max-w-3xl gap-1 overflow-x-auto py-1.5">
+              {tabs.map(({ id, label, icon: Icon }) => (
+                <button key={id} type="button" role="tab" aria-selected={tab === id}
+                  onClick={event => { setTab(id); event.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' }) }}
+                  className={cn('inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors duration-150 sm:px-3 sm:text-sm',
+                    tab === id ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800')}>
+                  <Icon className="hidden size-4 sm:block" aria-hidden />{label}
+                </button>
+              ))}
+            </div>
+          </nav>
+        )}
+
         {!chatId ? (
           <div className="min-h-0 flex-1 overflow-y-auto"><TutorDocumentPicker onStart={startChat} starting={createChat.isPending} /></div>
         ) : chat.isError ? (
           <div className="p-6"><Alert title="Söhbət tapılmadı" action={<button type="button" onClick={newChat} className="text-sm font-semibold underline">Yeni söhbət</button>}>Silinmiş ola bilər və ya sizə aid deyil.</Alert></div>
+        ) : session && tab !== 'learn' ? (
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            {tab === 'quiz' && <TutorQuiz key={chatId} chatId={chatId} disabled={usage.data?.enabled === false} />}
+            {tab === 'shared' && <TutorShared key={chatId} chatId={chatId} disabled={usage.data?.enabled === false} />}
+            {tab === 'last' && <TutorLastMinute key={chatId} chatId={chatId} disabled={usage.data?.enabled === false} />}
+          </div>
         ) : (
           <>
             <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
@@ -282,7 +286,7 @@ function TutorWorkspace() {
                 {chat.isLoading ? (
                   [0, 1].map(i => <div key={i} className="h-16 animate-pulse rounded-xl bg-slate-100" />)
                 ) : messages.length === 0 ? (
-                  <Welcome mode={mode} onAsk={text => send(text)} />
+                  <Welcome onAsk={text => send(text)} />
                 ) : (
                   messages.map((message, index) => (
                     <TutorMessage key={message.key} message={message} onOpenSource={openSource}
@@ -291,14 +295,19 @@ function TutorWorkspace() {
                 )}
               </div>
             </div>
-            {teacher && session && (
+            {session && !streaming && messages.at(-1)?.role === 'Assistant' && messages.at(-1)?.status === 'Completed' && messages.at(-1)?.grounded !== false && (
               <div className="shrink-0 px-3 sm:px-4">
-                <TutorTeacher topics={topics.data ?? []} loading={topics.isLoading} current={currentTopic} difficulty={difficulty}
-                  busy={streaming || usage.data?.enabled === false} onDifficulty={chooseDifficulty} onAction={teach} />
+                <div className="mx-auto flex max-w-3xl gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none]" aria-label="Son cavab üçün">
+                  {followUps.map(f => (
+                    <button key={f.label} type="button" onClick={() => void send(f.prompt)} disabled={usage.data?.enabled === false}
+                      className="tutor-border inline-flex h-8 shrink-0 items-center rounded-full border bg-white px-3 text-xs font-medium whitespace-nowrap text-slate-700 hover:border-indigo-200 hover:bg-indigo-50/50 disabled:opacity-50">
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
-            <Composer key={chatId} disabled={!session || usage.data?.enabled === false} streaming={streaming} mode={mode} onMode={chooseMode}
-              awaitingAnswer={teacher && !!currentTopic?.awaitingAnswer} onSend={text => send(text)} onStop={stop} />
+            <Composer key={chatId} disabled={!session || usage.data?.enabled === false} streaming={streaming} onSend={text => send(text)} onStop={stop} />
           </>
         )}
       </section>
@@ -314,14 +323,12 @@ function TutorWorkspace() {
   )
 }
 
-function Welcome({ mode, onAsk }: { mode: TutorMode; onAsk: (text: string) => void }) {
-  const prompts = mode === 'StepByStep'
-    ? ['Sənədin ilk mövzusunu addım-addım izah et', 'Əsas anlayışı sadə nümunə ilə öyrət', 'Mövzunu hissələrə bölüb izah et']
-    : ['Sənədin əsas mövzuları hansılardır?', 'Əsas anlayışları qısa siyahı şəklində ver', 'Ən vacib tərifləri izah et']
+function Welcome({ onAsk }: { onAsk: (text: string) => void }) {
+  const prompts = ['Sənədin əsas mövzuları hansılardır?', 'Əsas anlayışları qısa siyahı şəklində ver', 'Ən vacib tərifləri izah et']
   return (
     <div className="tutor-enter py-8 text-center sm:py-14">
       <span className="mx-auto grid size-12 place-items-center rounded-2xl bg-indigo-50 text-indigo-700" aria-hidden>
-        {mode === 'StepByStep' ? <GraduationCap className="size-6" /> : <BookOpenText className="size-6" />}
+        <BookOpenText className="size-6" />
       </span>
       <h2 className="mt-4 text-xl font-semibold tracking-tight">Sənəd haqqında soruşun</h2>
       <p className="mx-auto mt-1.5 max-w-md text-sm text-slate-600">Hər cavab sənəddəki mənbələrə istinad edir. Sənəddə olmayan məlumat uydurulmur.</p>
@@ -338,11 +345,11 @@ function Welcome({ mode, onAsk }: { mode: TutorMode; onAsk: (text: string) => vo
 }
 
 interface ComposerProps {
-  disabled: boolean; streaming: boolean; mode: TutorMode; awaitingAnswer: boolean
-  onMode: (mode: TutorMode) => void; onSend: (text: string) => void; onStop: () => void
+  disabled: boolean; streaming: boolean
+  onSend: (text: string) => void; onStop: () => void
 }
 
-function Composer({ disabled, streaming, mode, awaitingAnswer, onMode, onSend, onStop }: ComposerProps) {
+function Composer({ disabled, streaming, onSend, onStop }: ComposerProps) {
   const [text, setText] = useState('')
   const area = useRef<HTMLTextAreaElement>(null)
   useEffect(() => { area.current?.focus({ preventScroll: true }) }, [])
@@ -371,17 +378,9 @@ function Composer({ disabled, streaming, mode, awaitingAnswer, onMode, onSend, o
         <label htmlFor="tutor-input" className="sr-only">Sual</label>
         <textarea id="tutor-input" ref={area} rows={1} value={text} onChange={e => setText(e.target.value)} onKeyDown={onKeyDown}
           maxLength={1500} disabled={disabled} enterKeyHint="send"
-          placeholder={disabled ? 'Söhbət hazırda əlçatan deyil' : awaitingAnswer ? 'Cavabınızı yazın…' : mode === 'StepByStep' ? 'Nəyi addım-addım öyrənmək istəyirsiniz?' : 'Sənəd haqqında sual verin…'}
+          placeholder={disabled ? 'Söhbət hazırda əlçatan deyil' : 'Sənəd haqqında sual verin…'}
           className="block max-h-[200px] w-full resize-none bg-transparent px-4 pt-3 pb-1 text-[15px] leading-relaxed outline-none placeholder:text-slate-400 disabled:cursor-not-allowed" />
         <div className="flex items-center gap-2 px-2 pb-2">
-          <div role="radiogroup" aria-label="Rejim" className="flex rounded-lg bg-slate-100 p-0.5 text-xs font-medium">
-            {([['Free', 'Sərbəst'], ['StepByStep', 'Addım-addım']] as const).map(([value, label]) => (
-              <button key={value} type="button" role="radio" aria-checked={mode === value} onClick={() => onMode(value)}
-                className={cn('rounded-md px-2.5 py-1.5 whitespace-nowrap transition-colors', mode === value ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800')}>
-                {label}
-              </button>
-            ))}
-          </div>
           <span className="ml-auto hidden min-w-0 truncate text-[11px] text-slate-400 md:inline">Enter — göndər · Shift+Enter — yeni sətir</span>
           {streaming ? (
             <button type="button" onClick={onStop} aria-label="Cavabı dayandır" title="Dayandır (Esc)"

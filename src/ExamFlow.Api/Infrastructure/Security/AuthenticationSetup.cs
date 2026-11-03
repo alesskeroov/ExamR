@@ -190,9 +190,9 @@ public static class AuthenticationSetup
             options.AddPolicy(UploadRateLimit, context => RateLimitPartition.GetFixedWindowLimiter(
                 context.User.Identity?.IsAuthenticated == true ? context.User.GetUserId().ToString() : context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(10), QueueLimit = 0 }));
-            // Paid model calls: 6 tutor questions per minute per user (the daily cap and budget sit on top).
+            // Paid model calls: 20 tutor requests per minute per user (quiz question + grading count separately; daily cap and budget sit on top).
             options.AddPolicy(LearningAiRateLimit, context => RateLimitPartition.GetFixedWindowLimiter(
-                context.User.GetUserId().ToString(), _ => new FixedWindowRateLimiterOptions { PermitLimit = 6, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+                context.User.GetUserId().ToString(), _ => new FixedWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
             // Generous API-wide ceiling against floods (≈10 requests/second sustained per user or IP); SignalR hubs are exempt.
             options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
                 context.Request.Path.StartsWithSegments(HubPathPrefix)

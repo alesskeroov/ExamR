@@ -92,19 +92,82 @@ export function useAiUsage() {
   return useQuery({ queryKey: queryKeys.tutor.usage, queryFn: () => api.get<AiUsage>('/learning/ai/usage'), staleTime: 30_000 })
 }
 
-export type TutorAction = 'Ask' | 'Teach' | 'Next' | 'Quiz' | 'MultipleChoice' | 'Answer' | 'Hint' | 'Simplify' | 'Reveal'
-export type TutorDifficulty = 'Easy' | 'Medium' | 'Hard'
-export interface TutorTopic {
-  key: string; title: string; pageFrom: number | null; pageTo: number | null; steps: number
-  status: 'NotStarted' | 'InProgress' | 'Mastered'; currentStep: number; attempts: number; correct: number; partial: number; weak: boolean; awaitingAnswer: boolean
+export type QuizStatus = 'Correct' | 'Partial' | 'Incorrect'
+export interface QuizQuestion { id: string; question: string; pageFrom: number | null; pageTo: number | null }
+export interface QuizResult {
+  id: string; question: string; status: QuizStatus; feedback: string; correctAnswer: string; missingPoints: string[]
+  pageFrom: number | null; pageTo: number | null; aiChecked: boolean
 }
+export interface QuizReview { correct: number; partial: number; incorrect: number; items: QuizResult[] }
+export interface OpenQuestion { number: number; text: string; chunkOrdinal: number; page: number | null }
+export interface OpenQuestions { supported: boolean; warning: string | null; questions: OpenQuestion[] }
+export type AnswerLength = 'Short' | 'Long'
+export interface SharedGroup {
+  title: string; answer: string; keywords: string[]; sourcePages: number[]
+  questions: { number: number; text: string; coverage: 'FULL' | 'PARTIAL'; extraPoints: string[] }[]
+}
+export interface LastMinuteSheet {
+  sections: { heading: string; items: string[] }[]; keyTerms: string[]; reviewQuestions: { question: string; answer: string }[]
+  sourcePages: number[]; weakParts: number
+}
+export interface Material<T = unknown> {
+  id: string; kind: 'SharedAnswer' | 'LastMinute'; length: AnswerLength | null; minutes: number | null; saved: boolean; fromCache: boolean; createdAt: string; payload: T
+}
+export interface MaterialSummary { id: string; kind: 'SharedAnswer' | 'LastMinute'; length: AnswerLength | null; minutes: number | null; saved: boolean; title: string; items: number; createdAt: string }
 
-/** Topics of the chat's document with this user's progress; loaded only in teacher mode. */
-export function useTopics(chatId: string | null, enabled: boolean) {
-  return useQuery({
-    queryKey: queryKeys.tutor.topics(chatId ?? ''),
-    queryFn: () => api.get<TutorTopic[]>(`/learning/chats/${chatId}/topics`),
-    enabled: !!chatId && enabled,
-    staleTime: Infinity, // kept current from each answer's "done" event, no polling
+export function useQuizReview(chatId: string) {
+  return useQuery({ queryKey: queryKeys.tutor.review(chatId), queryFn: () => api.get<QuizReview>(`/learning/chats/${chatId}/quiz/review`) })
+}
+export function useNextQuestion(chatId: string) {
+  return useMutation({ mutationFn: () => api.post<QuizQuestion>(`/learning/chats/${chatId}/quiz`) })
+}
+export function useAnswerQuestion(chatId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, answer, giveUp }: { id: string; answer?: string; giveUp?: boolean }) => api.post<QuizResult>(`/learning/quiz/${id}/answer`, { answer, giveUp }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: queryKeys.tutor.review(chatId) })
+      void client.invalidateQueries({ queryKey: queryKeys.tutor.usage })
+    },
+  })
+}
+export function useOpenQuestions(chatId: string) {
+  return useQuery({ queryKey: queryKeys.tutor.openQuestions(chatId), queryFn: () => api.get<OpenQuestions>(`/learning/chats/${chatId}/open-questions`), staleTime: 5 * 60_000 })
+}
+export function useMaterials(chatId: string) {
+  return useQuery({ queryKey: queryKeys.tutor.materials(chatId), queryFn: () => api.get<MaterialSummary[]>(`/learning/chats/${chatId}/materials`) })
+}
+export function useMaterial<T>(id: string | null) {
+  return useQuery({ queryKey: queryKeys.tutor.material(id ?? ''), queryFn: () => api.get<Material<T>>(`/learning/materials/${id}`), enabled: !!id, staleTime: Infinity })
+}
+function useMaterialMutation<TBody, TPayload>(chatId: string, path: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (body: TBody) => api.post<Material<TPayload>>(`/learning/chats/${chatId}/${path}`, body),
+    onSuccess: material => {
+      client.setQueryData(queryKeys.tutor.material(material.id), material)
+      void client.invalidateQueries({ queryKey: queryKeys.tutor.materials(chatId) })
+      void client.invalidateQueries({ queryKey: queryKeys.tutor.usage })
+    },
+  })
+}
+export const useSharedAnswers = (chatId: string) =>
+  useMaterialMutation<{ auto: boolean; questionNumbers?: number[]; length: AnswerLength }, { groups: SharedGroup[]; auto: boolean }>(chatId, 'shared-answers')
+export const useLastMinute = (chatId: string) => useMaterialMutation<{ minutes: number }, LastMinuteSheet>(chatId, 'last-minute')
+export function useSaveMaterial(chatId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, saved }: { id: string; saved: boolean }) => api.post<void>(`/learning/materials/${id}/save`, { saved }),
+    onSuccess: (_, { id, saved }) => {
+      client.setQueryData<Material>(queryKeys.tutor.material(id), m => m && { ...m, saved })
+      void client.invalidateQueries({ queryKey: queryKeys.tutor.materials(chatId) })
+    },
+  })
+}
+export function useDeleteMaterial(chatId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/learning/materials/${id}`),
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.tutor.materials(chatId) }),
   })
 }

@@ -98,6 +98,7 @@ builder.Services.AddOptions<LearningAiOptions>()
     .Bind(builder.Configuration.GetSection(LearningAiOptions.Section)).ValidateDataAnnotations().ValidateOnStart();
 builder.Services.AddHttpClient<IChatModel, OpenAiChatClient>(client => client.Timeout = TimeSpan.FromSeconds(320));
 builder.Services.AddScoped<LearningAiBudget>();
+builder.Services.AddScoped<StudyAi>();
 
 builder.Services.AddOptions<StudyAiOptions>()
     .Bind(builder.Configuration.GetSection(StudyAiOptions.Section)).ValidateDataAnnotations().ValidateOnStart();
@@ -227,6 +228,7 @@ api.MapAdminEndpoints();
 api.MapFocusEndpoints();
 api.MapLearningEndpoints();
 api.MapLearningChatEndpoints();
+api.MapLearningStudyEndpoints();
 api.MapGoogleAuthEndpoints();
 app.MapHub<BattleHub>(BattleHub.Path);
 app.MapHub<SocialHub>("/hubs/social", options => options.CloseOnAuthenticationExpiration = true);

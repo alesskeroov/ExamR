@@ -117,6 +117,11 @@ public sealed class LearningAiOptions
     /// <summary>Feature flag; off by default so nothing can spend money until it is switched on.</summary>
     public bool Enabled { get; set; }
     [Required] public string Model { get; set; } = "gpt-4.1-mini";
+    /// <summary>Cheaper model for mechanical steps (grouping questions); quality-sensitive work stays on <see cref="Model"/>.</summary>
+    [Required] public string LightModel { get; set; } = "gpt-4o-mini";
+    [Range(0, 1000)] public decimal LightInputUsdPerMillion { get; set; } = 0.15m;
+    [Range(0, 1000)] public decimal LightCachedInputUsdPerMillion { get; set; } = 0.075m;
+    [Range(0, 1000)] public decimal LightOutputUsdPerMillion { get; set; } = 0.60m;
     [Required, Url] public string BaseUrl { get; set; } = "https://api.openai.com/v1/";
     // USD per 1M tokens for Model (standard tier, checked against OpenAI pricing on 2026-11-02).
     [Range(0, 1000)] public decimal InputUsdPerMillion { get; set; } = 0.40m;
