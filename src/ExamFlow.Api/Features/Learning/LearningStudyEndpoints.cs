@@ -43,7 +43,6 @@ public sealed record MaterialDto(Guid Id, string Kind, string? Length, int? Minu
 public static class LearningStudyEndpoints
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-    private const int MaxAutoQuestions = 60;
 
     public static void MapLearningStudyEndpoints(this RouteGroupBuilder api)
     {
@@ -215,8 +214,71 @@ public static class LearningStudyEndpoints
             return TypedResults.Ok(new OpenQuestionsDto(false, "Bu sənəd variantlı testə oxşayır. Ortaq cavab yalnız açıq suallı sənədlər üçündür.", []));
         if (scan.Questions.Count == 0)
             return TypedResults.Ok(new OpenQuestionsDto(false, "Sənəddə açıq sual tapılmadı. Suallar nömrələnmiş və ya “?” ilə bitən olmalıdır.", []));
-        return TypedResults.Ok(new OpenQuestionsDto(true, scan.Questions.Count >= OpenQuestionExtractor.MaxQuestions ? $"İlk {OpenQuestionExtractor.MaxQuestions} sual göstərilir." : null,
-            scan.Questions));
+        var warning = scan.Questions.Count >= OpenQuestionExtractor.MaxQuestions ? $"İlk {OpenQuestionExtractor.MaxQuestions} sual götürülür." : null;
+        if (!scan.HasAnswers)
+            warning = "Sənəddə sualların altında cavab mətni tapılmadı. Ortaq cavablar yalnız sənədin digər hissələrində olan məlumatdan hazırlanacaq; məlumat olmayan suallar ayrıca göstəriləcək.";
+        return TypedResults.Ok(new OpenQuestionsDto(true, warning, scan.Questions));
+    }
+
+    private sealed record QuestionGroup(string Title, List<int> Numbers);
+
+    /// <summary>
+    /// Topic groups of ALL open questions, made once per document version with the cheap model and reused by shared answers and
+    /// last-minute notes (stored as a QuestionGroups material shared by every reader of the same file version).
+    /// </summary>
+    private static async Task<(List<QuestionGroup>? Groups, IResult? Error)> GroupsAsync(AppDbContext db, StudyAi ai, Guid userId, bool admin, StudyDoc doc,
+        OpenQuestionScan scan, TimeProvider clock, CancellationToken ct)
+    {
+        var key = StudyPrompts.CacheKey("groups", doc.LearningId, doc.Sha256, StudyPrompts.Version);
+        var cached = await db.Set<LearningMaterial>().AsNoTracking()
+            .Where(m => m.LearningDocumentId == doc.LearningId && m.CacheKey == key).Select(m => m.PayloadJson).FirstOrDefaultAsync(ct);
+        if (cached is not null) return (JsonSerializer.Deserialize<List<QuestionGroup>>(cached, Json), null);
+
+        var byNumber = scan.Questions.ToDictionary(q => q.Number);
+        var all = scan.Questions.Select(q => q.Number).ToList();
+        var groups = new List<(string Title, List<int> Numbers)>();
+        // Long documents are grouped in slices, so no question is cut off by a token limit.
+        foreach (var slice in all.Chunk(120))
+        {
+            var list = string.Join('\n', slice.Select(n => $"{n}. {TutorPrompt.Neutralise(Shorten(byNumber[n].Text, 220))}"));
+            var result = await ai.RunAsync(userId, admin,
+                [new("system", StudyPrompts.System(TutorPrompt.DetectLanguage(list))), new("user", $"<question>\n{list}\n</question>\n{StudyPrompts.GroupTask}")],
+                "group_questions", StudyPrompts.GroupSchema(), Math.Min(6000, 300 + slice.Length * 18), light: true, ct);
+            if (!result.Ok) return (null, TypedResults.Problem(result.Error, statusCode: result.Status));
+            try
+            {
+                groups.AddRange(StudyJson.NormalizeGroups(result.Json!.Value.GetProperty("groups").EnumerateArray()
+                    .Select(g => (StudyJson.Text(g, "title", 120), StudyJson.Numbers(g, "questionNumbers"))), slice, n => Shorten(byNumber[n].Text, 80)));
+            }
+            catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException) { return (null, InvalidOutput()); }
+        }
+
+        var ordered = groups.Select(g => new QuestionGroup(g.Title, g.Numbers)).OrderByDescending(g => g.Numbers.Count).ThenBy(g => g.Numbers.Min()).ToList();
+        db.Add(new LearningMaterial
+        {
+            Id = Guid.NewGuid(), UserId = userId, LearningDocumentId = doc.LearningId, DocumentSha256 = doc.Sha256, Kind = MaterialKind.QuestionGroups,
+            CacheKey = key, PromptVersion = StudyPrompts.Version, PayloadJson = JsonSerializer.Serialize(ordered, Json), CreatedAt = clock.GetUtcNow(),
+        });
+        await db.SaveChangesAsync(ct);
+        return (ordered, null);
+    }
+
+    /// <summary>Document text behind a question: its own answer when the document has one, otherwise the closest indexed parts.</summary>
+    private static async Task<(string Text, List<LearningDocumentChunk> Chunks)> QuestionSourceAsync(AppDbContext db, IChunkRetriever retriever, StudyDoc doc,
+        OpenQuestionScan scan, OpenQuestion question, int maxChars, CancellationToken ct)
+    {
+        var ordinals = new List<int> { question.ChunkOrdinal };
+        string text;
+        if (scan.Answers.TryGetValue(question.Number, out var own) && own.Length >= 60) text = own;
+        else
+        {
+            var hits = await retriever.SearchAsync(doc.LearningId, question.Text, 2, ct);
+            ordinals.AddRange(hits.Chunks.Select(h => h.Ordinal));
+            text = string.Join("\n", hits.Chunks.Select(h => h.Text));
+        }
+        var chunks = await db.Set<LearningDocumentChunk>().AsNoTracking()
+            .Where(c => c.LearningDocumentId == doc.LearningId && ordinals.Contains(c.Ordinal)).ToListAsync(ct);
+        return (text.Length > maxChars ? text[..maxChars] : text, chunks);
     }
 
     private static async Task<IResult> SharedAnswers(Guid sessionId, SharedAnswerRequest request, ClaimsPrincipal user, AppDbContext db, StudyAi ai,
@@ -228,167 +290,192 @@ public static class LearningStudyEndpoints
         var (scan, multipleChoice) = await ScanAsync(db, doc, ct);
         if (multipleChoice) return Bad("Variantlı test sənədləri üçün ortaq cavab yaradılmır.");
         var byNumber = scan.Questions.ToDictionary(q => q.Number);
-        List<int> selected = request.Auto
-            ? scan.Questions.Take(MaxAutoQuestions).Select(q => q.Number).ToList()
-            : (request.QuestionNumbers ?? []).Distinct().Where(byNumber.ContainsKey).ToList();
-        if (request.Auto ? selected.Count < 2 : selected.Count < 2)
-            return Bad(request.Auto ? "Ortaq cavab üçün sənəddə ən azı 2 açıq sual olmalıdır." : "Ən azı 2 sual seçin.");
-        selected.Sort();
+        var selected = request.Auto ? byNumber.Keys.Order().ToList() : (request.QuestionNumbers ?? []).Distinct().Where(byNumber.ContainsKey).Order().ToList();
+        if (selected.Count < 2) return Bad(request.Auto ? "Ortaq cavab üçün sənəddə ən azı 2 açıq sual olmalıdır." : "Ən azı 2 sual seçin.");
 
-        // Shared answers come only from the document, so any reader of the same file version may reuse them.
+        // Doc-derived only, so readers of the same file version share it; short and long are separate entries.
         var key = StudyPrompts.CacheKey("shared", doc.LearningId, doc.Sha256, selected, request.Length, request.Auto, StudyPrompts.Version);
         if (await FromCache(db, userId, doc.LearningId, key, mine: false, clock, ct) is { } cached) return TypedResults.Ok(cached);
 
-        // 1. Groups: automatic (cheap model) or the user's selection, which the model may still split.
-        List<(string Title, List<int> Numbers)> groups;
+        // 1. Topic groups: all questions (cached per document) or the user's own selection, which the model may still split.
+        List<QuestionGroup> groups;
         if (request.Auto)
         {
-            var list = string.Join('\n', selected.Select(n => $"{n}. {TutorPrompt.Neutralise(byNumber[n].Text)}"));
-            var grouping = await ai.RunAsync(userId, admin,
-                [new("system", StudyPrompts.System(TutorPrompt.DetectLanguage(list))), new("user", $"<question>\n{list}\n</question>\n{StudyPrompts.GroupTask}")],
-                "group_questions", StudyPrompts.GroupSchema(), Math.Min(3000, 200 + selected.Count * 20), light: true, ct);
-            if (!grouping.Ok) return TypedResults.Problem(grouping.Error, statusCode: grouping.Status);
+            var (all, error) = await GroupsAsync(db, ai, userId, admin, doc, scan, clock, ct);
+            if (error is not null) return error;
+            groups = all!;
+        }
+        else groups = [new QuestionGroup("", selected)];
+
+        // 2. One shared answer per group plus a 1-2 sentence addition per question, a few groups per call.
+        var language = TutorPrompt.DetectLanguage(string.Join(' ', selected.Take(5).Select(n => byNumber[n].Text)));
+        var perAnswer = request.Length == AnswerLength.Short ? 260 : 480;
+        var output = new List<GroupOut>();
+        foreach (var batch in groups.Chunk(4))
+        {
+            var batchStart = output.Count;
+            var prompt = new StringBuilder();
+            var batchPages = new Dictionary<int, List<LearningDocumentChunk>>();
+            for (var gi = 0; gi < batch.Length; gi++)
+            {
+                var group = batch[gi];
+                var id = batchStart + gi + 1;
+                prompt.Append($"<group id=\"{id}\"").Append(group.Title.Length > 0 ? $" title=\"{TutorPrompt.Neutralise(group.Title).Replace("\"", "'")}\"" : "").Append(">\n");
+                var budget = Math.Max(300, 4000 / group.Numbers.Count);
+                foreach (var n in group.Numbers)
+                {
+                    var (source, chunks) = await QuestionSourceAsync(db, retriever, doc, scan, byNumber[n], budget, ct);
+                    batchPages[n] = chunks;
+                    prompt.Append($"<question number=\"{n}\">{TutorPrompt.Neutralise(byNumber[n].Text)}</question>\n");
+                    if (source.Length > 0) prompt.Append($"<source question=\"{n}\">\n{TutorPrompt.Neutralise(source)}\n</source>\n");
+                }
+                prompt.Append("</group>\n");
+            }
+            prompt.Append(StudyPrompts.GroupAnswerTask(request.Length, mayRegroup: !request.Auto));
+            var questionsInBatch = batch.Sum(g => g.Numbers.Count);
+            var result = await ai.RunAsync(userId, admin, [new("system", StudyPrompts.System(language)), new("user", prompt.ToString())],
+                "group_answers", StudyPrompts.GroupAnswerSchema(), Math.Min(8000, batch.Length * (perAnswer + 120) + questionsInBatch * 90), light: false, ct);
+            if (!result.Ok) return TypedResults.Problem(result.Error, statusCode: result.Status);
             try
             {
-                groups = StudyJson.NormalizeGroups(grouping.Json!.Value.GetProperty("groups").EnumerateArray()
-                    .Select(g => (StudyJson.Text(g, "title", 120), StudyJson.Numbers(g, "questionNumbers"))), selected, n => Shorten(byNumber[n].Text, 80));
+                var allowed = batch.SelectMany(g => g.Numbers).ToHashSet();
+                var used = new HashSet<int>();
+                foreach (var g in result.Json!.Value.GetProperty("groups").EnumerateArray())
+                {
+                    var items = g.GetProperty("questions").EnumerateArray()
+                        .Select(q => (Number: q.GetProperty("number").GetInt32(), Addition: q.GetProperty("addition").GetString()?.Trim() ?? "",
+                            NeedsLonger: q.GetProperty("needsLonger").GetBoolean(), Supported: q.GetProperty("supported").GetBoolean()))
+                        .Where(q => allowed.Contains(q.Number) && used.Add(q.Number)).ToList();
+                    if (items.Count == 0) continue;
+                    var givenTitle = request.Auto && g.GetProperty("groupId").GetInt32() is var gid && gid > batchStart && gid <= batchStart + batch.Length
+                        ? batch[gid - batchStart - 1].Title : null;
+                    output.Add(new GroupOut(output.Count + 1, givenTitle ?? StudyJson.Text(g, "title", 120), StudyJson.Text(g, "answer", 5000),
+                        StudyJson.Texts(g, "keywords", 8, 60),
+                        StudyPrompts.Pages(items.SelectMany(i => batchPages.GetValueOrDefault(i.Number) ?? [])),
+                        items.Select(i => new QuestionOut(i.Number, byNumber[i.Number].Text, i.Supported ? Shorten(i.Addition, 600) : "",
+                            i.NeedsLonger, i.Supported, scan.Answers.ContainsKey(i.Number) && byNumber[i.Number].HasAnswer)).ToList()));
+                }
+                // A question the model skipped is shown as not answered rather than silently dropped.
+                foreach (var n in allowed.Where(n => !used.Contains(n)).Order())
+                    output.Add(new GroupOut(output.Count + 1, Shorten(byNumber[n].Text, 80), "", [], [],
+                        [new QuestionOut(n, byNumber[n].Text, "", true, false, byNumber[n].HasAnswer)]));
             }
             catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException) { return InvalidOutput(); }
         }
-        else groups = [("", selected)];
 
-        // 2. Shared answers in batches, each with the document parts that match its questions.
-        var output = new List<object>();
-        foreach (var batch in groups.Chunk(5))
+        // 3. Universal base answer from the grounded group answers (whole document only).
+        object? baseAnswer = null;
+        var answered = output.Where(g => g.Answer.Length > 0).ToList();
+        if (request.Auto && answered.Count >= 2)
         {
-            var sources = new Dictionary<int, LearningDocumentChunk>();
-            var groupChunks = new List<HashSet<int>>();
-            foreach (var (_, numbers) in batch)
-            {
-                var ordinals = new HashSet<int>();
-                foreach (var n in numbers)
-                {
-                    var hits = await retriever.SearchAsync(doc.LearningId, byNumber[n].Text, 2, ct);
-                    foreach (var hit in hits.Chunks) ordinals.Add(hit.Ordinal);
-                }
-                groupChunks.Add(ordinals.Take(5).ToHashSet());
-            }
-            var wanted = groupChunks.SelectMany(o => o).Distinct().Take(14).ToList();
-            foreach (var chunk in await db.Set<LearningDocumentChunk>().AsNoTracking()
-                         .Where(c => c.LearningDocumentId == doc.LearningId && wanted.Contains(c.Ordinal)).OrderBy(c => c.Ordinal).ToListAsync(ct))
-                sources[chunk.Ordinal] = chunk;
-
-            var prompt = new StringBuilder();
-            foreach (var (title, numbers) in batch)
-            {
-                prompt.Append("<group").Append(title.Length > 0 ? $" title=\"{TutorPrompt.Neutralise(title).Replace("\"", "'")}\"" : "").Append(">\n");
-                foreach (var n in numbers) prompt.Append($"<question number=\"{n}\">{TutorPrompt.Neutralise(byNumber[n].Text)}</question>\n");
-                prompt.Append("</group>\n");
-            }
-            prompt.Append(StudyPrompts.Sources(sources.Values)).Append(StudyPrompts.SharedTask(request.Length, mayRegroup: !request.Auto));
-            var perGroup = request.Length == AnswerLength.Short ? 450 : 800;
-            var result = await ai.RunAsync(userId, admin,
-                [new("system", StudyPrompts.System(TutorPrompt.DetectLanguage(byNumber[batch[0].Numbers[0]].Text))), new("user", prompt.ToString())],
-                "shared_answers", StudyPrompts.SharedSchema(), Math.Min(4000, perGroup * batch.Length + (request.Auto ? 0 : 400)), light: false, ct);
-            if (!result.Ok) return TypedResults.Problem(result.Error, statusCode: result.Status);
-
+            var topics = string.Concat(answered.Take(30).Select(g =>
+                $"<topic id=\"{g.Id}\" title=\"{TutorPrompt.Neutralise(g.Title).Replace("\"", "'")}\">\n{TutorPrompt.Neutralise(Shorten(g.Answer, 900))}\n</topic>\n"));
+            var result = await ai.RunAsync(userId, admin, [new("system", StudyPrompts.System(language)), new("user", topics + StudyPrompts.BaseTask(request.Length))],
+                "base_answer", StudyPrompts.BaseSchema(), perAnswer + 300, light: false, ct);
+            // The base is optional: a failure here must not discard the group answers already paid for.
+            if (result.Ok)
             try
             {
-                var batchNumbers = batch.SelectMany(g => g.Numbers).ToList();
-                var parsed = result.Json!.Value.GetProperty("groups").EnumerateArray().Select(g => new
-                {
-                    Title = StudyJson.Text(g, "title", 120), Numbers = StudyJson.Numbers(g, "questionNumbers"),
-                    Answer = StudyJson.Text(g, "answer", 4000), Keywords = StudyJson.Texts(g, "keywords", 8, 60),
-                    Coverage = g.GetProperty("coverage").EnumerateArray().Select(c => (Number: c.GetProperty("questionNumber").GetInt32(),
-                        Full: c.GetProperty("level").GetString() == "FULL", Extra: StudyJson.Texts(c, "extraPoints", 4, 240))).ToList(),
-                }).Where(g => g.Numbers.Any(batchNumbers.Contains)).ToList();
-                // Every question appears once; questions the model left out are reported as not covered rather than hidden.
-                var used = new HashSet<int>();
-                foreach (var g in parsed)
-                {
-                    var numbers = g.Numbers.Where(n => batchNumbers.Contains(n) && used.Add(n)).ToList();
-                    if (numbers.Count == 0) continue;
-                    var chunks = numbers.SelectMany(n => groupChunks[batch.ToList().FindIndex(b => b.Numbers.Contains(n))]).Distinct()
-                        .Where(sources.ContainsKey).Select(o => sources[o]).ToList();
-                    output.Add(new
+                var json = result.Json!.Value;
+                var answer = json.GetProperty("answer").GetString()?.Trim() ?? "";
+                var topicIds = StudyJson.Numbers(json, "topicIds").Where(id => answered.Any(g => g.Id == id)).Distinct().ToList();
+                if (answer.Length > 0 && topicIds.Count >= 2)
+                    baseAnswer = new
                     {
-                        g.Title, g.Answer, g.Keywords, SourcePages = StudyPrompts.Pages(chunks),
-                        Questions = numbers.Select(n =>
-                        {
-                            var c = g.Coverage.FirstOrDefault(x => x.Number == n);
-                            return new { Number = n, byNumber[n].Text, Coverage = c.Number == n && c.Full ? "FULL" : "PARTIAL", ExtraPoints = c.Number == n ? c.Extra : [] };
-                        }).ToList(),
-                    });
-                }
-                foreach (var n in batchNumbers.Where(n => !used.Contains(n)))
-                    output.Add(new
-                    {
-                        Title = Shorten(byNumber[n].Text, 80), Answer = "", Keywords = Array.Empty<string>(), SourcePages = Array.Empty<int>(),
-                        Questions = new[] { new { Number = n, byNumber[n].Text, Coverage = "PARTIAL", ExtraPoints = (IReadOnlyList<string>)["Bu sual üçün ortaq cavab yaradılmadı."] } },
-                    });
+                        Title = StudyJson.Text(json, "title", 120), Answer = Shorten(answer, 5000), KeyPoints = StudyJson.Texts(json, "keyPoints", 6, 160),
+                        TopicIds = topicIds, SourcePages = answered.Where(g => topicIds.Contains(g.Id)).SelectMany(g => g.SourcePages).Distinct().Order().Take(30).ToList(),
+                    };
             }
-            catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException) { return InvalidOutput(); }
+            catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException) { baseAnswer = null; }
         }
 
         var material = new LearningMaterial
         {
             Id = Guid.NewGuid(), UserId = userId, LearningDocumentId = doc.LearningId, DocumentSha256 = doc.Sha256, Kind = MaterialKind.SharedAnswer,
             Length = request.Length, QuestionNumbersJson = JsonSerializer.Serialize(selected), CacheKey = key, PromptVersion = StudyPrompts.Version,
-            PayloadJson = JsonSerializer.Serialize(new { groups = output, auto = request.Auto }, Json), CreatedAt = clock.GetUtcNow(),
+            PayloadJson = JsonSerializer.Serialize(new { auto = request.Auto, hasAnswers = scan.HasAnswers, @base = baseAnswer, groups = output }, Json),
+            CreatedAt = clock.GetUtcNow(),
         };
         db.Add(material);
         await db.SaveChangesAsync(ct);
         return TypedResults.Ok(ToDto(material, fromCache: false));
     }
 
+    private sealed record QuestionOut(int Number, string Text, string Addition, bool NeedsLonger, bool Supported, bool HasDocumentAnswer);
+    private sealed record GroupOut(int Id, string Title, string Answer, IReadOnlyList<string> Keywords, IReadOnlyList<int> SourcePages, List<QuestionOut> Questions);
+
     // ---------- Son dəqiqə hazırlığı ----------
 
-    private static async Task<IResult> LastMinute(Guid sessionId, LastMinuteRequest request, ClaimsPrincipal user, AppDbContext db, StudyAi ai, TimeProvider clock, CancellationToken ct)
+    private static async Task<IResult> LastMinute(Guid sessionId, LastMinuteRequest request, ClaimsPrincipal user, AppDbContext db, StudyAi ai,
+        IChunkRetriever retriever, TimeProvider clock, CancellationToken ct)
     {
         var userId = user.GetUserId();
+        var admin = user.IsInRole(Roles.Admin);
         if (await FromSession(db, userId, sessionId, ct) is not { } doc) return NotFound();
         var minutes = request.Minutes <= 15 ? 15 : request.Minutes <= 30 ? 30 : 60;
         var chunks = await TeachingStep.ChunksAsync(db, doc.LearningId, ct);
         if (chunks.Count == 0) return TypedResults.Problem("Sənəddə mətn tapılmadı.", statusCode: 409);
 
-        var history = await db.Set<LearningQuizItem>().AsNoTracking()
-            .Where(q => q.UserId == userId && q.LearningDocumentId == doc.LearningId && q.Status != QuizStatus.Pending)
-            .Select(q => new { q.ChunkOrdinal, q.Status, q.AnsweredAt }).ToListAsync(ct);
-        // The sheet is personal (it follows the student's mistakes), so the cache is per user and changes with new answers.
-        var fingerprint = $"{history.Count}:{history.Max(h => h.AnsweredAt)?.ToUnixTimeSeconds()}";
-        var key = StudyPrompts.CacheKey("last", userId, doc.LearningId, doc.Sha256, minutes, fingerprint, StudyPrompts.Version);
-        if (await FromCache(db, userId, doc.LearningId, key, mine: true, clock, ct) is { } cached) return TypedResults.Ok(cached);
+        // Built only from the document (no personal test history), so readers of the same version share it.
+        var key = StudyPrompts.CacheKey("notes", doc.LearningId, doc.Sha256, minutes, StudyPrompts.Version);
+        if (await FromCache(db, userId, doc.LearningId, key, mine: false, clock, ct) is { } cached) return TypedResults.Ok(cached);
 
-        var budget = minutes switch { 15 => 6, 30 => 10, _ => 16 };
-        var weak = history.Where(h => h.Status is QuizStatus.Incorrect or QuizStatus.Partial).Select(h => h.ChunkOrdinal).Distinct().Take(budget / 2).ToHashSet();
-        var picked = chunks.Where(c => weak.Contains(c.Ordinal)).ToList();
-        var rest = chunks.Where(c => !weak.Contains(c.Ordinal)).ToList();
-        var step = Math.Max(1.0, rest.Count / (double)Math.Max(1, budget - picked.Count));
-        for (var i = 0.0; i < rest.Count && picked.Count < budget; i += step) picked.Add(rest[(int)i]);
-        picked = picked.OrderBy(c => c.Ordinal).ToList();
+        var topics = minutes switch { 15 => 5, 30 => 8, _ => 14 };
+        var charBudget = minutes switch { 15 => 9000, 30 => 15000, _ => 26000 };
+        var (scan, multipleChoice) = await ScanAsync(db, doc, ct);
+        var sources = new StringBuilder();
+        var used = new List<LearningDocumentChunk>();
+        var fromQuestions = !multipleChoice && scan.Questions.Count >= 3;
+        if (fromQuestions)
+        {
+            // Topics asked about in the most questions first; each topic is backed by its questions' document answers.
+            var (groups, error) = await GroupsAsync(db, ai, userId, admin, doc, scan, clock, ct);
+            if (error is not null) return error;
+            var byNumber = scan.Questions.ToDictionary(q => q.Number);
+            var picked = groups!.Take(topics).ToList();
+            var perTopic = charBudget / Math.Max(1, picked.Count);
+            for (var i = 0; i < picked.Count; i++)
+            {
+                sources.Append($"<topic priority=\"{i + 1}\" questions=\"{picked[i].Numbers.Count}\" title=\"{TutorPrompt.Neutralise(picked[i].Title).Replace("\"", "'")}\">\n");
+                foreach (var n in picked[i].Numbers.Take(4))
+                {
+                    var (text, cs) = await QuestionSourceAsync(db, retriever, doc, scan, byNumber[n], perTopic / Math.Min(4, picked[i].Numbers.Count), ct);
+                    used.AddRange(cs);
+                    sources.Append($"<source>\n{TutorPrompt.Neutralise(text)}\n</source>\n");
+                }
+                sources.Append("</topic>\n");
+            }
+        }
+        else
+        {
+            // No question list: an even spread over the whole document.
+            var count = Math.Min(chunks.Count, minutes switch { 15 => 6, 30 => 10, _ => 16 });
+            var step = chunks.Count / (double)count;
+            for (var i = 0; i < count; i++) used.Add(chunks[(int)(i * step)]);
+            sources.Append(StudyPrompts.Sources(used));
+        }
 
-        var sources = string.Concat(picked.Select(c =>
-            $"<source pages=\"{StudyPrompts.PageText(c.PageFrom, c.PageTo)}\"{(weak.Contains(c.Ordinal) ? " weak=\"true\"" : "")}>\n{TutorPrompt.Neutralise(c.Text)}\n</source>\n"));
-        var result = await ai.RunAsync(userId, user.IsInRole(Roles.Admin),
-            [new("system", StudyPrompts.System(TutorPrompt.DetectLanguage(picked[0].Text))), new("user", sources + StudyPrompts.LastMinuteTask(minutes, weak.Count > 0))],
-            "last_minute", StudyPrompts.LastMinuteSchema(), minutes switch { 15 => 900, 30 => 1600, _ => 2800 }, light: false, ct);
+        var result = await ai.RunAsync(userId, admin,
+            [new("system", StudyPrompts.System(TutorPrompt.DetectLanguage(chunks[0].Text))), new("user", sources + StudyPrompts.NotesTask(minutes, topics, fromQuestions))],
+            "study_notes", StudyPrompts.NotesSchema(), minutes switch { 15 => 1300, 30 => 2200, _ => 3800 }, light: false, ct);
         if (!result.Ok) return TypedResults.Problem(result.Error, statusCode: result.Status);
 
         try
         {
             var json = result.Json!.Value;
+            var notes = json.GetProperty("topics").EnumerateArray().Take(topics).Select(t => new
+            {
+                Title = StudyJson.Text(t, "title", 120), Explanation = StudyJson.Text(t, "explanation", 1500),
+                Remember = StudyJson.Texts(t, "remember", 5, 160), Related = StudyJson.Texts(t, "related", 4, 80),
+            }).ToList();
+            if (notes.Count == 0) throw new JsonException("topics");
+            // About 180 words per minute; the sheet is never padded to reach the chosen time.
+            var words = notes.Sum(n => (n.Title + " " + n.Explanation + " " + string.Join(' ', n.Remember)).Split(' ', StringSplitOptions.RemoveEmptyEntries).Length);
             var payload = new
             {
-                Sections = json.GetProperty("sections").EnumerateArray().Take(10)
-                    .Select(s => new { Heading = StudyJson.Text(s, "heading", 120), Items = StudyJson.Texts(s, "items", 14, 260) })
-                    .Where(s => s.Items.Count > 0).ToList(),
-                KeyTerms = StudyJson.Texts(json, "keyTerms", 25, 60),
-                ReviewQuestions = json.GetProperty("reviewQuestions").EnumerateArray().Take(15)
-                    .Select(q => new { Question = StudyJson.Text(q, "question", 300), Answer = StudyJson.Text(q, "answer", 500) }).ToList(),
-                SourcePages = StudyPrompts.Pages(picked),
-                WeakParts = weak.Count,
+                Topics = notes, KeyTerms = StudyJson.Texts(json, "keyTerms", 25, 60), SourcePages = StudyPrompts.Pages(used),
+                ReadingMinutes = Math.Max(1, (int)Math.Round(words / 180.0)), FromQuestions = fromQuestions,
             };
-            if (payload.Sections.Count == 0) throw new JsonException("sections");
             var material = new LearningMaterial
             {
                 Id = Guid.NewGuid(), UserId = userId, LearningDocumentId = doc.LearningId, DocumentSha256 = doc.Sha256, Kind = MaterialKind.LastMinute,
@@ -429,14 +516,15 @@ public static class LearningStudyEndpoints
     {
         var userId = user.GetUserId();
         if (await FromSession(db, userId, sessionId, ct) is not { } doc) return NotFound();
-        var rows = await db.Set<LearningMaterial>().AsNoTracking().Where(m => m.UserId == userId && m.LearningDocumentId == doc.LearningId)
+        var rows = await db.Set<LearningMaterial>().AsNoTracking().Where(m => m.UserId == userId && m.LearningDocumentId == doc.LearningId
+                && m.Kind != MaterialKind.QuestionGroups && m.PromptVersion == StudyPrompts.Version)
             .OrderByDescending(m => m.Saved).ThenByDescending(m => m.CreatedAt).Take(30).ToListAsync(ct);
         return TypedResults.Ok(rows.Select(m =>
         {
             using var payload = JsonDocument.Parse(m.PayloadJson);
             var root = payload.RootElement;
             var (title, count) = m.Kind == MaterialKind.LastMinute
-                ? ($"Son dəqiqə · {m.Minutes} dəq", root.TryGetProperty("sections", out var s) ? s.GetArrayLength() : 0)
+                ? ($"Son dəqiqə · {m.Minutes} dəq", root.TryGetProperty("topics", out var s) ? s.GetArrayLength() : 0)
                 : root.TryGetProperty("groups", out var g) && g.GetArrayLength() > 0
                     ? (g[0].GetProperty("title").GetString() ?? "Ortaq cavab", g.GetArrayLength())
                     : ("Ortaq cavab", 0);

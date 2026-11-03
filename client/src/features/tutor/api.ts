@@ -99,16 +99,16 @@ export interface QuizResult {
   pageFrom: number | null; pageTo: number | null; aiChecked: boolean
 }
 export interface QuizReview { correct: number; partial: number; incorrect: number; items: QuizResult[] }
-export interface OpenQuestion { number: number; text: string; chunkOrdinal: number; page: number | null }
+export interface OpenQuestion { number: number; text: string; chunkOrdinal: number; page: number | null; hasAnswer: boolean }
 export interface OpenQuestions { supported: boolean; warning: string | null; questions: OpenQuestion[] }
 export type AnswerLength = 'Short' | 'Long'
-export interface SharedGroup {
-  title: string; answer: string; keywords: string[]; sourcePages: number[]
-  questions: { number: number; text: string; coverage: 'FULL' | 'PARTIAL'; extraPoints: string[] }[]
-}
+export interface SharedQuestion { number: number; text: string; addition: string; needsLonger: boolean; supported: boolean; hasDocumentAnswer: boolean }
+export interface SharedGroup { id: number; title: string; answer: string; keywords: string[]; sourcePages: number[]; questions: SharedQuestion[] }
+export interface SharedBase { title: string; answer: string; keyPoints: string[]; topicIds: number[]; sourcePages: number[] }
+export interface SharedPayload { auto: boolean; hasAnswers: boolean; base: SharedBase | null; groups: SharedGroup[] }
 export interface LastMinuteSheet {
-  sections: { heading: string; items: string[] }[]; keyTerms: string[]; reviewQuestions: { question: string; answer: string }[]
-  sourcePages: number[]; weakParts: number
+  topics: { title: string; explanation: string; remember: string[]; related: string[] }[]; keyTerms: string[]
+  sourcePages: number[]; readingMinutes: number; fromQuestions: boolean
 }
 export interface Material<T = unknown> {
   id: string; kind: 'SharedAnswer' | 'LastMinute'; length: AnswerLength | null; minutes: number | null; saved: boolean; fromCache: boolean; createdAt: string; payload: T
@@ -152,7 +152,7 @@ function useMaterialMutation<TBody, TPayload>(chatId: string, path: string) {
   })
 }
 export const useSharedAnswers = (chatId: string) =>
-  useMaterialMutation<{ auto: boolean; questionNumbers?: number[]; length: AnswerLength }, { groups: SharedGroup[]; auto: boolean }>(chatId, 'shared-answers')
+  useMaterialMutation<{ auto: boolean; questionNumbers?: number[]; length: AnswerLength }, SharedPayload>(chatId, 'shared-answers')
 export const useLastMinute = (chatId: string) => useMaterialMutation<{ minutes: number }, LastMinuteSheet>(chatId, 'last-minute')
 export function useSaveMaterial(chatId: string) {
   const client = useQueryClient()

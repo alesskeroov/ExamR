@@ -1,15 +1,13 @@
-import { Bookmark, BookmarkCheck, Check, Copy, Layers, ListChecks, Loader2, Trash2 } from 'lucide-react'
+import { Bookmark, BookmarkCheck, Check, Copy, Layers, ListChecks, Loader2, Sparkles, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Alert } from '../../components/common/Alert'
 import { cn } from '../../lib/utils'
 import {
   useDeleteMaterial, useMaterial, useMaterials, useOpenQuestions, useSaveMaterial, useSharedAnswers,
-  type AnswerLength, type SharedGroup,
+  type AnswerLength, type SharedBase, type SharedGroup, type SharedPayload,
 } from './api'
 
-type Payload = { groups: SharedGroup[]; auto: boolean }
-
-/** "Ortaq cavab": groups related open questions and writes one answer per group, with what each question still needs. */
+/** "Ortaq cavab": a universal base answer, topic groups with one shared answer each, and what each question adds to it. */
 export function TutorShared({ chatId, disabled }: { chatId: string; disabled: boolean }) {
   const questions = useOpenQuestions(chatId)
   const materials = useMaterials(chatId)
@@ -20,7 +18,7 @@ export function TutorShared({ chatId, disabled }: { chatId: string; disabled: bo
   const [picking, setPicking] = useState(false)
   const [picked, setPicked] = useState<number[]>([])
   const [materialId, setMaterialId] = useState<string | null>(null)
-  const material = useMaterial<Payload>(materialId)
+  const material = useMaterial<SharedPayload>(materialId)
   const [lastRequest, setLastRequest] = useState<{ auto: boolean; questionNumbers?: number[] } | null>(null)
 
   const run = (request: { auto: boolean; questionNumbers?: number[] }, len = length) => {
@@ -111,7 +109,11 @@ export function TutorShared({ chatId, disabled }: { chatId: string; disabled: bo
               {material.data.saved ? 'Saxlanılıb' : 'Saxla'}
             </button>
           </div>
-          {material.data.payload.groups.map((group, i) => <GroupCard key={`${material.data!.id}-${i}`} group={group} />)}
+          {!material.data.payload.hasAnswers && (
+            <Alert title="Sənəddə cavab mətni tapılmadı">Cavablar yalnız sənədin digər hissələrindəki məlumatdan hazırlanıb; məlumat olmayan suallar ayrıca qeyd olunub.</Alert>
+          )}
+          {material.data.payload.base && <BaseCard base={material.data.payload.base} groups={material.data.payload.groups} />}
+          {material.data.payload.groups.map(group => <GroupCard key={`${material.data!.id}-${group.id}`} group={group} />)}
         </section>
       )}
 
@@ -136,43 +138,82 @@ export function TutorShared({ chatId, disabled }: { chatId: string; disabled: bo
   )
 }
 
-function GroupCard({ group }: { group: SharedGroup }) {
+function useCopy() {
   const [copied, setCopied] = useState(false)
-  const copy = async () => {
-    const text = [group.title, '', group.questions.map(q => `${q.number}. ${q.text}`).join('\n'), '', group.answer,
-      group.keywords.length ? `\nAçar sözlər: ${group.keywords.join(', ')}` : ''].join('\n')
+  const copy = async (text: string) => {
     try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500) } catch { /* clipboard blocked */ }
   }
+  return { copied, copy }
+}
+
+function CopyButton({ text }: { text: string }) {
+  const { copied, copy } = useCopy()
+  return (
+    <button type="button" onClick={() => copy(text)} aria-label="Kopyala" title="Kopyala"
+      className="grid size-9 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900">
+      {copied ? <Check className="size-4 text-emerald-600" /> : <Copy className="size-4" />}
+    </button>
+  )
+}
+
+function BaseCard({ base, groups }: { base: SharedBase; groups: SharedGroup[] }) {
+  const topics = groups.filter(g => base.topicIds.includes(g.id)).map(g => g.title)
+  const text = [base.title, '', base.answer, ...(base.keyPoints.length ? ['', ...base.keyPoints.map(p => `• ${p}`)] : [])].join('\n')
+  return (
+    <article className="tutor-enter rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4 sm:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-indigo-700 uppercase"><Sparkles className="size-3.5" aria-hidden />Universal əsas cavab</p>
+          <h3 className="mt-1 text-base font-semibold break-words">{base.title}</h3>
+        </div>
+        <CopyButton text={text} />
+      </div>
+      <p className="mt-2 text-[15px] leading-relaxed whitespace-pre-line text-slate-800">{base.answer}</p>
+      {base.keyPoints.length > 0 && (
+        <ul className="mt-3 space-y-1 text-sm text-slate-700">
+          {base.keyPoints.map(p => <li key={p} className="flex gap-2"><span className="mt-2 size-1.5 shrink-0 rounded-full bg-indigo-500" aria-hidden />{p}</li>)}
+        </ul>
+      )}
+      {(topics.length > 0 || base.sourcePages.length > 0) && (
+        <p className="mt-3 text-xs text-slate-500">
+          {topics.length > 0 && <>Bu mövzularda istifadə et: {topics.join(', ')}</>}
+          {base.sourcePages.length > 0 && <>{topics.length > 0 ? ' · ' : ''}səh. {base.sourcePages.join(', ')}</>}
+        </p>
+      )}
+    </article>
+  )
+}
+
+function GroupCard({ group }: { group: SharedGroup }) {
+  const text = [group.title, '', group.answer, '',
+    ...group.questions.map(q => `${q.number}. ${q.text}${q.addition ? `\n   Əlavə et: ${q.addition}` : ''}`),
+    group.keywords.length ? `\nAçar sözlər: ${group.keywords.join(', ')}` : ''].join('\n')
   return (
     <article className="tutor-enter tutor-border rounded-2xl border bg-white p-4 sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <h3 className="min-w-0 text-base font-semibold break-words">{group.title}</h3>
-        <button type="button" onClick={copy} aria-label="Kopyala" title="Kopyala"
-          className="grid size-9 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900">
-          {copied ? <Check className="size-4 text-emerald-600" /> : <Copy className="size-4" />}
-        </button>
+        <CopyButton text={text} />
       </div>
-      <ul className="mt-2 space-y-1.5">
-        {group.questions.map(q => (
-          <li key={q.number} className="text-sm">
-            <div className="flex items-start gap-2">
-              <span className={cn('mt-0.5 shrink-0 rounded-md px-1.5 py-px text-[11px] font-semibold', q.coverage === 'FULL' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800')}
-                title={q.coverage === 'FULL' ? 'Ortaq cavab bu sualı tam əhatə edir' : 'Bu sual üçün əlavə məqamlar lazımdır'}>
-                {q.coverage === 'FULL' ? 'Tam' : 'Qismən'}
-              </span>
-              <span className="min-w-0 flex-1 text-slate-700"><b className="font-semibold text-slate-500 tabular-nums">{q.number}.</b> {q.text}</span>
-            </div>
-            {q.extraPoints.length > 0 && (
-              <ul className="mt-1 ml-[3.4rem] list-disc space-y-0.5 pl-4 text-xs text-amber-900">{q.extraPoints.map(p => <li key={p}>{p}</li>)}</ul>
-            )}
-          </li>
-        ))}
-      </ul>
-      {group.answer && <p className="tutor-sunken mt-3 rounded-xl px-3.5 py-3 text-[15px] leading-relaxed whitespace-pre-line text-slate-800">{group.answer}</p>}
+      {group.answer && <p className="tutor-sunken mt-2 rounded-xl px-3.5 py-3 text-[15px] leading-relaxed whitespace-pre-line text-slate-800">{group.answer}</p>}
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
         {group.keywords.map(k => <span key={k} className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">{k}</span>)}
         {group.sourcePages.length > 0 && <span className="ml-auto text-xs text-slate-400">səh. {group.sourcePages.join(', ')}</span>}
       </div>
+      <ul className="mt-4 divide-y" style={{ borderColor: 'var(--app-border)' }}>
+        {group.questions.map(q => (
+          <li key={q.number} className="py-2.5 text-sm first:pt-0 last:pb-0">
+            <p className="text-slate-800"><b className="font-semibold text-slate-500 tabular-nums">{q.number}.</b> {q.text}</p>
+            {!q.supported ? (
+              <p className="mt-1 text-xs text-rose-700">Sənəddə bu sualın cavabı üçün məlumat tapılmadı.</p>
+            ) : (
+              <>
+                {q.addition && <p className="mt-1 text-slate-600"><span className="font-medium text-emerald-700">Bu suala əlavə et:</span> {q.addition}</p>}
+                {q.needsLonger && <p className="mt-1 text-xs text-amber-800">Bu sual üçün daha geniş, ayrıca cavab tələb olunur.</p>}
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
     </article>
   )
 }

@@ -7,7 +7,7 @@ import { Skeleton } from './TutorShared'
 
 const durations = [15, 30, 60] as const
 
-/** "Son dəqiqə hazırlığı": a short revision sheet sized to the time left, weighted toward the student's mistakes. */
+/** "Son dəqiqə hazırlığı": a topic summary sized to the time left, ordered by how often the document's questions ask about each topic. */
 export function TutorLastMinute({ chatId, disabled }: { chatId: string; disabled: boolean }) {
   const generate = useLastMinute(chatId)
   const materials = useMaterials(chatId)
@@ -26,9 +26,8 @@ export function TutorLastMinute({ chatId, disabled }: { chatId: string; disabled
   const copy = async () => {
     if (!sheet) return
     const text = [
-      ...sheet.sections.flatMap(s => [s.heading, ...s.items.map(i => `• ${i}`), '']),
-      sheet.keyTerms.length ? `Açar sözlər: ${sheet.keyTerms.join(', ')}\n` : '',
-      ...sheet.reviewQuestions.map((q, i) => `${i + 1}. ${q.question}\n   ${q.answer}`),
+      ...sheet.topics.flatMap(t => [t.title, t.explanation, ...(t.remember.length ? ['Yadda saxla:', ...t.remember.map(i => `• ${i}`)] : []), '']),
+      sheet.keyTerms.length ? `Açar sözlər: ${sheet.keyTerms.join(', ')}` : '',
     ].join('\n')
     try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500) } catch { /* clipboard blocked */ }
   }
@@ -40,7 +39,7 @@ export function TutorLastMinute({ chatId, disabled }: { chatId: string; disabled
           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-indigo-50 text-indigo-700" aria-hidden><Timer className="size-5" /></span>
           <div className="min-w-0">
             <h2 className="text-base font-semibold">Son dəqiqə hazırlığı</h2>
-            <p className="text-sm text-slate-500">Nə qədər vaxtın var? Material yalnız sənəddən hazırlanır; səhv cavab verdiyin mövzulara daha çox yer ayrılır.</p>
+            <p className="text-sm text-slate-500">Nə qədər vaxtın var? Mövzu konspekti yalnız sənəddən hazırlanır; suallarda daha çox soruşulan mövzular öndə gəlir.</p>
           </div>
         </div>
         <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -54,19 +53,19 @@ export function TutorLastMinute({ chatId, disabled }: { chatId: string; disabled
           </div>
           <button type="button" onClick={run} disabled={disabled || generate.isPending}
             className="btn-primary inline-flex h-11 items-center justify-center rounded-xl px-5 text-sm font-semibold disabled:opacity-50 sm:ml-auto">
-            Materialı hazırla
+            Konspekti hazırla
           </button>
         </div>
       </section>
 
-      {generate.isPending && <Skeleton label="Təkrar materialı hazırlanır" />}
-      {generate.isError && <Alert title="Material hazırlanmadı">{generate.error.message}</Alert>}
+      {generate.isPending && <Skeleton label="Konspekt hazırlanır" />}
+      {generate.isError && <Alert title="Konspekt hazırlanmadı">{generate.error.message}</Alert>}
 
       {sheet && !generate.isPending && (
-        <article className="tutor-enter tutor-border rounded-2xl border bg-white p-4 sm:p-6" aria-label="Təkrar materialı">
+        <article className="tutor-enter tutor-border rounded-2xl border bg-white p-4 sm:p-6" aria-label="Mövzu konspekti">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm text-slate-500">
-              {material.data!.minutes} dəqiqəlik təkrar{sheet.weakParts > 0 ? ` · ${sheet.weakParts} zəif mövzu önə çəkilib` : ''}{sheet.sourcePages.length > 0 ? ` · səh. ${sheet.sourcePages.slice(0, 8).join(', ')}${sheet.sourcePages.length > 8 ? '…' : ''}` : ''}
+              {material.data!.minutes} dəqiqəlik konspekt · {sheet.topics.length} mövzu · ~{sheet.readingMinutes} dəq oxu{sheet.sourcePages.length > 0 ? ` · səh. ${sheet.sourcePages.slice(0, 8).join(', ')}${sheet.sourcePages.length > 8 ? '…' : ''}` : ''}
             </p>
             <div className="flex gap-1">
               <button type="button" onClick={copy} className="tutor-border inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium text-slate-700 hover:bg-slate-50">
@@ -80,13 +79,22 @@ export function TutorLastMinute({ chatId, disabled }: { chatId: string; disabled
             </div>
           </div>
 
-          <div className="mt-4 grid gap-5 md:grid-cols-2">
-            {sheet.sections.map(section => (
-              <section key={section.heading} className="min-w-0">
-                <h3 className="text-sm font-semibold tracking-tight text-slate-900">{section.heading}</h3>
-                <ul className="mt-2 space-y-1.5 text-sm leading-relaxed text-slate-700">
-                  {section.items.map(item => <li key={item} className="flex gap-2"><span className="mt-2 size-1.5 shrink-0 rounded-full bg-indigo-500" aria-hidden />{item}</li>)}
-                </ul>
+          <div className="mt-4 flex flex-col gap-3">
+            {sheet.topics.map((topic, i) => (
+              <section key={topic.title} className="tutor-sunken min-w-0 rounded-xl px-4 py-3.5">
+                <h3 className="flex items-baseline gap-2 text-[15px] font-semibold tracking-tight text-slate-900">
+                  <span className="text-xs text-slate-400 tabular-nums">{i + 1}</span><span className="min-w-0 break-words">{topic.title}</span>
+                </h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-slate-700">{topic.explanation}</p>
+                {topic.remember.length > 0 && (
+                  <div className="mt-2.5">
+                    <p className="text-xs font-semibold text-indigo-700">Yadda saxla</p>
+                    <ul className="mt-1 space-y-1 text-sm text-slate-800">
+                      {topic.remember.map(item => <li key={item} className="flex gap-2"><span className="mt-2 size-1.5 shrink-0 rounded-full bg-indigo-500" aria-hidden />{item}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {topic.related.length > 0 && <p className="mt-2 text-xs text-slate-500">Əlaqəli: {topic.related.join(', ')}</p>}
               </section>
             ))}
           </div>
@@ -97,31 +105,12 @@ export function TutorLastMinute({ chatId, disabled }: { chatId: string; disabled
               <div className="mt-2 flex flex-wrap gap-1.5">{sheet.keyTerms.map(t => <span key={t} className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">{t}</span>)}</div>
             </div>
           )}
-
-          {sheet.reviewQuestions.length > 0 && (
-            <div className="mt-5">
-              <h3 className="text-sm font-semibold">Təkrar sualları</h3>
-              <ol className="mt-2 space-y-1.5">
-                {sheet.reviewQuestions.map((q, i) => (
-                  <li key={q.question}>
-                    <details className="tutor-border group rounded-xl border px-3.5 py-2.5">
-                      <summary className="flex cursor-pointer list-none items-start gap-2 text-sm font-medium text-slate-800">
-                        <span className="text-slate-400 tabular-nums">{i + 1}.</span><span className="min-w-0 flex-1">{q.question}</span>
-                        <span className="text-xs font-normal text-indigo-700 group-open:hidden">Cavab</span>
-                      </summary>
-                      <p className="mt-2 text-sm leading-relaxed text-slate-600">{q.answer}</p>
-                    </details>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          )}
         </article>
       )}
 
       {previous.length > 1 && (
         <p className="text-xs text-slate-500">
-          Əvvəlki materiallar:{' '}
+          Əvvəlki konspektlər:{' '}
           {previous.map((m, i) => (
             <button key={m.id} type="button" onClick={() => setChosenId(m.id)} className={cn('mr-2 underline-offset-2 hover:underline', m.id === materialId && 'font-semibold text-slate-800')}>
               {m.minutes} dəq{m.saved ? ' ★' : ''}{i < previous.length - 1 ? ',' : ''}

@@ -10,7 +10,7 @@ using Microsoft.Extensions.Options;
 namespace ExamFlow.Api.Features.Learning;
 
 public enum QuizStatus { Pending, Correct, Partial, Incorrect }
-public enum MaterialKind { SharedAnswer, LastMinute }
+public enum MaterialKind { SharedAnswer, LastMinute, QuestionGroups }
 public enum AnswerLength { Short, Long }
 
 /// <summary>One "Məni yoxla" question with its document-grounded reference answer, kept for grading and later review.</summary>
@@ -113,8 +113,14 @@ public static class RefusalDetector
     }
 }
 
-public sealed record OpenQuestion(int Number, string Text, int ChunkOrdinal, int? Page);
-public sealed record OpenQuestionScan(IReadOnlyList<OpenQuestion> Questions, bool LooksMultipleChoice);
+public sealed record OpenQuestion(int Number, string Text, int ChunkOrdinal, int? Page, bool HasAnswer);
+
+/// <summary>Answers (by question number) are the document text written under each question; empty when the document has none.</summary>
+public sealed record OpenQuestionScan(IReadOnlyList<OpenQuestion> Questions, bool LooksMultipleChoice, IReadOnlyDictionary<int, string> Answers)
+{
+    /// <summary>At least half of the questions have answer text under them.</summary>
+    public bool HasAnswers => Questions.Count > 0 && Questions.Count(q => q.HasAnswer) * 2 >= Questions.Count;
+}
 
 /// <summary>
 /// Finds open questions in an indexed document without AI: numbered lines ("12. …", "12) …") and sentences ending with "?".
@@ -124,55 +130,125 @@ public static partial class OpenQuestionExtractor
 {
     public const int MaxQuestions = 300;
 
+    private sealed record Paragraph(string Text, int Ordinal, int? Page);
+
+    /// <summary>
+    /// Questions are the document's main numbered sequence. Answers often contain their own numbered lists; those restart at 1
+    /// (or jump far back / far ahead), so they are recognised as list items and become part of the answer text instead.
+    /// </summary>
     public static OpenQuestionScan Scan(IReadOnlyList<LearningDocumentChunk> chunks)
     {
-        var found = new List<OpenQuestion>();
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        var options = 0;
-        foreach (var chunk in chunks.OrderBy(c => c.Ordinal))
+        var paragraphs = Paragraphs(chunks);
+        var candidates = paragraphs.Select((p, i) => (Index: i, Match: Numbered().Match(p.Text))).Where(c => c.Match.Success)
+            .Select(c => (c.Index, Number: int.Parse(c.Match.Groups[1].Value), Text: c.Match.Groups[2].Value.Trim())).ToList();
+
+        // A later candidate with the same number that is not itself the next item of a list: then this one is a list item.
+        bool LaterSame(int k)
         {
-            options += OptionMarker().Matches(chunk.Text).Count;
-            // Extractors join a paragraph's lines, so "1. …? 2. …?" can arrive as one line: split before inline numbering too.
-            foreach (var raw in chunk.Text.Split('\n').SelectMany(l => InlineNumber().Split(l)))
+            for (var j = k + 1; j < Math.Min(candidates.Count, k + 80); j++)
+                if (candidates[j].Number == candidates[k].Number && candidates[j - 1].Number != candidates[k].Number - 1) return true;
+            return false;
+        }
+
+        var main = new List<(int Index, int Number, string Text)>();
+        var seen = new HashSet<int>();
+        var last = 0;
+        int? nested = null;
+        var previousIndex = -10;
+        for (var k = 0; k < candidates.Count; k++)
+        {
+            var c = candidates[k];
+            var gap = c.Index - previousIndex;
+            previousIndex = c.Index;
+            var afterLeadIn = c.Index > 0 && paragraphs[c.Index - 1].Text.TrimEnd().EndsWith(':');
+            if (nested is { } n && c.Number == n + 1 && gap <= 8)
             {
-                var line = raw.Trim();
-                if (line.Length < 8) continue;
-                var numbered = Numbered().Match(line);
-                IEnumerable<(int? Number, string Text)> candidates = numbered.Success
-                    ? [(int.Parse(numbered.Groups[1].Value), CutAtQuestionMark(numbered.Groups[2].Value))]
-                    : QuestionSentence().Matches(line).Select(m => ((int?)null, m.Value.Trim()));
-                foreach (var (number, text) in candidates)
-                {
-                    if (text.Length < 10 || text.Length > 500 || found.Count >= MaxQuestions) continue;
-                    var key = TextNormalizer.FoldedPhrase(text);
-                    if (!seen.Add(key)) continue; // chunk overlap repeats lines
-                    found.Add(new OpenQuestion(number ?? 0, text, chunk.Ordinal, chunk.PageFrom));
-                }
+                // The answer's list continues, unless this is clearly the next question.
+                if (!(c.Number == last + 1 && !LaterSame(k))) { nested = c.Number; continue; }
+            }
+            else if (last > 0 && (c.Number == 1 || (afterLeadIn && LaterSame(k))))
+            {
+                nested = c.Number; // a list inside an answer starts ("…mərhələləri bunlardır:" / "1. …")
+                continue;
+            }
+            nested = null;
+            // Repeated numbers, numbers far behind the sequence (list items) and stray far jumps ("92. …") are not questions.
+            if (seen.Contains(c.Number) || c.Number <= last - 5 || (last > 0 && c.Number - last > 15)) continue;
+            seen.Add(c.Number);
+            last = Math.Max(last, c.Number);
+            main.Add(c);
+        }
+
+        var questions = new List<OpenQuestion>();
+        var answers = new Dictionary<int, string>();
+        if (main.Count >= 3)
+        {
+            for (var i = 0; i < main.Count && questions.Count < MaxQuestions; i++)
+            {
+                var (index, number, text) = main[i];
+                var end = i + 1 < main.Count ? main[i + 1].Index : paragraphs.Count;
+                // Everything up to the next question is this question's answer (sub-lists included).
+                var answer = string.Join('\n', paragraphs.Skip(index + 1).Take(end - index - 1).Select(p => p.Text));
+                if (answer.Length > 2400) answer = answer[..2400];
+                answers[number] = answer;
+                questions.Add(new OpenQuestion(number, Shorten(text, 500), paragraphs[index].Ordinal, paragraphs[index].Page, answer.Length >= 60));
             }
         }
-        // Keep source numbers when they are unique, otherwise number in reading order.
-        var numbers = found.Select(q => q.Number).ToList();
-        var useSource = numbers.All(n => n > 0) && numbers.Distinct().Count() == numbers.Count;
-        var questions = found.Select((q, i) => q with { Number = useSource ? q.Number : i + 1 }).ToList();
-        return new OpenQuestionScan(questions, questions.Count >= 3 && options >= questions.Count * 2);
+        else
+        {
+            // No numbered sequence: fall back to sentences that end with "?" (no answers are attached).
+            var seenText = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var p in paragraphs)
+                foreach (Match m in QuestionSentence().Matches(p.Text))
+                {
+                    var text = m.Value.Trim();
+                    if (text.Length < 10 || questions.Count >= MaxQuestions || !seenText.Add(TextNormalizer.FoldedPhrase(text))) continue;
+                    questions.Add(new OpenQuestion(questions.Count + 1, Shorten(text, 500), p.Ordinal, p.Page, false));
+                }
+        }
+
+        // Test documents put the options in or right after the question ("276. … ? • a √ b • c", "A) …").
+        var optionMarks = main.Sum(q => OptionMarker().Matches(q.Text).Count)
+                          + paragraphs.Sum(p => LetterOption().Matches(p.Text).Count);
+        return new OpenQuestionScan(questions, questions.Count >= 3 && optionMarks >= questions.Count * 2, answers);
     }
 
-    private static string CutAtQuestionMark(string text)
+    /// <summary>Paragraphs in reading order without the overlap that consecutive chunks share.</summary>
+    private static List<Paragraph> Paragraphs(IReadOnlyList<LearningDocumentChunk> chunks)
     {
-        var index = text.IndexOf('?');
-        return (index > 0 ? text[..(index + 1)] : text).Trim();
+        var list = new List<Paragraph>();
+        foreach (var chunk in chunks.OrderBy(c => c.Ordinal))
+        {
+            // Only the previous chunk's tail can be overlap. Repeated text inside this chunk
+            // may be a legitimate answer to several questions and must stay attached to each.
+            var previousTail = list.TakeLast(6).ToList();
+            var inOverlap = true;
+            // Extractors join a paragraph's lines, so "1. …? 2. …?" can arrive as one paragraph: split before inline numbering too.
+            foreach (var part in chunk.Text.Split("\n\n").SelectMany(p => InlineNumber().Split(p)))
+            {
+                var text = part.Trim();
+                if (text.Length == 0) continue;
+                if (inOverlap && previousTail.Any(p => p.Text == text || (text.Length > 30 && p.Text.Contains(text, StringComparison.Ordinal)))) continue;
+                inOverlap = false;
+                list.Add(new Paragraph(text, chunk.Ordinal, chunk.PageFrom));
+            }
+        }
+        return list;
     }
 
-    [GeneratedRegex(@"^\(?(\d{1,3})\s*[.)]\s+(.+)$")] private static partial Regex Numbered();
-    [GeneratedRegex(@"(?<=[?.!:;])\s+(?=\(?\d{1,3}\s*[.)]\s+\p{L})")] private static partial Regex InlineNumber();
+    private static string Shorten(string text, int max) => text.Length <= max ? text : text[..(max - 1)].TrimEnd() + "…";
+
+    [GeneratedRegex(@"^\(?(\d{1,3})\s*[.)]\s*(\S[\s\S]*)$")] private static partial Regex Numbered();
+    [GeneratedRegex(@"(?<=[?.!:;])\s+(?=\(?\d{1,3}\s*[.)]\s*\p{L})")] private static partial Regex InlineNumber();
     [GeneratedRegex(@"[^.!?\n]{10,}\?")] private static partial Regex QuestionSentence();
-    [GeneratedRegex(@"(?:^|\s)(?:[A-Ea-e]\)|[A-E]\.\s|•|√)")] private static partial Regex OptionMarker();
+    [GeneratedRegex(@"•|√")] private static partial Regex OptionMarker();
+    [GeneratedRegex(@"(?:^|\n)\s*[A-Ea-e]\)\s")] private static partial Regex LetterOption();
 }
 
 /// <summary>Prompts and JSON schemas for the study tools. Bump <see cref="Version"/> when output changes, so cached results are not reused.</summary>
 public static class StudyPrompts
 {
-    public const string Version = "s1";
+    public const string Version = "s2";
 
     public static string System(ReplyLanguage language) => $"""
         You are ExamR's exam-preparation assistant for ONE document.
@@ -208,27 +284,45 @@ public static class StudyPrompts
         """;
 
     public const string GroupTask = """
-        Group the exam questions so that each group can be answered by one shared explanation of the same topic.
-        Do NOT force unrelated questions together; a question can stay alone in its own group.
-        Use every question number exactly once. title: a short topic name.
+        Group the exam questions by topic so that each group can be learned with one shared explanation.
+        Put questions together only when they really need the same knowledge; an unrelated question stays alone in its own group.
+        Use every question number exactly once. title: a short, plain topic name (2-6 words).
         """;
 
-    public static string SharedTask(AnswerLength length, bool mayRegroup) => $"""
-        For each group write ONE shared answer that a student can learn to answer all questions of the group.
-        {(length == AnswerLength.Short ? "Length: about 4-6 sentences (quick review)." : "Length: about 8-12 sentences (deeper understanding).")} Never drop essential content to meet the length.
-        keywords: 3-8 key terms. For every question in the group give coverage FULL if the shared answer fully answers it, otherwise PARTIAL,
-        and in extraPoints the important details that question additionally needs (empty when FULL).
-        If the sources do not answer a question, mark it PARTIAL and say in extraPoints that the document does not cover it.
-        Do not claim that one answer covers questions it does not really answer.
-        {(mayRegroup ? "First check whether the selected questions really share one topic. If not, split them into several groups (every number exactly once)." : "Keep the given groups.")}
+    private static string LengthRule(AnswerLength length) => length == AnswerLength.Short
+        ? "about 4-6 sentences (quick memorising before the exam)"
+        : "about 8-12 sentences (better understanding, fuller exam answer)";
+
+    public static string GroupAnswerTask(AnswerLength length, bool mayRegroup) => $"""
+        Each <source question="n"> block is the document's own text for that question (or the closest document text).
+        For each group write ONE shared exam answer of {LengthRule(length)} that covers what the group's questions have in common,
+        in simple, exam-ready sentences. Short must not lose essential facts; long must not be padded.
+        keywords: 3-8 key terms of the topic.
+        For EVERY question of the group:
+        - addition: 1-2 concrete sentences the student adds to the shared answer for this specific question (empty if nothing is needed).
+        - needsLonger: true if 1-2 sentences are not enough and the question needs a longer specific answer.
+        - supported: false if the sources do not contain the answer to this question; then leave addition empty.
+        Every fact must come from the sources. Do not connect a question to an answer that does not fit it.
+        {(mayRegroup ? "First check whether the selected questions really share one topic; if not, split them into several groups (every number exactly once)." : "Keep the given groups and their order; groupId repeats the given id.")}
         """;
 
-    public static string LastMinuteTask(int minutes, bool hasHistory) => $"""
-        Prepare a last-minute revision sheet that can be read in about {minutes} minutes, only from the sources.
-        sections: short headed lists (e.g. key concepts, definitions, differences, short exam answers); every item one short line.
-        keyTerms: important terms. reviewQuestions: questions worth practising with their short answers.
-        {(hasHistory ? "Sources marked weak=\"true\" cover topics the student got wrong or incomplete: give them more space; keep already-known topics brief." : "Cover the main topics of the document evenly.")}
-        Do not guess which questions will appear in the exam.
+    public static string BaseTask(AnswerLength length) => $"""
+        The <topic> blocks are shared answers already written from ONE document. Find the concepts, definitions and principles that recur
+        across the most topics and write ONE universal base answer of {LengthRule(length)} that a student can reuse in as many exam answers as possible.
+        Use only statements that appear in the topic blocks. Do not invent a link between unrelated topics.
+        keyPoints: 3-6 short facts to remember. topicIds: the ids of the topics this base answer really helps.
+        If the topics share nothing meaningful, return an empty answer and empty lists.
+        """;
+
+    public static string NotesTask(int minutes, int topics, bool fromQuestions) => $"""
+        Write a last-minute study summary (konspekt) that can be read in about {minutes} minutes, only from the sources.
+        Return at most {topics} topics{(fromQuestions ? ", in the given priority order (topics asked about most come first)" : "")}. For each topic:
+        - title: short and concrete;
+        - explanation: 3-6 simple, short sentences;
+        - remember: the 3-5 most important key words or facts;
+        - related: names of other topics it connects to (may be empty).
+        Do not repeat the same sentence in several topics. If the sources are short, return fewer topics instead of padding.
+        keyTerms: the most important terms overall. Do not claim which questions will appear in the exam.
         """;
 
     private static JsonObject Str() => new() { ["type"] = "string" };
@@ -245,16 +339,17 @@ public static class StudyPrompts
     }
     private static JsonObject Enum(params string[] values) => new() { ["type"] = "string", ["enum"] = new JsonArray(values.Select(v => (JsonNode)JsonValue.Create(v)!).ToArray()) };
     private static JsonObject Int() => new() { ["type"] = "integer" };
+    private static JsonObject Bool() => new() { ["type"] = "boolean" };
 
     public static JsonObject QuizSchema() => Obj(("question", Str()), ("answer", Str()), ("keyPoints", Arr(Str())));
     public static JsonObject GradeSchema() => Obj(("status", Enum("CORRECT", "PARTIAL", "INCORRECT")), ("feedback", Str()), ("missingPoints", Arr(Str())), ("correctAnswer", Str()));
     public static JsonObject GroupSchema() => Obj(("groups", Arr(Obj(("title", Str()), ("questionNumbers", Arr(Int()))))));
-    public static JsonObject SharedSchema() => Obj(("groups", Arr(Obj(
-        ("title", Str()), ("questionNumbers", Arr(Int())), ("answer", Str()), ("keywords", Arr(Str())),
-        ("coverage", Arr(Obj(("questionNumber", Int()), ("level", Enum("FULL", "PARTIAL")), ("extraPoints", Arr(Str())))))))));
-    public static JsonObject LastMinuteSchema() => Obj(
-        ("sections", Arr(Obj(("heading", Str()), ("items", Arr(Str()))))), ("keyTerms", Arr(Str())),
-        ("reviewQuestions", Arr(Obj(("question", Str()), ("answer", Str())))));
+    public static JsonObject GroupAnswerSchema() => Obj(("groups", Arr(Obj(
+        ("groupId", Int()), ("title", Str()), ("answer", Str()), ("keywords", Arr(Str())),
+        ("questions", Arr(Obj(("number", Int()), ("addition", Str()), ("needsLonger", Bool()), ("supported", Bool()))))))));
+    public static JsonObject BaseSchema() => Obj(("title", Str()), ("answer", Str()), ("keyPoints", Arr(Str())), ("topicIds", Arr(Int())));
+    public static JsonObject NotesSchema() => Obj(
+        ("topics", Arr(Obj(("title", Str()), ("explanation", Str()), ("remember", Arr(Str())), ("related", Arr(Str()))))), ("keyTerms", Arr(Str())));
 
     public static string CacheKey(params object?[] parts) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('|', parts.Select(p => p switch
