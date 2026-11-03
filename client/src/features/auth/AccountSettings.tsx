@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Check, MailCheck, MailWarning } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
@@ -47,10 +48,34 @@ export function AccountSettings() {
     if (await confirm({ title: 'Hesab bağlansın?', description: 'Profil anonimləşdiriləcək, giriş və aktiv sessiyalar bağlanacaq. Ortaq sənədlər, qruplar və tarixçə qorunacaq. Bu əməliyyatı geri qaytarmaq mümkün deyil.', confirmLabel: 'Hesabı bağla', danger: true })) deletion.mutate()
   }
   return <div className="space-y-4">
-    <section className={card}><h2 className="font-semibold">E-mail təsdiqi</h2><p className="mt-3 break-all text-sm">{user.email}</p><p className="mt-2 text-sm text-slate-500">{user.emailConfirmed ? 'Təsdiqlənib' : 'Təsdiqlənməyib'}</p>
-      {!user.emailConfirmed && <Button className="mt-4" variant="secondary" loading={resend.isPending} disabled={cooldown} onClick={() => void sendVerification()}>{cooldown ? 'Yenidən göndərmək üçün 60 saniyə gözləyin' : resend.isSuccess ? 'Yenidən göndər' : 'Təsdiqləmə məktubu göndər'}</Button>}
+    <section className={card}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-semibold">E-mail təsdiqi</h2>
+        {user.emailConfirmed
+          ? <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-600/20"><MailCheck className="size-3.5" aria-hidden />Təsdiqlənib</span>
+          : <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 ring-1 ring-amber-600/25"><MailWarning className="size-3.5" aria-hidden />Təsdiqlənməyib</span>}
+      </div>
+      {user.emailConfirmed ? (
+        <div className="mt-4 flex items-center gap-3 rounded-xl bg-emerald-50/60 px-3.5 py-3 ring-1 ring-emerald-600/15">
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-emerald-600 text-white" aria-hidden><Check className="size-4" strokeWidth={3} /></span>
+          <div className="min-w-0">
+            <p className="break-all text-sm font-semibold text-slate-900">{user.email}</p>
+            <p className="text-xs text-emerald-700">Email ünvanınız təsdiqlənib. Bildiriş və bərpa məktubları bu ünvana göndərilir.</p>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="mt-4 rounded-xl bg-amber-50/50 px-3.5 py-3 ring-1 ring-amber-600/20">
+            <p className="break-all text-sm font-semibold text-slate-900">{user.email}</p>
+            <p className="mt-0.5 text-xs text-amber-800">Hesabı qorumaq və şifrəni bərpa edə bilmək üçün emailinizi təsdiqləyin.</p>
+          </div>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            <Button variant="secondary" loading={resend.isPending} disabled={cooldown} onClick={() => void sendVerification()} className="w-full sm:w-auto">{cooldown ? 'Yenidən göndərmək üçün 60 saniyə gözləyin' : resend.isSuccess ? 'Yenidən göndər' : 'Təsdiqləmə məktubu göndər'}</Button>
+            <Button variant="ghost" onClick={() => void client.invalidateQueries({ queryKey: queryKeys.me })} className="w-full sm:w-auto">Təsdiq statusunu yenilə</Button>
+          </div>
+        </>
+      )}
       {resend.isSuccess && <div role="status" className="mt-3"><Alert tone="info" title={resend.data.message} /></div>}{resend.isError && <Alert title="Məktub göndərilmədi">{resend.error.message}</Alert>}
-      <Button className="mt-3" variant="ghost" onClick={() => void client.invalidateQueries({ queryKey: queryKeys.me })}>Təsdiq statusunu yenilə</Button>
     </section>
     <section className={card}><h2 className="font-semibold">Təhlükəsizlik</h2>
       {user.hasPassword !== false ? <form onSubmit={change} className="mt-4 space-y-3 text-sm">
