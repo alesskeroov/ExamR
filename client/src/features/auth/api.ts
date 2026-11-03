@@ -77,7 +77,13 @@ function useSignIn(path: string) {
 }
 
 export const useLogin = () => useSignIn('/auth/login')
-export const useRegister = () => useSignIn('/auth/register')
+
+/** Creates an unconfirmed account; no session until the emailed link confirms the address. */
+export function useRegister() {
+  return useMutation({
+    mutationFn: (request: RegisterRequest) => api.post<{ email: string; message: string }>('/auth/register', request),
+  })
+}
 
 export function useLogout() {
   const queryClient = useQueryClient()

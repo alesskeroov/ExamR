@@ -49,7 +49,7 @@ public static class AuthEndpoints
         return FrontendLink(configuration, $"/verify-email?uid={user.Id}&token={WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token))}");
     }
 
-    private static async Task<IResult> ConfirmEmail(ConfirmEmailRequest request, UserManager<AppUser> users)
+    private static async Task<IResult> ConfirmEmail(ConfirmEmailRequest request, UserManager<AppUser> users, EmailQueue email, IConfiguration configuration)
     {
         var user = await users.FindByIdAsync(request.UserId.ToString());
         if (user is null || user.IsDeleted) return InvalidVerifyLink();
@@ -59,7 +59,11 @@ public static class AuthEndpoints
         catch (FormatException) { return InvalidVerifyLink(); }
         // Validates signature, 24-hour lifetime and the security stamp; a confirmed account rejects reuse above.
         var result = await users.ConfirmEmailAsync(user, token);
-        return result.Succeeded ? TypedResults.Ok(new MessageResponse("Email ünvanın təsdiqləndi.")) : InvalidVerifyLink();
+        if (!result.Succeeded) return InvalidVerifyLink();
+        // Sent only on the unconfirmed → confirmed transition: a confirmed account returns early above, and a parallel
+        // second click fails ConfirmEmailAsync on the concurrency stamp, so the welcome goes out once.
+        if (FrontendLink(configuration, "/") is { } appUrl) email.Enqueue(EmailTemplates.Welcome(user.Email!, user.DisplayName, appUrl));
+        return TypedResults.Ok(new MessageResponse("Email ünvanınız təsdiqləndi. İndi hesabınıza daxil ola bilərsiniz."));
     }
 
     private static IResult InvalidVerifyLink() =>
@@ -74,8 +78,14 @@ public static class AuthEndpoints
         return TypedResults.Ok(new MessageResponse(ResendMessage));
     }
 
-    private static async Task<IResult> Register(RegisterRequest request, UserManager<AppUser> users, TokenService tokens, IConfiguration configuration, EmailQueue email, HttpResponse response)
+    private static async Task<IResult> Register(RegisterRequest request, UserManager<AppUser> users, IConfiguration configuration, EmailQueue email)
     {
+        if (await users.FindByEmailAsync(request.Email.Trim()) is not null)
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["email"] = ["Bu e-mail ilə artıq hesab var. Daxil olun və ya şifrənizi bərpa edin."],
+            });
+
         var fallbackNickname = $"user{Guid.NewGuid():N}"[..16];
         var user = new AppUser
         {
@@ -94,10 +104,10 @@ public static class AuthEndpoints
 
         await users.AddToRoleAsync(user, Roles.User);
         await ConfiguredAdmins.SendConfirmationAsync(users, configuration, email, user);
-        // Queued, so a provider outage never fails the registration itself.
-        if (FrontendLink(configuration, "/") is { } appUrl)
-            email.Enqueue(EmailTemplates.Welcome(user.Email!, user.DisplayName, appUrl, await VerifyLink(users, configuration, user)));
-        return TypedResults.Ok(await IssueToken(user, users, tokens, configuration, response));
+        // No session yet: the account is usable only after the emailed link confirms the address. Queued, so a
+        // provider outage never fails the registration; the user can request the link again.
+        if (await VerifyLink(users, configuration, user) is { } link) email.Enqueue(EmailTemplates.Verify(user.Email!, user.DisplayName, link));
+        return TypedResults.Ok(new RegisterResponse(user.Email!, "Təsdiqləmə linki e-mail ünvanınıza göndərildi."));
     }
 
     private static async Task<IResult> Login(
@@ -116,9 +126,12 @@ public static class AuthEndpoints
         }
 
         if (!result.Succeeded) return InvalidCredentials();
-        // Optional policy (Email:RequireConfirmedEmail); off by default so existing accounts keep working.
-        if (configuration.GetValue<bool>("Email:RequireConfirmedEmail") && !user.EmailConfirmed)
-            return TypedResults.Problem("Email ünvanın hələ təsdiqlənməyib. Gələnlər qutundakı linkə bax və ya yeni link istə.", statusCode: StatusCodes.Status403Forbidden);
+        // Confirmed address required (Email:RequireConfirmedEmail, on by default). Google sign-in already proves ownership
+        // of the address, so Google-linked accounts pass without changing their stored EmailConfirmed flag.
+        if (configuration.GetValue("Email:RequireConfirmedEmail", true) && !user.EmailConfirmed
+            && !(await users.GetLoginsAsync(user)).Any(l => l.LoginProvider == GoogleAuthEndpoints.Scheme))
+            return TypedResults.Problem("E-mail ünvanınız hələ təsdiqlənməyib. Gələnlər qutusundakı linkə keçin və ya yeni link istəyin.",
+                statusCode: StatusCodes.Status403Forbidden, extensions: new Dictionary<string, object?> { ["code"] = "email_not_confirmed" });
         await ConfiguredAdmins.SendConfirmationAsync(users, configuration, email, user);
         return TypedResults.Ok(await IssueToken(user, users, tokens, configuration, response, request.RememberMe));
     }
@@ -257,6 +270,8 @@ public static class AuthEndpoints
     private static IResult InvalidResetLink() =>
         TypedResults.Problem("Link etibarsızdır və ya vaxtı bitib. Yeni link tələb edin.", statusCode: StatusCodes.Status400BadRequest);
 }
+
+public sealed record RegisterResponse(string Email, string Message);
 
 public sealed class RegisterRequest
 {

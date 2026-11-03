@@ -1,3 +1,4 @@
+using ExamFlow.Api.Infrastructure.Email;
 using System.Security.Claims;
 using ExamFlow.Api.Infrastructure.Security;
 using Microsoft.AspNetCore.Authentication;
@@ -43,7 +44,7 @@ public static class GoogleAuthEndpoints
         return TypedResults.Challenge(properties, [Scheme]);
     }
 
-    private static async Task<IResult> Complete(HttpContext context, UserManager<AppUser> users, TokenService tokens)
+    private static async Task<IResult> Complete(HttpContext context, UserManager<AppUser> users, TokenService tokens, EmailQueue emails, IConfiguration configuration)
     {
         var external = await context.AuthenticateAsync(IdentityConstants.ExternalScheme);
         await context.SignOutAsync(IdentityConstants.ExternalScheme);
@@ -86,6 +87,8 @@ public static class GoogleAuthEndpoints
             if (!(await users.CreateAsync(owner)).Succeeded) return Fail("google_failed");
             await users.AddToRoleAsync(owner, Roles.User);
             await users.AddLoginAsync(owner, new UserLoginInfo(Scheme, subject, "Google"));
+            // Google has already verified this address, so a new Google account gets its single welcome now.
+            if (configuration["App:FrontendBaseUrl"] is { Length: > 0 } appUrl) emails.Enqueue(EmailTemplates.Welcome(owner.Email!, owner.DisplayName, appUrl.TrimEnd('/') + "/"));
         }
 
         if (owner.IsDeleted || await users.IsLockedOutAsync(owner)) return Fail("locked");

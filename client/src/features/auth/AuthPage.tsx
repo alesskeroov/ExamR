@@ -5,7 +5,8 @@ import { Button } from '../../components/common/Button'
 import { FormField } from '../../components/common/FormField'
 import { fieldErrors } from '../../lib/form-errors'
 import { cn } from '../../lib/utils'
-import { useForgotPassword, useLogin, useRegister } from './api'
+import { useForgotPassword, useLogin, useRegister, useResendConfirmation } from './api'
+import { ApiError } from '../../lib/api-client'
 import { ProductPreview } from '../landing/ProductPreview'
 import { markFreshLogin } from '../../lib/fresh-login'
 import './auth.css'
@@ -86,7 +87,10 @@ function SignInForm({ mode, onModeChange }: { mode: 'login' | 'register'; onMode
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [rememberMe, setRememberMe] = useState(false)
+  const [localErrors, setLocalErrors] = useState<Record<string, string>>({})
   const errors = fieldErrors(mutation.error)
+  const fieldError = (name: string) => localErrors[name] ?? errors.field(name)
+  const unconfirmed = mode === 'login' && login.error instanceof ApiError && login.error.problem?.code === 'email_not_confirmed'
   const [googleError] = useState(() => {
     // The Google callback redirects back with ?authError=…; show it once and clean the URL.
     const code = new URLSearchParams(window.location.search).get('authError')
@@ -98,12 +102,27 @@ function SignInForm({ mode, onModeChange }: { mode: 'login' | 'register'; onMode
     onModeChange(next)
     login.reset()
     register.reset()
+    setLocalErrors({})
   }
 
   function submit(event: FormEvent) {
     event.preventDefault()
+    // Client checks only give faster feedback; the API validates everything again.
+    const problems: Record<string, string> = {}
+    if (mode === 'register' && !displayName.trim()) problems.displayName = 'Adınızı daxil edin.'
+    if (!email.trim()) problems.email = 'E-mail ünvanını daxil edin.'
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) problems.email = 'E-mail ünvanı düzgün formatda deyil.'
+    if (!password) problems.password = 'Şifrəni daxil edin.'
+    else if (mode === 'register' && !(password.length >= 8 && /[a-z]/.test(password) && /[A-Z]/.test(password) && /\d/.test(password)))
+      problems.password = 'Şifrə ən azı 8 simvol olmalı, böyük və kiçik hərf, rəqəm daxil etməlidir.'
+    setLocalErrors(problems)
+    if (Object.keys(problems).length) return
     if (mode === 'login') login.mutate({ email, password, rememberMe })
     else register.mutate({ email, password, displayName })
+  }
+
+  if (mode === 'register' && register.isSuccess) {
+    return <VerifyPending email={register.data.email} onBack={() => { register.reset(); switchMode('login') }} />
   }
 
   return (
@@ -135,13 +154,16 @@ function SignInForm({ mode, onModeChange }: { mode: 'login' | 'register'; onMode
       {new URLSearchParams(window.location.search).get('account') === 'password-changed' && <p role="status" className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">Şifrə dəyişdirildi. Yeni şifrə ilə daxil olun.</p>}
       {new URLSearchParams(window.location.search).get('account') === 'deleted' && <p role="status" className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">Hesab bağlandı və profil anonimləşdirildi.</p>}
       <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
+        {mode === 'register' && (
+          <FormField label="Ad" autoComplete="name" value={displayName} onChange={e => setDisplayName(e.target.value)} error={fieldError('displayName')} maxLength={100} required />
+        )}
         <FormField
           label="Email"
           type="email"
           autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          error={errors.field('email')}
+          error={fieldError('email')}
           required
         />
         <AuthPasswordField
@@ -150,13 +172,12 @@ function SignInForm({ mode, onModeChange }: { mode: 'login' | 'register'; onMode
           autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          error={errors.field('password')}
+          error={fieldError('password')}
           required
         />
         <div className="auth-mode-slot">
           <div className="auth-mode-panel" data-active={mode === 'register'} aria-hidden={mode !== 'register'}>
             <div className="auth-mode-panel-inner space-y-2">
-            <FormField label="Ad" autoComplete="name" value={displayName} onChange={e => setDisplayName(e.target.value)} error={errors.field('displayName')} disabled={mode !== 'register'} required={mode === 'register'} />
             <p className="auth-muted text-xs">Şifrə: ən azı 8 simvol, böyük/kiçik hərf və rəqəm.</p>
             </div>
           </div>
@@ -173,6 +194,7 @@ function SignInForm({ mode, onModeChange }: { mode: 'login' | 'register'; onMode
         </div>
         <div className={errors.general || googleError ? undefined : 'hidden'} aria-live="polite">
           {(errors.general ?? googleError) && <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-rose-700">{errors.general ?? googleError}</p>}
+          {unconfirmed && <div className="mt-2"><ResendLink email={email} /></div>}
         </div>
 
         <Button type="submit" loading={mutation.isPending} className="auth-submit w-full">
@@ -271,4 +293,44 @@ export function ResendButton({ onResend, busy }: { onResend: () => void; busy: b
   return <Button variant="secondary" className="w-full" disabled={left > 0} loading={busy} onClick={() => { onResend(); setLeft(60) }}>
     {left > 0 ? `Yenidən göndər (${left} san)` : 'Linki yenidən göndər'}
   </Button>
+}
+
+const RESEND_COOLDOWN = 60
+
+/** Resend button with a visible cooldown; the API is rate limited and answers the same for unknown addresses. */
+function ResendLink({ email }: { email: string }) {
+  const resend = useResendConfirmation()
+  const [left, setLeft] = useState(0)
+  useEffect(() => {
+    if (left <= 0) return
+    const timer = setTimeout(() => setLeft(value => value - 1), 1000)
+    return () => clearTimeout(timer)
+  }, [left])
+  const send = () => resend.mutate(email, { onSettled: () => setLeft(RESEND_COOLDOWN) })
+  return (
+    <div className="flex flex-col gap-2" aria-live="polite">
+      <Button type="button" variant="secondary" loading={resend.isPending} disabled={left > 0 || !email.trim()} onClick={send} className="w-full">
+        {left > 0 ? `Yenidən göndər (${left} s)` : 'Təsdiqləmə məktubunu yenidən göndər'}
+      </Button>
+      {resend.isSuccess && <p role="status" className="text-sm text-emerald-700">Məktub yenidən göndərildi. Gələnlər və Spam qovluğunu yoxlayın.</p>}
+      {resend.isError && <p role="alert" className="text-sm text-rose-700">{resend.error.message}</p>}
+    </div>
+  )
+}
+
+function VerifyPending({ email, onBack }: { email: string; onBack: () => void }) {
+  return (
+    <div className="auth-mode-enter flex flex-col gap-5">
+      <span className="grid size-12 place-items-center rounded-xl bg-indigo-50 text-indigo-700" aria-hidden><MailCheck className="size-6" /></span>
+      <div>
+        <h2 className="text-[28px] font-bold leading-tight tracking-[-0.035em]">E-mail ünvanınızı təsdiqləyin</h2>
+        <p className="auth-muted mt-2 text-sm">
+          Qeydiyyatınızı tamamlamaq üçün <strong className="break-all">{email}</strong> ünvanına təsdiqləmə linki göndərdik. Link 24 saat etibarlıdır.
+        </p>
+      </div>
+      <p className="auth-muted text-sm">E-mail gəlməyibsə, Spam qovluğunu yoxlayın və ya yenidən göndərin:</p>
+      <ResendLink email={email} />
+      <button type="button" onClick={onBack} className="auth-link text-center text-sm font-medium">Girişə qayıt</button>
+    </div>
+  )
 }

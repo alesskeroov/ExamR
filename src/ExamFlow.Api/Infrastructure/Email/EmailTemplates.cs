@@ -9,23 +9,27 @@ namespace ExamFlow.Api.Infrastructure.Email;
 /// </summary>
 public static class EmailTemplates
 {
-    public static EmailMessage Welcome(string to, string name, string appUrl, string? verifyLink) => Build(to,
-        subject: "ExamR-ə xoş gəldin",
-        preheader: "Sual-cavab faylını yüklə — imtahan, öyrənmə və Battle hazırdır.",
-        eyebrow: "Xoş gəldin",
-        title: $"Salam, {name}.",
+    /// <summary>Sent once, after the address is confirmed (or when a Google account is created). Carries no link secrets.</summary>
+    public static EmailMessage Welcome(string to, string name, string appUrl) => Build(to,
+        subject: "ExamR-ə xoş gəldiniz! 🎉",
+        preheader: "Hesabınız hazırdır — sənədlərinizlə imtahana hazırlaşmağa başlayın.",
+        eyebrow: "Xoş gəldiniz",
+        title: $"Salam, {(string.IsNullOrWhiteSpace(name) ? "ExamR istifadəçisi" : name.Trim())}!", // Build encodes the title
         paragraphs:
         [
-            "ExamR hesabın hazırdır. Sual-cavab olan PDF və ya Word faylını yüklə — suallar avtomatik çıxarılır və dərhal istifadəyə hazır olur.",
+            "ExamR ailəsinə xoş gəldiniz! Hesabınız uğurla yaradıldı və e-mail ünvanınız təsdiqləndi.",
+            "Artıq ExamR vasitəsilə:",
         ],
         list:
         [
-            ("Sınaq imtahanı", "vaxtlı, istədiyin sual aralığı ilə"),
-            ("Öyrənmə rejimi", "cavabını yaz, ipucu al, müqayisə et"),
-            ("Battle", "dostlarınla eyni sənəd üzrə canlı yarış"),
+            ("İmtahana hazırlıq", "öz sənədləriniz əsasında"),
+            ("Bilik yoxlaması", "vaxtlı testlər və nəticələrin təhlili"),
+            ("Battle", "dostlarınızla canlı yarışlar"),
+            ("İnkişaf", "nəticələrinizi və irəliləyişinizi izləyin"),
         ],
-        cta: ("Öyrənməyə başla", appUrl),
-        footnote: verifyLink is null ? null : ("Email ünvanını təsdiqlə", verifyLink, "Hesabını qorumaq üçün email ünvanını təsdiqlə. Link 24 saat etibarlıdır."));
+        cta: ("ExamR-ə keçid et", appUrl),
+        footnote: null,
+        ignoreNote: "Öyrənməyə başlamağın vaxtıdır. Uğurlar arzulayırıq! — ExamR komandası");
 
     public static EmailMessage Verify(string to, string name, string link) => Build(to,
         subject: "ExamR — email ünvanını təsdiqlə",
