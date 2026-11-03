@@ -40,3 +40,12 @@
 @media (prefers-reduced-motion: reduce) {
   .tutor-enter, .tutor-caret::after, .tutor-dots span { animation: none; }
 }
+
+/* Scoped to Ortaq cavab; use theme surfaces instead of fixed light card backgrounds. */
+.tutor-shared { color: var(--app-foreground); overflow-wrap: anywhere; }
+.tutor-shared-card { min-width: 0; border-color: var(--app-border); background: var(--app-surface); }
+.tutor-shared-muted { color: var(--app-muted); }
+.tutor-shared-action { display: inline-flex; min-height: 44px; min-width: 0; align-items: center; justify-content: center; gap: .5rem; border: 1px solid var(--app-border); border-radius: 12px; padding: .65rem .75rem; font-size: .875rem; font-weight: 600; background: var(--app-surface); color: var(--app-foreground); }
+.tutor-shared-action:hover { background: var(--app-sunken); }
+.tutor-shared-action:focus-visible { outline: 2px solid var(--app-accent); outline-offset: 2px; }
+.tutor-shared-action:disabled { opacity: .5; cursor: not-allowed; }

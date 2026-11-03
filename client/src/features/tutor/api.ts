@@ -102,10 +102,7 @@ export interface QuizReview { correct: number; partial: number; incorrect: numbe
 export interface OpenQuestion { number: number; text: string; chunkOrdinal: number; page: number | null; hasAnswer: boolean }
 export interface OpenQuestions { supported: boolean; warning: string | null; questions: OpenQuestion[] }
 export type AnswerLength = 'Short' | 'Long'
-export interface SharedQuestion { number: number; text: string; addition: string; needsLonger: boolean; supported: boolean; hasDocumentAnswer: boolean }
-export interface SharedGroup { id: number; title: string; answer: string; keywords: string[]; sourcePages: number[]; questions: SharedQuestion[] }
-export interface SharedBase { title: string; answer: string; keyPoints: string[]; topicIds: number[]; sourcePages: number[] }
-export interface SharedPayload { auto: boolean; hasAnswers: boolean; base: SharedBase | null; groups: SharedGroup[] }
+export interface SharedPayload { generatorVersion: string; mainTopic: string; answer: string; sourcePages: number[] }
 export interface LastMinuteSheet {
   topics: { title: string; explanation: string; remember: string[]; related: string[] }[]; keyTerms: string[]
   sourcePages: number[]; readingMinutes: number; fromQuestions: boolean
@@ -113,7 +110,7 @@ export interface LastMinuteSheet {
 export interface Material<T = unknown> {
   id: string; kind: 'SharedAnswer' | 'LastMinute'; length: AnswerLength | null; minutes: number | null; saved: boolean; fromCache: boolean; createdAt: string; payload: T
 }
-export interface MaterialSummary { id: string; kind: 'SharedAnswer' | 'LastMinute'; length: AnswerLength | null; minutes: number | null; saved: boolean; title: string; items: number; createdAt: string }
+export interface MaterialSummary { id: string; kind: 'SharedAnswer' | 'LastMinute'; length: AnswerLength | null; minutes: number | null; saved: boolean; title: string; items: number; createdAt: string; generatorVersion?: string | null }
 
 export function useQuizReview(chatId: string) {
   return useQuery({ queryKey: queryKeys.tutor.review(chatId), queryFn: () => api.get<QuizReview>(`/learning/chats/${chatId}/quiz/review`) })
@@ -152,7 +149,7 @@ function useMaterialMutation<TBody, TPayload>(chatId: string, path: string) {
   })
 }
 export const useSharedAnswers = (chatId: string) =>
-  useMaterialMutation<{ auto: boolean; questionNumbers?: number[]; length: AnswerLength }, SharedPayload>(chatId, 'shared-answers')
+  useMaterialMutation<{ regenerate?: boolean }, SharedPayload>(chatId, 'shared-answers')
 export const useLastMinute = (chatId: string) => useMaterialMutation<{ minutes: number }, LastMinuteSheet>(chatId, 'last-minute')
 export function useSaveMaterial(chatId: string) {
   const client = useQueryClient()
