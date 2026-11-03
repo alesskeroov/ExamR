@@ -1,7 +1,7 @@
 import './exam-flow.css'
 import { answerDisplayText } from './answer-display'
 import { useIsMutating } from '@tanstack/react-query'
-import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Flag, Loader2, Maximize2, Minimize2, X } from 'lucide-react'
+import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Eye, Flag, Loader2, Maximize2, Minimize2, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
@@ -62,6 +62,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
   const saving = useIsMutating({ mutationKey: answerMutationKey(session.id) }) > 0
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [mapOpen, setMapOpen] = useState(false)
+  const [revealed, reveal] = useRevealedQuestions(session.id)
 
   const answered = session.questions.filter((q) => q.selectedOptionId).length
   const locked = immediate && question.selectedOptionId !== null
@@ -159,6 +160,8 @@ function ExamRunner({ session }: { session: ExamSession }) {
             number={index + 1}
             immediate={immediate}
             locked={locked}
+            revealed={revealed.has(question.examQuestionId)}
+            onReveal={() => reveal(question.examQuestionId)}
             onChoose={choose}
           />
 
@@ -182,7 +185,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
           </div>
         </div>
 
-        <QuestionNavigator questions={session.questions} current={index} immediate={immediate} onSelect={goTo} open={mapOpen} onToggle={() => setMapOpen(value => !value)} />
+        <QuestionNavigator questions={session.questions} current={index} immediate={immediate} revealed={revealed} onSelect={goTo} open={mapOpen} onToggle={() => setMapOpen(value => !value)} />
       </main>
 
       <FinishDialog
@@ -204,11 +207,14 @@ interface QuestionPanelProps {
   number: number
   immediate: boolean
   locked: boolean
+  revealed: boolean
+  onReveal: () => void
   onChoose: (optionId: string | null) => void
 }
 
-function QuestionPanel({ question, number, immediate, locked, onChoose }: QuestionPanelProps) {
-  const reveal = question.reveal
+function QuestionPanel({ question, number, immediate, locked, revealed, onReveal, onChoose }: QuestionPanelProps) {
+  // Immediate mode gets the result with the saved answer, but shows it only after the student asks for it.
+  const reveal = revealed ? question.reveal : null
   const headingId = `question-${question.examQuestionId}`
 
   return (
@@ -269,6 +275,16 @@ function QuestionPanel({ question, number, immediate, locked, onChoose }: Questi
 
       {reveal && <RevealNote reveal={reveal} selectedOptionId={question.selectedOptionId} />}
 
+      {!reveal && question.reveal && (
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-slate-500">Cavabın yadda saxlanıldı.</p>
+          <Button variant="secondary" onClick={onReveal} className="h-11 w-full sm:w-auto">
+            <Eye className="size-4" aria-hidden />
+            Cavabı göstər
+          </Button>
+        </div>
+      )}
+
       {!immediate && question.selectedOptionId && (
         <button type="button" onClick={() => onChoose(null)} className="mt-2 min-h-11 text-sm text-slate-500 hover:text-slate-800">
           Cavabı təmizlə
@@ -308,12 +324,13 @@ interface QuestionNavigatorProps {
   questions: ExamSessionQuestion[]
   current: number
   immediate: boolean
+  revealed: ReadonlySet<string>
   onSelect: (index: number) => void
   open: boolean
   onToggle: () => void
 }
 
-function QuestionNavigator({ questions, current, immediate, onSelect, open, onToggle }: QuestionNavigatorProps) {
+function QuestionNavigator({ questions, current, immediate, revealed, onSelect, open, onToggle }: QuestionNavigatorProps) {
   return (
     <nav aria-label="Suallar" className="order-first min-w-0 rounded-xl border border-slate-200 bg-white p-3 lg:order-last lg:sticky lg:top-24 lg:self-start lg:p-4">
       <button type="button" className="exam-panel-toggle min-h-11 w-full items-center justify-between gap-2 text-sm font-medium" aria-expanded={open} aria-controls="exam-question-map" onClick={onToggle}>
@@ -326,7 +343,7 @@ function QuestionNavigator({ questions, current, immediate, onSelect, open, onTo
       <div id="exam-question-map" className="exam-map-content" data-open={open}>
       <ol className="exam-question-map grid grid-cols-[repeat(auto-fill,minmax(42px,1fr))] gap-1.5">
         {questions.map((q, i) => {
-          const reveal = immediate ? q.reveal : null
+          const reveal = immediate && revealed.has(q.examQuestionId) ? q.reveal : null
           const state = !q.selectedOptionId
             ? 'empty'
             : !reveal ? 'answered'
@@ -360,6 +377,7 @@ function QuestionNavigator({ questions, current, immediate, onSelect, open, onTo
         <Legend className="border-slate-300 bg-white" label="Boş" />
         {immediate ? (
           <>
+            <Legend className="border-indigo-600 bg-indigo-600" label="Cavablanıb" />
             <Legend className="border-emerald-600 bg-emerald-600" label="Düzgün" />
             <Legend className="border-rose-600 bg-rose-600" label="Yanlış" />
           </>
@@ -491,4 +509,20 @@ function FullscreenToggle() {
       {active ? <Minimize2 className="size-4" aria-hidden /> : <Maximize2 className="size-4" aria-hidden />}
     </button>
   )
+}
+
+/** Questions whose result the student chose to see; kept per session so a reload does not hide them again. */
+function useRevealedQuestions(sessionId: string): [ReadonlySet<string>, (examQuestionId: string) => void] {
+  const storageKey = `exam-revealed:${sessionId}`
+  const [revealed, setRevealed] = useState<ReadonlySet<string>>(() => {
+    try { return new Set(JSON.parse(sessionStorage.getItem(storageKey) ?? '[]') as string[]) } catch { return new Set() }
+  })
+  const reveal = useCallback((examQuestionId: string) => {
+    setRevealed(current => {
+      const next = new Set(current).add(examQuestionId)
+      try { sessionStorage.setItem(storageKey, JSON.stringify([...next])) } catch { /* storage blocked */ }
+      return next
+    })
+  }, [storageKey])
+  return [revealed, reveal]
 }
