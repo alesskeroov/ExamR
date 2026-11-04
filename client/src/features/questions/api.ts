@@ -9,7 +9,7 @@ export interface QuestionEdit { text: string; answer: string | null; options: { 
 
 export const BANK_PAGE_SIZE = 20
 
-export function useQuestionBank(filters: BankFilters, page: number) {
+export function useQuestionBank(filters: BankFilters, page: number, enabled = true) {
   const params = new URLSearchParams({ page: String(page), pageSize: String(BANK_PAGE_SIZE) })
   if (filters.search.trim()) params.set('search', filters.search.trim())
   if (filters.documentId) params.set('documentId', filters.documentId)
@@ -17,7 +17,7 @@ export function useQuestionBank(filters: BankFilters, page: number) {
   if (filters.status) params.set('status', filters.status)
   if (filters.bookmarked) params.set('bookmarked', 'true')
   const query = params.toString()
-  return useQuery({ queryKey: queryKeys.questions.bank(query), placeholderData: keepPreviousData,
+  return useQuery({ queryKey: queryKeys.questions.bank(query), placeholderData: keepPreviousData, enabled,
     queryFn: () => api.get<PagedResult<QuestionDto>>(`/questions?${query}`) })
 }
 

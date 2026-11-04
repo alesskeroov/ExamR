@@ -26,9 +26,12 @@ export function QuestionBankPage() {
   const [notice, setNotice] = useState('')
   const stats = useQuestionStats()
   const documents = useBankDocuments()
-  const bank = useQuestionBank(filters, page)
+  const selected = filters.documentId !== ''
+  const bank = useQuestionBank(filters, page, selected)
   const action = useQuestionAction()
   const update = (patch: Partial<BankFilters>) => { setFilters(f => ({ ...f, ...patch })); setPage(1) }
+  // Clearing the document hides the other filters, so reset them instead of applying them invisibly.
+  const selectDocument = (documentId: string) => { if (!documentId) setTerm(''); update(documentId ? { documentId } : initial) }
   useEffect(() => { const timer = setTimeout(() => { setFilters(f => f.search === term ? f : { ...f, search: term }); setPage(1) }, 300); return () => clearTimeout(timer) }, [term])
   useEffect(() => { if (!notice) return; const timer = setTimeout(() => setNotice(''), 3000); return () => clearTimeout(timer) }, [notice])
   const pages = bank.data ? Math.max(1, Math.ceil(bank.data.totalCount / BANK_PAGE_SIZE)) : 1
@@ -36,25 +39,24 @@ export function QuestionBankPage() {
   return <>
     <PageHeader title="Sual bankı" description="Sənədlərindən və səninlə paylaşılan materiallardan çıxarılmış suallar." />
 
-    <section aria-label="Statistika" className="grid grid-cols-3 gap-2 sm:gap-4">
+    {selected && <section aria-label="Statistika" className="mb-6 grid grid-cols-3 gap-2 sm:gap-4">
       {[['Ümumi sual', stats.data?.totalQuestions], ['Sənəd', stats.data?.documentCount], ['Seçilmiş suallar', stats.data?.bookmarkCount]].map(([label, value]) =>
         <div key={label} className={cn(card, 'p-3 sm:p-5')}><p className="text-xs text-slate-500 sm:text-sm">{label}</p>
           {stats.isPending ? <div className="mt-1 h-7 w-12 animate-pulse rounded-lg bg-slate-100" /> : <p className="text-xl font-semibold tabular-nums sm:text-2xl">{value ?? '—'}</p>}</div>)}
-    </section>
+    </section>}
 
-    <section aria-label="Filtrlər" className={cn(card, 'mt-6 grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_auto]')}>
+    <section aria-label="Filtrlər" className={cn(card, 'grid grid-cols-1 gap-3 p-4', selected && 'sm:grid-cols-2 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,2fr)_minmax(0,1fr)_auto]')}>
+      <select aria-label="Sənəd" value={filters.documentId} onChange={e => selectDocument(e.target.value)} className={field}>
+        <option value="">Sənəd seçin</option>{documents.data?.items.map(d => <option key={d.id} value={d.id}>{d.originalFileName}</option>)}
+      </select>
+      {selected && <>
       <input type="search" aria-label="Sual mətnində axtar" placeholder="Sual mətnində axtar…" value={term} onChange={e => setTerm(e.target.value)} maxLength={200} className={field} />
-      <select aria-label="Sənəd" value={filters.documentId} onChange={e => update({ documentId: e.target.value })} className={field}>
-        <option value="">Bütün sənədlər</option>{documents.data?.items.map(d => <option key={d.id} value={d.id}>{d.originalFileName}</option>)}
-      </select>
-      <select aria-label="Sual növü" value={filters.type} onChange={e => update({ type: e.target.value as BankFilters['type'] })} className={field}>
-        <option value="">Bütün növlər</option><option value="choice">Variantlı</option><option value="open">Açıq sual</option>
-      </select>
       <select aria-label="Yoxlanılma statusu" value={filters.status} onChange={e => update({ status: e.target.value as BankFilters['status'] })} className={field}>
         <option value="">Bütün statuslar</option><option value="Verified">Yoxlanılıb</option><option value="AutoDetected">Yoxlanılmayıb</option><option value="Unverified">Cavab bilinmir</option>
       </select>
       <button type="button" aria-pressed={filters.bookmarked} onClick={() => update({ bookmarked: !filters.bookmarked })} className={cn('flex h-10 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-medium transition-colors', filters.bookmarked ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-slate-300 text-slate-600 hover:bg-slate-50')}>
         <Bookmark className={cn('size-4', filters.bookmarked && 'fill-current')} aria-hidden />Seçilmişlər</button>
+      </>}
     </section>
 
     <div className="mt-4 space-y-3" aria-live="polite">
@@ -63,7 +65,8 @@ export function QuestionBankPage() {
     </div>
 
     <div className="mt-4 space-y-4">
-      {bank.isPending ? [0, 1, 2].map(i => <div key={i} className={cn(card, 'h-40 animate-pulse')} />)
+      {!selected ? <EmptyState icon={<FileText className="size-6" />} title="Sənəd seçin" description="Sualları görmək üçün yuxarıdan sənəd seçin." />
+        : bank.isPending ? [0, 1, 2].map(i => <div key={i} className={cn(card, 'h-40 animate-pulse')} />)
         : bank.error ? <Alert title="Suallar yüklənmədi">{bank.error.message}</Alert>
         : bank.data.items.length === 0 ? <EmptyState icon={<Library className="size-6" />} title="Sual tapılmadı" description={JSON.stringify(filters) === JSON.stringify(initial) ? 'Sənəd yüklədikdə çıxarılan suallar burada görünəcək.' : 'Axtarışı və ya filtrləri dəyişin.'} />
         : bank.data.items.map(q => <QuestionItem key={q.id} question={q} busy={action.isPending}
