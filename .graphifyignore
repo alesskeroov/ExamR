@@ -1,0 +1,39 @@
+# Graphify scan exclusions for ExamR (gitignore syntax).
+# .gitignore is honoured as well; this file only adds more exclusions.
+
+# Dependencies, build output, VCS
+node_modules/
+bin/
+obj/
+dist/
+dist-ssr/
+artifacts/
+.git/
+.vs/
+
+# User uploads, local emails, QA credentials
+App_Data/
+
+# Real exam PDFs and other samples
+samples/
+
+# Secrets and environment files
+.env
+.env.*
+secrets.json
+appsettings.Development.json
+appsettings.*.local.json
+*.pfx
+*.pem
+*.key
+
+# Local-only tooling, notes and generated SQL
+.claude/
+scripts/
+*.sql
+
+# Graphify's own output
+graphify-out/
+
+# Generated EF migration designer files (noise; migration classes stay)
+*.Designer.cs
