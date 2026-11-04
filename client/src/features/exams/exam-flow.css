@@ -25,7 +25,8 @@
   transform: translateY(100%); visibility: hidden; transition: transform 220ms ease-out, visibility 0s linear 220ms; }
 .exam-session .exam-sheet[data-open='true'] { transform: none; visibility: visible; transition: transform 220ms ease-out, visibility 0s; }
 .exam-session .exam-sheet-handle { display: block; width: 36px; height: 4px; margin: -4px auto 10px; border-radius: 999px; background: var(--app-border); }
-@media (min-width: 640px) { .exam-session .exam-sheet { left: 50%; right: auto; width: min(32rem, 100%); translate: -50% 0; } }
+/* Centred sheet only up to the sidebar breakpoint: the minifier drops a later `translate: none` reset. */
+@media (min-width: 640px) and (max-width: 899.98px) { .exam-session .exam-sheet { left: 50%; right: auto; width: min(32rem, 100%); translate: -50% 0; } }
 @media (min-width: 900px) {
   .exam-session .exam-layout { padding-bottom: 2rem; }
   .exam-session .exam-sheet-backdrop, .exam-session .exam-sheet-handle { display: none; }
