@@ -7,7 +7,12 @@
 .exam-session .exam-progress { background: var(--app-sunken); }
 .exam-session .exam-controls { background: var(--app-surface); border-color: var(--app-border); }
 /* Room for the fixed mobile action bar (incl. the home-indicator area) under the last option. */
-.exam-session .exam-layout { padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
+.exam-session .exam-layout { padding-bottom: calc(var(--exam-controls-h, calc(4.5rem + env(safe-area-inset-bottom))) + 1rem); }
+/* Revealed answer above the mobile action bar: long answers scroll inside it instead of covering the question. */
+.exam-session .exam-answer-sheet { animation: exam-sheet-in 200ms ease-out; }
+.exam-session .exam-answer-sheet-body { max-height: min(28dvh, 9rem); overflow-y: auto; overscroll-behavior: contain; }
+@keyframes exam-sheet-in { from { opacity: 0; transform: translateY(6px); } }
+.exam-session .exam-map-button-active { border-color: var(--app-accent); color: var(--app-accent); }
 .exam-session .exam-map-button { border: 1px solid var(--app-border); background: var(--app-sunken); color: var(--app-foreground); }
 .exam-session .exam-save-status:empty { display: none; }
 .exam-session .exam-flag-dot { position: absolute; top: -3px; right: -3px; width: 9px; height: 9px; border-radius: 999px; background: #f59e0b; box-shadow: 0 0 0 2px var(--app-surface); }
@@ -47,7 +52,23 @@
 @keyframes exam-pop { from { opacity: 0; transform: translateY(-4px) scale(.98); } }
 .exam-session .exam-dialog[open] { animation: exam-pop 170ms ease-out; }
 @media (prefers-reduced-motion: reduce) {
-  .exam-session .exam-question-enter, .exam-session .exam-dialog[open] { animation: none; }
+  .exam-session .exam-question-enter, .exam-session .exam-dialog[open], .exam-session .exam-answer-sheet { animation: none; }
   .exam-session .exam-sheet, .exam-session .exam-sheet-backdrop { transition: none; }
 }
 @media (min-width: 1024px) { .exam-session .exam-controls { background: transparent; padding-bottom: 0; } }
+
+/* Result page: short reveal of the summary, bar parts filling left to right, staggered question map. */
+.exam-flow .result-reveal { animation: result-fade 320ms ease-out both; }
+.exam-flow .result-bar-part { transform-origin: left; animation: result-grow 600ms cubic-bezier(.2, .7, .2, 1) both; }
+.exam-flow .result-cell { animation: result-cell-in 240ms ease-out both; transition: transform 120ms ease, box-shadow 150ms ease; }
+.exam-flow .result-cell:hover { box-shadow: 0 0 0 1px var(--app-border); }
+.exam-flow .result-cell:active { transform: scale(.94); }
+.exam-flow .result-cell:focus-visible { outline: 2px solid var(--app-accent); outline-offset: 2px; }
+.exam-flow .result-card { transition: border-color 200ms ease, box-shadow 200ms ease; }
+@keyframes result-fade { from { opacity: 0; transform: translateY(4px); } }
+@keyframes result-grow { from { transform: scaleX(0); } }
+@keyframes result-cell-in { from { opacity: 0; transform: translateY(3px); } }
+@media (prefers-reduced-motion: reduce) {
+  .exam-flow .result-reveal, .exam-flow .result-bar-part, .exam-flow .result-cell { animation: none; }
+  .exam-flow .result-cell:active { transform: none; }
+}

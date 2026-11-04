@@ -66,6 +66,10 @@ function ExamRunner({ session }: { session: ExamSession }) {
   const [mapOpen, setMapOpen] = useState(false)
   const [revealed, toggleRevealed] = useStoredSet(`exam-revealed:${session.id}`)
   const [flagged, toggleFlag] = useStoredSet(`exam-flagged:${session.id}`)
+  // Mobile answer panel: open by default for revealed questions, until the student closes it.
+  const [closedNotes, setClosedNotes] = useState<ReadonlySet<string>>(new Set())
+  const controlsRef = useRef<HTMLDivElement>(null)
+  const layoutRef = useRef<HTMLElement>(null)
   // The session has no title; the exam is also listed (newest first) in the history, which names its PDF.
   const history = useExamHistory(1)
   const summary = history.data?.items.find(e => e.id === session.id)
@@ -73,6 +77,14 @@ function ExamRunner({ session }: { session: ExamSession }) {
 
   const answered = session.questions.filter((q) => q.selectedOptionId).length
   const locked = immediate && question.selectedOptionId !== null
+  const isRevealed = revealed.has(question.examQuestionId)
+  const noteOpen = isRevealed && question.reveal !== null && !closedNotes.has(question.examQuestionId)
+  const setNoteClosed = (closed: boolean) => setClosedNotes(current => {
+    const next = new Set(current)
+    if (closed) next.add(question.examQuestionId); else next.delete(question.examQuestionId)
+    return next
+  })
+  const reveal = () => { toggleRevealed(question.examQuestionId, true); setNoteClosed(false) }
 
   const goTo = useCallback(
     (i: number) => {
@@ -124,6 +136,16 @@ function ExamRunner({ session }: { session: ExamSession }) {
     return () => { document.body.style.overflow = overflow; window.removeEventListener('keydown', close) }
   }, [mapOpen])
 
+  // Keep the last option clear of the fixed mobile action bar, whatever its current height.
+  useEffect(() => {
+    const controls = controlsRef.current
+    const layout = layoutRef.current
+    if (!controls || !layout || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => layout.style.setProperty('--exam-controls-h', `${controls.offsetHeight}px`))
+    observer.observe(controls)
+    return () => observer.disconnect()
+  }, [])
+
   // Warn before leaving while an answer is still being saved.
   useEffect(() => {
     if (!saving) return
@@ -159,7 +181,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
         </div>
       </header>
 
-      <main className="exam-shell exam-layout mx-auto grid gap-3 px-3 pt-3 sm:px-4 sm:pt-4 lg:gap-6 lg:px-6 lg:pt-6">
+      <main ref={layoutRef} className="exam-shell exam-layout mx-auto grid gap-3 px-3 pt-3 sm:px-4 sm:pt-4 lg:gap-6 lg:px-6 lg:pt-6">
         <div className="flex min-w-0 flex-col gap-4">
           {finish.isError && <Alert title="İmtahan bitirilmədi">{finish.error.message}</Alert>}
 
@@ -169,28 +191,42 @@ function ExamRunner({ session }: { session: ExamSession }) {
             number={index + 1}
             immediate={immediate}
             locked={locked}
-            revealed={revealed.has(question.examQuestionId)}
-            onReveal={() => toggleRevealed(question.examQuestionId, true)}
+            revealed={isRevealed}
+            onReveal={reveal}
             flagged={flagged.has(question.examQuestionId)}
             onFlag={() => toggleFlag(question.examQuestionId)}
             onChoose={choose}
           />
 
-          <div className="exam-controls fixed inset-x-0 bottom-0 z-20 border-t px-3 pt-2.5 lg:static lg:border-0 lg:bg-transparent lg:p-0">
+          <div ref={controlsRef} className="exam-controls fixed inset-x-0 bottom-0 z-20 border-t px-3 pt-2.5 lg:static lg:border-0 lg:bg-transparent lg:p-0">
+            {noteOpen && question.reveal && (
+              <AnswerSheet reveal={question.reveal} options={question.options} selectedOptionId={question.selectedOptionId} onClose={() => setNoteClosed(true)} />
+            )}
             <div className="relative mx-auto grid max-w-2xl grid-cols-[1fr_auto_1fr] items-center gap-2 lg:flex lg:max-w-none">
               <SaveStatus saving={saving} error={answer.isError ? answer.error.message : null} />
-              <Button variant="secondary" disabled={index === 0} onClick={() => goTo(index - 1)} className="exam-nav-button min-w-0 gap-1 px-2 whitespace-nowrap sm:gap-2 sm:px-3 lg:order-1">
+              <Button variant="secondary" disabled={index === 0} onClick={() => goTo(index - 1)} aria-label="Əvvəlki sual" className="exam-nav-button min-w-0 gap-1 px-2 whitespace-nowrap sm:gap-2 sm:px-3 lg:order-1">
                 <ChevronLeft className="size-4 shrink-0" aria-hidden />
-                Əvvəlki
+                <span className={cn(question.reveal && 'max-[379px]:sr-only')}>Əvvəlki</span>
               </Button>
-              <button type="button" onClick={() => setMapOpen(true)} aria-haspopup="dialog" aria-expanded={mapOpen} aria-controls="exam-question-map"
-                className="exam-map-button inline-flex h-11 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-semibold tabular-nums lg:hidden">
-                <LayoutGrid className="size-4" aria-hidden />
-                <span className="sr-only">Suallar, </span>{index + 1}/{total}
-              </button>
+              <div className="flex items-center gap-2 lg:hidden">
+                <button type="button" onClick={() => setMapOpen(true)} aria-haspopup="dialog" aria-expanded={mapOpen} aria-controls="exam-question-map"
+                  className="exam-map-button inline-flex h-11 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-semibold tabular-nums">
+                  <LayoutGrid className="size-4" aria-hidden />
+                  <span className="sr-only">Suallar, </span>{index + 1}/{total}
+                </button>
+                {/* Only present when the exam settings already sent this question's result (Immediate mode, answered). */}
+                {question.reveal && (
+                  <button type="button" onClick={() => (noteOpen ? setNoteClosed(true) : reveal())} aria-pressed={noteOpen}
+                    aria-label={noteOpen ? 'Cavab panelini bağla' : 'Cavabı göstər'}
+                    className={cn('exam-map-button inline-flex h-11 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-semibold', noteOpen && 'exam-map-button-active')}>
+                    <Eye className="size-4" aria-hidden />
+                    <span className="max-[419px]:sr-only">Cavab</span>
+                  </button>
+                )}
+              </div>
               {index < total - 1 ? (
-                <Button onClick={() => goTo(index + 1)} className="exam-nav-button min-w-0 gap-1 px-2 whitespace-nowrap sm:gap-2 sm:px-3 lg:order-3 lg:ml-auto">
-                  Növbəti
+                <Button onClick={() => goTo(index + 1)} aria-label="Növbəti sual" className="exam-nav-button min-w-0 gap-1 px-2 whitespace-nowrap sm:gap-2 sm:px-3 lg:order-3 lg:ml-auto">
+                  <span className={cn(question.reveal && 'max-[379px]:sr-only')}>Növbəti</span>
                   <ChevronRight className="size-4 shrink-0" aria-hidden />
                 </Button>
               ) : (
@@ -252,7 +288,7 @@ function QuestionPanel({ question, number, immediate, locked, revealed, onReveal
         {question.text}
       </h1>
 
-      <div role="radiogroup" aria-labelledby={headingId} className="mt-5 flex flex-col gap-2 sm:gap-2.5">
+      <div role="radiogroup" aria-labelledby={headingId} className="mt-4 flex flex-col gap-2 sm:mt-5 sm:gap-2.5">
         {question.options.map((option) => {
           const selected = question.selectedOptionId === option.id
           const isCorrect = reveal?.correctOptionId === option.id
@@ -267,7 +303,7 @@ function QuestionPanel({ question, number, immediate, locked, revealed, onReveal
               aria-disabled={locked || undefined}
               onClick={() => onChoose(option.id)}
               className={cn(
-                'exam-option flex min-h-12 w-full items-start gap-3 rounded-xl border px-3 py-3 text-left text-sm text-slate-700 sm:px-4 sm:text-[15px]',
+                'exam-option flex min-h-12 w-full min-w-0 items-start gap-3 rounded-xl border px-3 py-2.5 text-left sm:py-3 text-sm text-slate-700 sm:px-4 sm:text-[15px]',
                 isCorrect && 'border-emerald-300 bg-emerald-50/60',
                 isWrongPick && 'border-rose-300 bg-rose-50/60',
                 !reveal && selected && 'border-indigo-500 bg-indigo-50 text-slate-900',
@@ -301,12 +337,13 @@ function QuestionPanel({ question, number, immediate, locked, revealed, onReveal
         })}
       </div>
 
-      {reveal && <RevealNote reveal={reveal} selectedOptionId={question.selectedOptionId} />}
+      {/* Below laptop width the answer is shown in the action bar instead (AnswerSheet). */}
+      {reveal && <RevealNote reveal={reveal} selectedOptionId={question.selectedOptionId} className="hidden lg:flex" />}
 
       {!reveal && question.reveal && (
-        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-4 hidden items-center justify-between gap-2 lg:flex">
           <p className="text-sm text-slate-500">Cavabın yadda saxlanıldı.</p>
-          <Button variant="secondary" onClick={onReveal} className="h-11 w-full sm:w-auto">
+          <Button variant="secondary" onClick={onReveal} className="h-11">
             <Eye className="size-4" aria-hidden />
             Cavabı göstər
           </Button>
@@ -322,10 +359,10 @@ function QuestionPanel({ question, number, immediate, locked, revealed, onReveal
   )
 }
 
-function RevealNote({ reveal, selectedOptionId }: { reveal: NonNullable<ExamSessionQuestion['reveal']>; selectedOptionId: string | null }) {
+function RevealNote({ reveal, selectedOptionId, className }: { reveal: NonNullable<ExamSessionQuestion['reveal']>; selectedOptionId: string | null; className?: string }) {
   if (!reveal.isGradable) {
     return (
-      <p role="status" className="mt-4 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-amber-800">
+      <p role="status" className={cn('mt-4 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-amber-800', className)}>
         <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
         Bu sualın düzgün cavabı məlum deyil, ballanmayacaq.
       </p>
@@ -334,9 +371,38 @@ function RevealNote({ reveal, selectedOptionId }: { reveal: NonNullable<ExamSess
 
   const correct = reveal.correctOptionId === selectedOptionId
   return (
-    <p role="status" className={cn('mt-4 rounded-lg px-3 py-2 font-medium', correct ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-800')}>
+    <p role="status" className={cn('mt-4 rounded-lg px-3 py-2 font-medium', correct ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-800', className)}>
       {correct ? 'Düzgün cavab!' : 'Yanlış cavab. Düzgün variant yaşılla göstərilib.'}
     </p>
+  )
+}
+
+/** Mobile/tablet: the revealed answer sits just above the action bar, so no scrolling is needed to read it. */
+function AnswerSheet({ reveal, options, selectedOptionId, onClose }: {
+  reveal: NonNullable<ExamSessionQuestion['reveal']>
+  options: ExamSessionQuestion['options']
+  selectedOptionId: string | null
+  onClose: () => void
+}) {
+  const correctOption = options.find(o => o.id === reveal.correctOptionId)
+  const correct = reveal.isGradable && reveal.correctOptionId === selectedOptionId
+  const tone = !reveal.isGradable ? 'border-amber-200 bg-amber-50 text-amber-900' : correct ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-rose-200 bg-rose-50 text-rose-900'
+  return (
+    <div role="status" className={cn('exam-answer-sheet relative mx-auto mb-2.5 max-w-2xl rounded-xl border py-2 pr-11 pl-3 text-sm lg:hidden', tone)}>
+      <p className="flex items-center gap-1.5 font-semibold">
+        {!reveal.isGradable ? <AlertTriangle className="size-4 shrink-0" aria-hidden /> : correct ? <Check className="size-4 shrink-0" aria-hidden /> : <X className="size-4 shrink-0" aria-hidden />}
+        {!reveal.isGradable ? 'Düzgün cavab məlum deyil' : correct ? 'Düzgün cavab!' : 'Yanlış cavab'}
+      </p>
+      {reveal.isGradable && correctOption && (
+        <p className="exam-question-text exam-answer-sheet-body mt-1 leading-6">
+          <span className="font-semibold">Düzgün variant {correctOption.label}: </span>{answerDisplayText(correctOption.text)}
+        </p>
+      )}
+      <button type="button" onClick={onClose} aria-label="Cavab panelini bağla"
+        className="absolute top-0.5 right-0.5 grid size-10 place-items-center rounded-lg opacity-70 hover:opacity-100">
+        <X className="size-4" aria-hidden />
+      </button>
+    </div>
   )
 }
 
