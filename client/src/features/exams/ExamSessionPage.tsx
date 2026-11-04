@@ -157,7 +157,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
   return (
     <div className="exam-flow exam-session min-h-dvh bg-slate-50">
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="exam-shell mx-auto flex min-h-14 items-center gap-2 px-3 py-2 sm:min-h-16 sm:gap-3 sm:px-4 lg:px-6">
+        <div className="exam-shell mx-auto flex min-h-14 items-center gap-2 px-3 py-2 sm:min-h-16 sm:gap-3 sm:px-4 min-[900px]:px-6">
           <Link to="/" className="hidden items-center gap-2 font-semibold sm:flex" aria-label="ExamR ana səhifə">
             <img src="/favicon.svg" alt="" className="size-7" />
           </Link>
@@ -181,7 +181,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
         </div>
       </header>
 
-      <main ref={layoutRef} className="exam-shell exam-layout mx-auto grid gap-3 px-3 pt-3 sm:px-4 sm:pt-4 lg:gap-6 lg:px-6 lg:pt-6">
+      <main ref={layoutRef} className="exam-shell exam-layout mx-auto grid gap-3 px-3 pt-3 sm:px-4 sm:pt-4 min-[900px]:gap-6 min-[900px]:px-6 min-[900px]:pt-6">
         <div className="flex min-w-0 flex-col gap-4">
           {finish.isError && <Alert title="İmtahan bitirilmədi">{finish.error.message}</Alert>}
 
@@ -198,17 +198,17 @@ function ExamRunner({ session }: { session: ExamSession }) {
             onChoose={choose}
           />
 
-          <div ref={controlsRef} className="exam-controls fixed inset-x-0 bottom-0 z-20 border-t px-3 pt-2.5 lg:static lg:border-0 lg:bg-transparent lg:p-0">
+          <div ref={controlsRef} className="exam-controls fixed inset-x-0 bottom-0 z-20 border-t px-3 pt-2.5 min-[900px]:static min-[900px]:border-0 min-[900px]:bg-transparent min-[900px]:p-0">
             {noteOpen && question.reveal && (
               <AnswerSheet reveal={question.reveal} options={question.options} selectedOptionId={question.selectedOptionId} onClose={() => setNoteClosed(true)} />
             )}
-            <div className="relative mx-auto grid max-w-2xl grid-cols-[1fr_auto_1fr] items-center gap-2 lg:flex lg:max-w-none">
+            <div className="relative mx-auto grid max-w-2xl grid-cols-[1fr_auto_1fr] items-center gap-2 min-[900px]:flex min-[900px]:max-w-none">
               <SaveStatus saving={saving} error={answer.isError ? answer.error.message : null} />
-              <Button variant="secondary" disabled={index === 0} onClick={() => goTo(index - 1)} aria-label="Əvvəlki sual" className="exam-nav-button min-w-0 gap-1 px-2 whitespace-nowrap sm:gap-2 sm:px-3 lg:order-1">
+              <Button variant="secondary" disabled={index === 0} onClick={() => goTo(index - 1)} aria-label="Əvvəlki sual" className="exam-nav-button min-w-0 gap-1 px-2 whitespace-nowrap sm:gap-2 sm:px-3 min-[900px]:order-1">
                 <ChevronLeft className="size-4 shrink-0" aria-hidden />
                 <span className={cn(question.reveal && 'max-[379px]:sr-only')}>Əvvəlki</span>
               </Button>
-              <div className="flex items-center gap-2 lg:hidden">
+              <div className="flex items-center gap-2 min-[900px]:hidden">
                 <button type="button" onClick={() => setMapOpen(true)} aria-haspopup="dialog" aria-expanded={mapOpen} aria-controls="exam-question-map"
                   className="exam-map-button inline-flex h-11 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-semibold tabular-nums">
                   <LayoutGrid className="size-4" aria-hidden />
@@ -225,12 +225,12 @@ function ExamRunner({ session }: { session: ExamSession }) {
                 )}
               </div>
               {index < total - 1 ? (
-                <Button onClick={() => goTo(index + 1)} aria-label="Növbəti sual" className="exam-nav-button min-w-0 gap-1 px-2 whitespace-nowrap sm:gap-2 sm:px-3 lg:order-3 lg:ml-auto">
+                <Button onClick={() => goTo(index + 1)} aria-label="Növbəti sual" className="exam-nav-button min-w-0 gap-1 px-2 whitespace-nowrap sm:gap-2 sm:px-3 min-[900px]:order-3 min-[900px]:ml-auto">
                   <span className={cn(question.reveal && 'max-[379px]:sr-only')}>Növbəti</span>
                   <ChevronRight className="size-4 shrink-0" aria-hidden />
                 </Button>
               ) : (
-                <Button onClick={() => setConfirmOpen(true)} className="exam-nav-button min-w-0 gap-1 px-2 whitespace-nowrap sm:gap-2 sm:px-3 lg:order-3 lg:ml-auto">
+                <Button onClick={() => setConfirmOpen(true)} className="exam-nav-button min-w-0 gap-1 px-2 whitespace-nowrap sm:gap-2 sm:px-3 min-[900px]:order-3 min-[900px]:ml-auto">
                   <Flag className="size-4 shrink-0" aria-hidden />
                   Bitir
                 </Button>
@@ -275,7 +275,7 @@ function QuestionPanel({ question, number, immediate, locked, revealed, onReveal
   const headingId = `question-${question.examQuestionId}`
 
   return (
-    <section aria-labelledby={headingId} className="exam-question-enter min-w-0 rounded-xl border border-slate-200 bg-white px-3.5 pt-2 pb-4 sm:px-6 sm:pb-6 lg:px-7 lg:pb-7">
+    <section aria-labelledby={headingId} className="exam-question-enter min-w-0 rounded-xl border border-slate-200 bg-white px-3.5 pt-2 pb-4 sm:px-6 sm:pb-6 min-[900px]:px-7 min-[900px]:pb-7">
       <div className="mb-1 flex min-h-10 items-center justify-between gap-2 sm:mt-2">
         <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">Sual {number}</p>
         <button type="button" onClick={onFlag} aria-pressed={flagged}
@@ -284,7 +284,7 @@ function QuestionPanel({ question, number, immediate, locked, revealed, onReveal
           {flagged ? 'İşarələnib' : 'İşarələ'}
         </button>
       </div>
-      <h1 id={headingId} className="exam-question-text max-w-[72ch] text-base leading-7 font-semibold text-slate-900 sm:text-[17px] lg:text-lg lg:leading-8">
+      <h1 id={headingId} className="exam-question-text max-w-[72ch] text-base leading-7 font-semibold text-slate-900 sm:text-[17px] min-[900px]:text-lg min-[900px]:leading-8">
         {question.text}
       </h1>
 
@@ -338,10 +338,10 @@ function QuestionPanel({ question, number, immediate, locked, revealed, onReveal
       </div>
 
       {/* Below laptop width the answer is shown in the action bar instead (AnswerSheet). */}
-      {reveal && <RevealNote reveal={reveal} selectedOptionId={question.selectedOptionId} className="hidden lg:flex" />}
+      {reveal && <RevealNote reveal={reveal} selectedOptionId={question.selectedOptionId} className="hidden min-[900px]:flex" />}
 
       {!reveal && question.reveal && (
-        <div className="mt-4 hidden items-center justify-between gap-2 lg:flex">
+        <div className="mt-4 hidden items-center justify-between gap-2 min-[900px]:flex">
           <p className="text-sm text-slate-500">Cavabın yadda saxlanıldı.</p>
           <Button variant="secondary" onClick={onReveal} className="h-11">
             <Eye className="size-4" aria-hidden />
@@ -388,7 +388,7 @@ function AnswerSheet({ reveal, options, selectedOptionId, onClose }: {
   const correct = reveal.isGradable && reveal.correctOptionId === selectedOptionId
   const tone = !reveal.isGradable ? 'border-amber-200 bg-amber-50 text-amber-900' : correct ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-rose-200 bg-rose-50 text-rose-900'
   return (
-    <div role="status" className={cn('exam-answer-sheet relative mx-auto mb-2.5 max-w-2xl rounded-xl border py-2 pr-11 pl-3 text-sm lg:hidden', tone)}>
+    <div role="status" className={cn('exam-answer-sheet relative mx-auto mb-2.5 max-w-2xl rounded-xl border py-2 pr-11 pl-3 text-sm min-[900px]:hidden', tone)}>
       <p className="flex items-center gap-1.5 font-semibold">
         {!reveal.isGradable ? <AlertTriangle className="size-4 shrink-0" aria-hidden /> : correct ? <Check className="size-4 shrink-0" aria-hidden /> : <X className="size-4 shrink-0" aria-hidden />}
         {!reveal.isGradable ? 'Düzgün cavab məlum deyil' : correct ? 'Düzgün cavab!' : 'Yanlış cavab'}
@@ -408,7 +408,7 @@ function AnswerSheet({ reveal, options, selectedOptionId, onClose }: {
 
 function SaveStatus({ saving, error }: { saving: boolean; error: string | null }) {
   return (
-    <p aria-live="polite" className={cn('exam-save-status pointer-events-none absolute inset-x-0 bottom-full mb-2 text-center text-xs lg:static lg:order-2 lg:mb-0 lg:flex-1', error ? 'text-rose-600' : 'text-slate-500')}>
+    <p aria-live="polite" className={cn('exam-save-status pointer-events-none absolute inset-x-0 bottom-full mb-2 text-center text-xs min-[900px]:static min-[900px]:order-2 min-[900px]:mb-0 min-[900px]:flex-1', error ? 'text-rose-600' : 'text-slate-500')}>
       {saving ? 'Saxlanılır…' : error ? `Saxlanmadı: ${error}` : ''}
     </p>
   )
@@ -432,17 +432,17 @@ function QuestionNavigator({ questions, current, immediate, revealed, flagged, o
     <>
       <div aria-hidden onClick={onClose} className="exam-sheet-backdrop" data-open={open} />
       <nav id="exam-question-map" aria-label="Suallar" data-open={open}
-        className="exam-sheet min-w-0 border border-slate-200 bg-white p-4 lg:order-last lg:sticky lg:top-24 lg:self-start">
+        className="exam-sheet min-w-0 border border-slate-200 bg-white p-4 min-[900px]:order-last min-[900px]:sticky min-[900px]:top-24 min-[900px]:self-start">
         <span className="exam-sheet-handle" aria-hidden />
         <div className="mb-3 flex items-center gap-2">
           <h2 className="text-sm font-semibold">Suallar</h2>
           <span className="ml-auto text-xs text-slate-500 tabular-nums">{answeredCount} cavablanıb · {questions.length - answeredCount} boş</span>
           <button type="button" onClick={onClose} aria-label="Sualları bağla"
-            className="-mr-2 grid size-10 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 lg:hidden">
+            className="-mr-2 grid size-10 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 min-[900px]:hidden">
             <X className="size-5" aria-hidden />
           </button>
         </div>
-        <ol className="exam-question-map grid grid-cols-[repeat(auto-fill,minmax(44px,1fr))] gap-1.5 lg:grid-cols-[repeat(auto-fill,minmax(40px,1fr))]">
+        <ol className="exam-question-map grid grid-cols-[repeat(auto-fill,minmax(44px,1fr))] gap-1.5 min-[900px]:grid-cols-[repeat(auto-fill,minmax(40px,1fr))]">
           {questions.map((q, i) => {
             const reveal = immediate && revealed.has(q.examQuestionId) ? q.reveal : null
             const isFlagged = flagged.has(q.examQuestionId)
@@ -460,7 +460,7 @@ function QuestionNavigator({ questions, current, immediate, revealed, flagged, o
                   aria-current={i === current ? 'step' : undefined}
                   aria-label={`Sual ${i + 1}${q.selectedOptionId ? ', cavablanıb' : ''}${isFlagged ? ', işarələnib' : ''}`}
                   className={cn(
-                    'relative flex h-11 w-full items-center justify-center rounded-md border text-xs font-semibold tabular-nums transition-colors duration-150 lg:h-9',
+                    'relative flex h-11 w-full items-center justify-center rounded-md border text-xs font-semibold tabular-nums transition-colors duration-150 min-[900px]:h-9',
                     state === 'empty' && 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50',
                     state === 'answered' && 'border-indigo-600 bg-indigo-600 text-white',
                     state === 'correct' && 'border-emerald-600 bg-emerald-600 text-white',
@@ -487,7 +487,7 @@ function QuestionNavigator({ questions, current, immediate, revealed, flagged, o
           )}
           <Legend className="rounded-full border-amber-500 bg-amber-500" label="İşarələnmiş" />
         </div>
-        <p className="mt-3 hidden text-xs text-slate-400 lg:block">Klaviatura: ← → keçid, A–F seçim</p>
+        <p className="mt-3 hidden text-xs text-slate-400 min-[900px]:block">Klaviatura: ← → keçid, A–F seçim</p>
       </nav>
     </>
   )
