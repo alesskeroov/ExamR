@@ -15,7 +15,7 @@ const statusBadge: Record<VerificationStatus, { tone: BadgeTone; label: string }
   Unverified: { tone: 'warning', label: 'Cavab bilinmir' },
 }
 const card = 'rounded-xl border border-slate-200 bg-white shadow-sm'
-const field = 'h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20'
+const field = 'h-10 w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20'
 const initial: BankFilters = { search: '', documentId: '', type: '', status: '', bookmarked: false }
 
 export function QuestionBankPage() {
@@ -42,7 +42,7 @@ export function QuestionBankPage() {
           {stats.isPending ? <div className="mt-1 h-7 w-12 animate-pulse rounded-lg bg-slate-100" /> : <p className="text-xl font-semibold tabular-nums sm:text-2xl">{value ?? '—'}</p>}</div>)}
     </section>
 
-    <section aria-label="Filtrlər" className={cn(card, 'mt-6 grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[2fr_1.5fr_1fr_1fr_auto]')}>
+    <section aria-label="Filtrlər" className={cn(card, 'mt-6 grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_auto]')}>
       <input type="search" aria-label="Sual mətnində axtar" placeholder="Sual mətnində axtar…" value={term} onChange={e => setTerm(e.target.value)} maxLength={200} className={field} />
       <select aria-label="Sənəd" value={filters.documentId} onChange={e => update({ documentId: e.target.value })} className={field}>
         <option value="">Bütün sənədlər</option>{documents.data?.items.map(d => <option key={d.id} value={d.id}>{d.originalFileName}</option>)}
@@ -90,23 +90,23 @@ function QuestionItem({ question: q, busy, onBookmark, onVerify, onEdit }: { que
   return <article className={cn(card, 'p-4 transition-shadow hover:shadow-md sm:p-5')}>
     <header className="flex items-start gap-3">
       <span className="mt-0.5 shrink-0 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 tabular-nums">#{q.sourceNumber}</span>
-      <h3 className="flex-1 break-words text-[15px] leading-6 font-medium">{q.text}</h3>
+      <h3 className="min-w-0 flex-1 wrap-anywhere text-[15px] leading-6 font-medium">{q.text}</h3>
       <button type="button" disabled={busy} onClick={onBookmark} aria-pressed={q.isBookmarked} aria-label={q.isBookmarked ? 'Seçilmişlərdən çıxar' : 'Seçilmişlərə əlavə et'} className="-m-1 grid size-10 shrink-0 place-items-center rounded-lg text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 disabled:opacity-50 sm:m-0 sm:size-8">
         <Bookmark className={cn('size-5', q.isBookmarked && 'fill-indigo-600 text-indigo-600')} aria-hidden /></button>
     </header>
     <div className="mt-2 mb-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
       <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
       <span className="rounded-full bg-slate-100 px-2 py-0.5">{isOpen ? 'Açıq sual' : 'Variantlı'}</span>
-      <span className="flex min-w-0 items-center gap-1"><FileText className="size-3.5 shrink-0" aria-hidden /><span className="truncate">{q.documentName}</span></span>
+      <span className="flex min-w-0 max-w-full items-center gap-1"><FileText className="size-3.5 shrink-0" aria-hidden /><span className="truncate">{q.documentName}</span></span>
     </div>
     {isOpen ? <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-700">
-        <p className={cn('whitespace-pre-wrap break-words', long && !open && 'line-clamp-4')}>{q.answer || 'Cavab yoxdur.'}</p>
+        <p className={cn('whitespace-pre-wrap wrap-anywhere', long && !open && 'line-clamp-4')}>{q.answer || 'Cavab yoxdur.'}</p>
         {long && <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} className="mt-1 flex items-center gap-1 text-xs font-medium text-indigo-600">
           {open ? 'Bağla' : 'Tam cavabı göstər'}<ChevronDown className={cn('size-3.5 transition-transform', open && 'rotate-180')} aria-hidden /></button>}
       </div>
       : <ul className="flex flex-col gap-1.5">{q.options.map(o => <li key={o.id} className={cn('flex items-start gap-3 rounded-lg border px-3 py-2', o.isCorrect ? 'border-emerald-200 bg-emerald-50' : 'border-transparent')}>
         <span className={cn('flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold', o.isCorrect ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600')} aria-hidden>{o.isCorrect ? <Check className="size-3.5" strokeWidth={3} /> : o.label}</span>
-        <span className={cn('flex-1 leading-6', o.isCorrect ? 'font-medium text-emerald-900' : 'text-slate-700')}><span className="sr-only">{o.label}){o.isCorrect ? ' (düzgün cavab)' : ''} </span>{o.text}</span>
+        <span className={cn('min-w-0 flex-1 wrap-anywhere leading-6', o.isCorrect ? 'font-medium text-emerald-900' : 'text-slate-700')}><span className="sr-only">{o.label}){o.isCorrect ? ' (düzgün cavab)' : ''} </span>{o.text}</span>
       </li>)}</ul>}
     {q.canEdit && <footer className="mt-4 flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-3">
       {q.verificationStatus !== 'Verified' && <Button variant="ghost" className="h-9 px-3 text-xs" disabled={busy} onClick={onVerify}><ShieldCheck className="size-3.5" aria-hidden />Təsdiqlə</Button>}
