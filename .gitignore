@@ -445,6 +445,3 @@ samples/*.pdf
 
 # Hand-applied production migration scripts (generated locally)
 azure-migrate-*.sql
-
-# Graphify knowledge graph output and caches (local, regenerated)
-graphify-out/
