@@ -1,7 +1,7 @@
 import './exam-flow.css'
 import { answerDisplayText } from './answer-display'
 import { useIsMutating } from '@tanstack/react-query'
-import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Eye, Flag, Loader2, Maximize2, Minimize2, X } from 'lucide-react'
+import { AlertTriangle, Bookmark, BookmarkCheck, Check, ChevronLeft, ChevronRight, Clock, Eye, Flag, LayoutGrid, Loader2, Maximize2, Minimize2, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
@@ -11,11 +11,13 @@ import { NotificationBell } from '../friends/NotificationBell'
 import {
   answerMutationKey,
   useAnswerQuestion,
+  useExamHistory,
   useExamSession,
   useFinishExam,
   type ExamSession,
   type ExamSessionQuestion,
 } from './api'
+import { sourceName } from './examSource'
 
 export function ExamSessionPage() {
   const { id = '' } = useParams()
@@ -62,7 +64,12 @@ function ExamRunner({ session }: { session: ExamSession }) {
   const saving = useIsMutating({ mutationKey: answerMutationKey(session.id) }) > 0
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [mapOpen, setMapOpen] = useState(false)
-  const [revealed, reveal] = useRevealedQuestions(session.id)
+  const [revealed, toggleRevealed] = useStoredSet(`exam-revealed:${session.id}`)
+  const [flagged, toggleFlag] = useStoredSet(`exam-flagged:${session.id}`)
+  // The session has no title; the exam is also listed (newest first) in the history, which names its PDF.
+  const history = useExamHistory(1)
+  const summary = history.data?.items.find(e => e.id === session.id)
+  const title = summary ? sourceName(summary.source) : null
 
   const answered = session.questions.filter((q) => q.selectedOptionId).length
   const locked = immediate && question.selectedOptionId !== null
@@ -107,6 +114,16 @@ function ExamRunner({ session }: { session: ExamSession }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [choose, confirmOpen, goTo, index, question.options])
 
+  // Mobile question sheet: lock the page behind it and close on Escape; the scroll position is kept.
+  useEffect(() => {
+    if (!mapOpen) return
+    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setMapOpen(false) }
+    const overflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', close)
+    return () => { document.body.style.overflow = overflow; window.removeEventListener('keydown', close) }
+  }, [mapOpen])
+
   // Warn before leaving while an answer is still being saved.
   useEffect(() => {
     if (!saving) return
@@ -118,39 +135,31 @@ function ExamRunner({ session }: { session: ExamSession }) {
   return (
     <div className="exam-flow exam-session min-h-dvh bg-slate-50">
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="exam-shell mx-auto flex min-h-16 items-center gap-2 px-3 py-2 sm:gap-3 sm:px-4 lg:px-6">
+        <div className="exam-shell mx-auto flex min-h-14 items-center gap-2 px-3 py-2 sm:min-h-16 sm:gap-3 sm:px-4 lg:px-6">
           <Link to="/" className="hidden items-center gap-2 font-semibold sm:flex" aria-label="ExamR ana səhifə">
             <img src="/favicon.svg" alt="" className="size-7" />
           </Link>
           <div className="min-w-0 flex-1">
-            <div className="flex items-baseline justify-between gap-2 text-slate-600">
-              <span className="truncate font-medium whitespace-nowrap text-slate-900 tabular-nums">
-                <span className="hidden min-[400px]:inline">Sual </span>{index + 1} / {total}
-              </span>
-              <span className="hidden truncate whitespace-nowrap tabular-nums sm:inline">{answered} / {total} cavablanıb</span>
-            </div>
-            <div
-              className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100"
-              role="progressbar"
-              aria-label="Cavablanan suallar"
-              aria-valuemin={0}
-              aria-valuemax={total}
-              aria-valuenow={answered}
-            >
-              <div className="h-full rounded-full bg-indigo-600 transition-[width] duration-300" style={{ width: `${(answered / total) * 100}%` }} />
-            </div>
+            <p className="truncate text-xs leading-5 text-slate-500" title={title ?? undefined}>{title ?? 'İmtahan'}</p>
+            <p className="truncate text-[15px] leading-5 font-semibold whitespace-nowrap text-slate-900 tabular-nums">
+              Sual {index + 1}<span className="font-normal text-slate-500"> / {total}</span>
+              <span className="hidden text-sm font-normal text-slate-500 sm:inline"> · {answered} cavablanıb</span>
+            </p>
           </div>
           <ExamTimer expiresAt={session.expiresAt} serverNow={session.serverNow} onExpire={submit} />
           <FullscreenToggle />
-          <NotificationBell safe />
+          <div className="hidden sm:block"><NotificationBell safe /></div>
           <Button variant="secondary" onClick={() => setConfirmOpen(true)} loading={finish.isPending} className="h-10 shrink-0 px-3 text-sm sm:px-4">
             <Flag className="hidden size-4 sm:block" aria-hidden />
             Bitir
           </Button>
         </div>
+        <div className="exam-progress h-1" role="progressbar" aria-label="Cavablanan suallar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={answered}>
+          <div className="h-full bg-indigo-600 transition-[width] duration-300" style={{ width: `${(answered / total) * 100}%` }} />
+        </div>
       </header>
 
-      <main className="exam-shell exam-layout mx-auto grid gap-3 px-3 pt-4 pb-28 sm:px-4 lg:gap-6 lg:px-6 lg:pt-6 lg:pb-8">
+      <main className="exam-shell exam-layout mx-auto grid gap-3 px-3 pt-3 sm:px-4 sm:pt-4 lg:gap-6 lg:px-6 lg:pt-6">
         <div className="flex min-w-0 flex-col gap-4">
           {finish.isError && <Alert title="İmtahan bitirilmədi">{finish.error.message}</Alert>}
 
@@ -161,31 +170,41 @@ function ExamRunner({ session }: { session: ExamSession }) {
             immediate={immediate}
             locked={locked}
             revealed={revealed.has(question.examQuestionId)}
-            onReveal={() => reveal(question.examQuestionId)}
+            onReveal={() => toggleRevealed(question.examQuestionId, true)}
+            flagged={flagged.has(question.examQuestionId)}
+            onFlag={() => toggleFlag(question.examQuestionId)}
             onChoose={choose}
           />
 
-          <div className="exam-controls fixed inset-x-0 bottom-0 z-10 grid grid-cols-2 gap-2 border-t px-3 pt-3 lg:static lg:flex lg:items-center lg:border-0 lg:bg-transparent lg:p-0">
-            <Button variant="secondary" disabled={index === 0} onClick={() => goTo(index - 1)} className="exam-nav-button lg:order-1">
-              <ChevronLeft className="size-4" aria-hidden />
-              Əvvəlki
-            </Button>
-            <div className="col-span-2 min-w-0 lg:order-2 lg:flex-1"><SaveStatus saving={saving} error={answer.isError ? answer.error.message : null} /></div>
-            {index < total - 1 ? (
-              <Button onClick={() => goTo(index + 1)} className="exam-nav-button row-start-1 lg:order-3">
-                Növbəti
-                <ChevronRight className="size-4" aria-hidden />
+          <div className="exam-controls fixed inset-x-0 bottom-0 z-20 border-t px-3 pt-2.5 lg:static lg:border-0 lg:bg-transparent lg:p-0">
+            <div className="relative mx-auto grid max-w-2xl grid-cols-[1fr_auto_1fr] items-center gap-2 lg:flex lg:max-w-none">
+              <SaveStatus saving={saving} error={answer.isError ? answer.error.message : null} />
+              <Button variant="secondary" disabled={index === 0} onClick={() => goTo(index - 1)} className="exam-nav-button min-w-0 gap-1 px-2 whitespace-nowrap sm:gap-2 sm:px-3 lg:order-1">
+                <ChevronLeft className="size-4 shrink-0" aria-hidden />
+                Əvvəlki
               </Button>
-            ) : (
-              <Button onClick={() => setConfirmOpen(true)} className="exam-nav-button row-start-1 lg:order-3">
-                <Flag className="size-4" aria-hidden />
-                Bitir
-              </Button>
-            )}
+              <button type="button" onClick={() => setMapOpen(true)} aria-haspopup="dialog" aria-expanded={mapOpen} aria-controls="exam-question-map"
+                className="exam-map-button inline-flex h-11 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-semibold tabular-nums lg:hidden">
+                <LayoutGrid className="size-4" aria-hidden />
+                <span className="sr-only">Suallar, </span>{index + 1}/{total}
+              </button>
+              {index < total - 1 ? (
+                <Button onClick={() => goTo(index + 1)} className="exam-nav-button min-w-0 gap-1 px-2 whitespace-nowrap sm:gap-2 sm:px-3 lg:order-3 lg:ml-auto">
+                  Növbəti
+                  <ChevronRight className="size-4 shrink-0" aria-hidden />
+                </Button>
+              ) : (
+                <Button onClick={() => setConfirmOpen(true)} className="exam-nav-button min-w-0 gap-1 px-2 whitespace-nowrap sm:gap-2 sm:px-3 lg:order-3 lg:ml-auto">
+                  <Flag className="size-4 shrink-0" aria-hidden />
+                  Bitir
+                </Button>
+              )}
+            </div>
           </div>
         </div>
 
-        <QuestionNavigator questions={session.questions} current={index} immediate={immediate} revealed={revealed} onSelect={goTo} open={mapOpen} onToggle={() => setMapOpen(value => !value)} />
+        <QuestionNavigator questions={session.questions} current={index} immediate={immediate} revealed={revealed} flagged={flagged}
+          onSelect={goTo} open={mapOpen} onClose={() => setMapOpen(false)} />
       </main>
 
       <FinishDialog
@@ -209,17 +228,26 @@ interface QuestionPanelProps {
   locked: boolean
   revealed: boolean
   onReveal: () => void
+  flagged: boolean
+  onFlag: () => void
   onChoose: (optionId: string | null) => void
 }
 
-function QuestionPanel({ question, number, immediate, locked, revealed, onReveal, onChoose }: QuestionPanelProps) {
+function QuestionPanel({ question, number, immediate, locked, revealed, onReveal, flagged, onFlag, onChoose }: QuestionPanelProps) {
   // Immediate mode gets the result with the saved answer, but shows it only after the student asks for it.
   const reveal = revealed ? question.reveal : null
   const headingId = `question-${question.examQuestionId}`
 
   return (
-    <section aria-labelledby={headingId} className="exam-question-enter min-w-0 rounded-xl border border-slate-200 bg-white p-4 sm:p-6 lg:p-7">
-      <p className="mb-2 text-xs font-medium tracking-wide text-slate-500 uppercase">Sual {number}</p>
+    <section aria-labelledby={headingId} className="exam-question-enter min-w-0 rounded-xl border border-slate-200 bg-white px-3.5 pt-2 pb-4 sm:px-6 sm:pb-6 lg:px-7 lg:pb-7">
+      <div className="mb-1 flex min-h-10 items-center justify-between gap-2 sm:mt-2">
+        <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">Sual {number}</p>
+        <button type="button" onClick={onFlag} aria-pressed={flagged}
+          className={cn('-mr-2 inline-flex h-10 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors', flagged ? 'text-amber-800 hover:bg-amber-50' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800')}>
+          {flagged ? <BookmarkCheck className="size-4" aria-hidden /> : <Bookmark className="size-4" aria-hidden />}
+          {flagged ? 'İşarələnib' : 'İşarələ'}
+        </button>
+      </div>
       <h1 id={headingId} className="exam-question-text max-w-[72ch] text-base leading-7 font-semibold text-slate-900 sm:text-[17px] lg:text-lg lg:leading-8">
         {question.text}
       </h1>
@@ -314,7 +342,7 @@ function RevealNote({ reveal, selectedOptionId }: { reveal: NonNullable<ExamSess
 
 function SaveStatus({ saving, error }: { saving: boolean; error: string | null }) {
   return (
-    <p aria-live="polite" className={cn('text-center text-xs', error ? 'text-rose-600' : 'text-slate-500')}>
+    <p aria-live="polite" className={cn('exam-save-status pointer-events-none absolute inset-x-0 bottom-full mb-2 text-center text-xs lg:static lg:order-2 lg:mb-0 lg:flex-1', error ? 'text-rose-600' : 'text-slate-500')}>
       {saving ? 'Saxlanılır…' : error ? `Saxlanmadı: ${error}` : ''}
     </p>
   )
@@ -325,69 +353,77 @@ interface QuestionNavigatorProps {
   current: number
   immediate: boolean
   revealed: ReadonlySet<string>
+  flagged: ReadonlySet<string>
   onSelect: (index: number) => void
   open: boolean
-  onToggle: () => void
+  onClose: () => void
 }
 
-function QuestionNavigator({ questions, current, immediate, revealed, onSelect, open, onToggle }: QuestionNavigatorProps) {
+/** Sidebar from laptop width; on smaller screens a bottom sheet opened from the action bar. */
+function QuestionNavigator({ questions, current, immediate, revealed, flagged, onSelect, open, onClose }: QuestionNavigatorProps) {
+  const answeredCount = questions.filter(q => q.selectedOptionId).length
   return (
-    <nav aria-label="Suallar" className="order-first min-w-0 rounded-xl border border-slate-200 bg-white p-3 lg:order-last lg:sticky lg:top-24 lg:self-start lg:p-4">
-      <button type="button" className="exam-panel-toggle min-h-11 w-full items-center justify-between gap-2 text-sm font-medium" aria-expanded={open} aria-controls="exam-question-map" onClick={onToggle}>
-        <span>Suallar · {current + 1}/{questions.length}</span><span className="inline-flex items-center gap-2 text-xs text-slate-500">{questions.filter(q => q.selectedOptionId).length} cavablanıb<ChevronDown className={cn('size-4 transition-transform', open && 'rotate-180')} aria-hidden /></span>
-      </button>
-      <div className="mb-3 hidden items-baseline justify-between lg:flex">
-        <h2 className="text-sm font-semibold">Suallar</h2>
-        <span className="text-xs text-slate-500 tabular-nums">{questions.filter(q => !q.selectedOptionId).length} boş</span>
-      </div>
-      <div id="exam-question-map" className="exam-map-content" data-open={open}>
-      <ol className="exam-question-map grid grid-cols-[repeat(auto-fill,minmax(42px,1fr))] gap-1.5">
-        {questions.map((q, i) => {
-          const reveal = immediate && revealed.has(q.examQuestionId) ? q.reveal : null
-          const state = !q.selectedOptionId
-            ? 'empty'
-            : !reveal ? 'answered'
-              : !reveal.isGradable ? 'ungraded'
-                : reveal.correctOptionId === q.selectedOptionId ? 'correct' : 'wrong'
+    <>
+      <div aria-hidden onClick={onClose} className="exam-sheet-backdrop" data-open={open} />
+      <nav id="exam-question-map" aria-label="Suallar" data-open={open}
+        className="exam-sheet min-w-0 border border-slate-200 bg-white p-4 lg:order-last lg:sticky lg:top-24 lg:self-start">
+        <span className="exam-sheet-handle" aria-hidden />
+        <div className="mb-3 flex items-center gap-2">
+          <h2 className="text-sm font-semibold">Suallar</h2>
+          <span className="ml-auto text-xs text-slate-500 tabular-nums">{answeredCount} cavablanıb · {questions.length - answeredCount} boş</span>
+          <button type="button" onClick={onClose} aria-label="Sualları bağla"
+            className="-mr-2 grid size-10 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 lg:hidden">
+            <X className="size-5" aria-hidden />
+          </button>
+        </div>
+        <ol className="exam-question-map grid grid-cols-[repeat(auto-fill,minmax(44px,1fr))] gap-1.5 lg:grid-cols-[repeat(auto-fill,minmax(40px,1fr))]">
+          {questions.map((q, i) => {
+            const reveal = immediate && revealed.has(q.examQuestionId) ? q.reveal : null
+            const isFlagged = flagged.has(q.examQuestionId)
+            const state = !q.selectedOptionId
+              ? 'empty'
+              : !reveal ? 'answered'
+                : !reveal.isGradable ? 'ungraded'
+                  : reveal.correctOptionId === q.selectedOptionId ? 'correct' : 'wrong'
 
-          return (
-            <li key={q.examQuestionId}>
-              <button
-                type="button"
-                onClick={() => onSelect(i)}
-                aria-current={i === current ? 'step' : undefined}
-                aria-label={`Sual ${i + 1}${q.selectedOptionId ? ', cavablanıb' : ''}`}
-                className={cn(
-                  'flex h-10 w-full items-center justify-center rounded-md border text-xs font-semibold tabular-nums transition-colors duration-150 lg:h-9',
-                  state === 'empty' && 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50',
-                  state === 'answered' && 'border-indigo-600 bg-indigo-600 text-white',
-                  state === 'correct' && 'border-emerald-600 bg-emerald-600 text-white',
-                  state === 'wrong' && 'border-rose-600 bg-rose-600 text-white',
-                  state === 'ungraded' && 'border-amber-400 bg-amber-100 text-amber-900',
-                  i === current && 'ring-2 ring-[var(--app-ink)] ring-offset-2 ring-offset-[var(--app-surface)]',
-                )}
-              >
-                {i + 1}
-              </button>
-            </li>
-          )
-        })}
-      </ol>
-      <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-        <Legend className="border-slate-300 bg-white" label="Boş" />
-        {immediate ? (
-          <>
-            <Legend className="border-indigo-600 bg-indigo-600" label="Cavablanıb" />
-            <Legend className="border-emerald-600 bg-emerald-600" label="Düzgün" />
-            <Legend className="border-rose-600 bg-rose-600" label="Yanlış" />
-          </>
-        ) : (
+            return (
+              <li key={q.examQuestionId}>
+                <button
+                  type="button"
+                  onClick={() => onSelect(i)}
+                  aria-current={i === current ? 'step' : undefined}
+                  aria-label={`Sual ${i + 1}${q.selectedOptionId ? ', cavablanıb' : ''}${isFlagged ? ', işarələnib' : ''}`}
+                  className={cn(
+                    'relative flex h-11 w-full items-center justify-center rounded-md border text-xs font-semibold tabular-nums transition-colors duration-150 lg:h-9',
+                    state === 'empty' && 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50',
+                    state === 'answered' && 'border-indigo-600 bg-indigo-600 text-white',
+                    state === 'correct' && 'border-emerald-600 bg-emerald-600 text-white',
+                    state === 'wrong' && 'border-rose-600 bg-rose-600 text-white',
+                    state === 'ungraded' && 'border-amber-400 bg-amber-100 text-amber-900',
+                    i === current && 'ring-2 ring-[var(--app-ink)] ring-offset-2 ring-offset-[var(--app-surface)]',
+                  )}
+                >
+                  {i + 1}
+                  {isFlagged && <span className="exam-flag-dot" aria-hidden />}
+                </button>
+              </li>
+            )
+          })}
+        </ol>
+        <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-slate-500">
+          <Legend className="border-slate-300 bg-white" label="Boş" />
           <Legend className="border-indigo-600 bg-indigo-600" label="Cavablanıb" />
-        )}
-      </div>
-      <p className="mt-3 hidden text-xs text-slate-400 lg:block">Klaviatura: ← → keçid, A–F seçim</p>
-      </div>
-    </nav>
+          {immediate && (
+            <>
+              <Legend className="border-emerald-600 bg-emerald-600" label="Düzgün" />
+              <Legend className="border-rose-600 bg-rose-600" label="Yanlış" />
+            </>
+          )}
+          <Legend className="rounded-full border-amber-500 bg-amber-500" label="İşarələnmiş" />
+        </div>
+        <p className="mt-3 hidden text-xs text-slate-400 lg:block">Klaviatura: ← → keçid, A–F seçim</p>
+      </nav>
+    </>
   )
 }
 
@@ -511,18 +547,18 @@ function FullscreenToggle() {
   )
 }
 
-/** Questions whose result the student chose to see; kept per session so a reload does not hide them again. */
-function useRevealedQuestions(sessionId: string): [ReadonlySet<string>, (examQuestionId: string) => void] {
-  const storageKey = `exam-revealed:${sessionId}`
-  const [revealed, setRevealed] = useState<ReadonlySet<string>>(() => {
+/** Per-exam set of question ids (revealed results, flags) kept in sessionStorage so a reload keeps them. */
+function useStoredSet(storageKey: string): [ReadonlySet<string>, (id: string, on?: boolean) => void] {
+  const [items, setItems] = useState<ReadonlySet<string>>(() => {
     try { return new Set(JSON.parse(sessionStorage.getItem(storageKey) ?? '[]') as string[]) } catch { return new Set() }
   })
-  const reveal = useCallback((examQuestionId: string) => {
-    setRevealed(current => {
-      const next = new Set(current).add(examQuestionId)
+  const toggle = useCallback((id: string, on?: boolean) => {
+    setItems(current => {
+      const next = new Set(current)
+      if (on ?? !next.has(id)) next.add(id); else next.delete(id)
       try { sessionStorage.setItem(storageKey, JSON.stringify([...next])) } catch { /* storage blocked */ }
       return next
     })
   }, [storageKey])
-  return [revealed, reveal]
+  return [items, toggle]
 }

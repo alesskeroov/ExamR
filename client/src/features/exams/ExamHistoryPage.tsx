@@ -43,7 +43,7 @@ export function ExamHistoryPage() {
             aria-selected={tab === t}
             onClick={() => setSearchParams(t === 'battle' ? { tab: 'battle' } : {})}
             className={cn(
-              'h-8 rounded-md px-4 font-medium transition-colors duration-150',
+              'h-10 rounded-md px-4 font-medium transition-colors duration-150 sm:h-8',
               tab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900',
             )}
           >

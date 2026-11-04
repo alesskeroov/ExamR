@@ -91,7 +91,7 @@ function QuestionItem({ question: q, busy, onBookmark, onVerify, onEdit }: { que
     <header className="flex items-start gap-3">
       <span className="mt-0.5 shrink-0 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 tabular-nums">#{q.sourceNumber}</span>
       <h3 className="flex-1 break-words text-[15px] leading-6 font-medium">{q.text}</h3>
-      <button type="button" disabled={busy} onClick={onBookmark} aria-pressed={q.isBookmarked} aria-label={q.isBookmarked ? 'Seçilmişlərdən çıxar' : 'Seçilmişlərə əlavə et'} className="shrink-0 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 disabled:opacity-50">
+      <button type="button" disabled={busy} onClick={onBookmark} aria-pressed={q.isBookmarked} aria-label={q.isBookmarked ? 'Seçilmişlərdən çıxar' : 'Seçilmişlərə əlavə et'} className="-m-1 grid size-10 shrink-0 place-items-center rounded-lg text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 disabled:opacity-50 sm:m-0 sm:size-8">
         <Bookmark className={cn('size-5', q.isBookmarked && 'fill-indigo-600 text-indigo-600')} aria-hidden /></button>
     </header>
     <div className="mt-2 mb-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">

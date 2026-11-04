@@ -17,12 +17,13 @@ import { cn } from '../../lib/utils'
 import { normalizeUser, useCurrentUser, type User } from './api'
 import { ProfileActivity } from './ProfileActivity'
 
+// Phones show the short label under the icon so all five sections fit without scrolling.
 const tabs = [
-  { label: 'Ümumi baxış', icon: LayoutGrid },
-  { label: 'İmtahanlar', icon: ClipboardList },
-  { label: 'Battle', icon: Swords },
-  { label: 'Sosial', icon: Users },
-  { label: 'Hesab ayarları', icon: Settings },
+  { label: 'Ümumi baxış', short: 'Ümumi', icon: LayoutGrid },
+  { label: 'İmtahanlar', short: 'İmtahan', icon: ClipboardList },
+  { label: 'Battle', short: 'Battle', icon: Swords },
+  { label: 'Sosial', short: 'Sosial', icon: Users },
+  { label: 'Hesab ayarları', short: 'Ayarlar', icon: Settings },
 ]
 const field = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20'
 
@@ -43,12 +44,6 @@ export function ProfilePage() {
   const [avatarBusy, setAvatarBusy] = useState(false)
   const [brokenAvatar, setBrokenAvatar] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
-  const activeTab = useRef<HTMLButtonElement>(null)
-  // On narrow screens the tab row scrolls; keep the selected tab visible.
-  useEffect(() => {
-    const button = activeTab.current, row = button?.parentElement
-    if (button && row) row.scrollTo({ left: button.offsetLeft - (row.clientWidth - button.offsetWidth) / 2, behavior: 'smooth' })
-  }, [tab])
   const confirm = useConfirm()
   const dirty = editing && (nickname !== user?.nickname || bio !== (user?.bio ?? ''))
   const blocker = useBlocker(({ currentLocation, nextLocation }) => dirty && currentLocation.pathname !== nextLocation.pathname)
@@ -104,14 +99,14 @@ export function ProfilePage() {
     <PageHeader title="Profil" description="İrəliləyişiniz və hesabınız bir yerdə." />
     {error && <Alert title="Əməliyyat alınmadı">{error}</Alert>}
     {notice && <div role="status"><Alert tone="info" title={notice} /></div>}
-    <section aria-label="Profil məlumatları" className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
-      <div className="flex flex-wrap items-start gap-4 sm:gap-5">
+    <section aria-label="Profil məlumatları" className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
+      <div className="flex flex-wrap items-start gap-x-4 gap-y-3 sm:gap-5">
         {user.avatarUrl && brokenAvatar !== user.avatarUrl
-          ? <img src={user.avatarUrl} onError={() => setBrokenAvatar(user.avatarUrl)} alt={`${user.nickname} — profil şəkli`} className="size-16 shrink-0 rounded-full border border-slate-200 object-cover sm:size-20" />
-          : <span className="grid size-16 shrink-0 place-items-center rounded-full bg-indigo-50 text-indigo-600 sm:size-20"><UserRound className="size-8" aria-hidden /></span>}
+          ? <img src={user.avatarUrl} onError={() => setBrokenAvatar(user.avatarUrl)} alt={`${user.nickname} — profil şəkli`} className="size-14 shrink-0 rounded-full border border-slate-200 object-cover sm:size-20" />
+          : <span className="grid size-14 shrink-0 place-items-center rounded-full bg-indigo-50 text-indigo-600 sm:size-20"><UserRound className="size-7 sm:size-8" aria-hidden /></span>}
         <div className="min-w-0 flex-1 self-center">
           <p className="text-xs font-medium uppercase tracking-widest text-slate-500">Şəxsi profil</p>
-          <h2 className="mt-1 break-words text-xl font-semibold tracking-tight sm:text-2xl">{user.nickname}{(user.emailConfirmed || user.googleLinked) && <VerifiedBadge className="ml-1.5" />}</h2>
+          <h2 className="mt-0.5 text-xl font-semibold tracking-tight [overflow-wrap:anywhere] sm:mt-1 sm:text-2xl">{user.nickname}{(user.emailConfirmed || user.googleLinked) && <VerifiedBadge className="ml-1.5" />}</h2>
           {rank.data && <div className="mt-2"><RankBadge rank={rank.data} /></div>}
           <p className="mt-2 whitespace-pre-wrap text-sm text-slate-500">{user.bio || 'Özünüz haqqında qısa məlumat əlavə edin.'}</p>
         </div>
@@ -139,14 +134,13 @@ export function ProfilePage() {
       </form>}
     </section>
     <div role="tablist" aria-label="Profil bölmələri" className="profile-tabs">
-      {tabs.map(({ label, icon: Icon }, index) => <button key={label} role="tab" id={`profile-tab-${index}`} aria-selected={tab === index} aria-controls="profile-panel" tabIndex={tab === index ? 0 : -1}
-        ref={tab === index ? activeTab : undefined}
+      {tabs.map(({ label, short, icon: Icon }, index) => <button key={label} role="tab" id={`profile-tab-${index}`} aria-selected={tab === index} aria-controls="profile-panel" tabIndex={tab === index ? 0 : -1}
         onClick={() => setParams(previous => { const next = new URLSearchParams(previous); next.set('tab', String(index)); return next }, { replace: true })}
         onKeyDown={event => {
           const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length : event.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : null
           if (next !== null) { event.preventDefault(); document.getElementById(`profile-tab-${next}`)?.click(); document.getElementById(`profile-tab-${next}`)?.focus() }
         }}
-        className="profile-tab"><Icon className="size-4 shrink-0" aria-hidden />{label}</button>)}
+        className="profile-tab"><Icon className="size-[18px] shrink-0 md:size-4" aria-hidden /><span className="md:hidden">{short}</span><span className="hidden md:inline">{label}</span></button>)}
     </div>
     <div key={tab} className="profile-panel" role="tabpanel" id="profile-panel" aria-labelledby={`profile-tab-${tab}`} tabIndex={0}>
       {tab === 4 ? <><AccountSettings /><GoogleLinkSection /></> : <ProfileActivity tab={tab} />}

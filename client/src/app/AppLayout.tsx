@@ -121,7 +121,7 @@ function UserMenu() {
 
   return (
     <div className="app-sidebar-footer flex shrink-0 items-center gap-3 border-t border-slate-200 p-4 lg:mt-auto">
-      <NavLink to="/profile" aria-label="Profili redaktə et" title="Profili redaktə et" className="shrink-0 rounded-full focus-visible:outline-2 focus-visible:outline-indigo-600">
+      <NavLink to="/profile" aria-label="Profili redaktə et" title="Profili redaktə et" className="-m-1 grid size-10 shrink-0 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-indigo-600">
         {user.avatarUrl ? <img src={user.avatarUrl} alt="" className="size-8 rounded-full object-cover" /> :
           <span className="flex size-8 items-center justify-center rounded-full bg-indigo-100 font-semibold text-indigo-700" aria-hidden>{nickname.charAt(0).toUpperCase()}</span>}
       </NavLink>
