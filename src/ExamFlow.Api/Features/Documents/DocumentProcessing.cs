@@ -178,8 +178,10 @@ public sealed class DocumentProcessor(
             var storedKeys = existingVisuals.Where(v => v.StorageKey is not null).Select(v => v.StorageKey!).ToHashSet();
             // A fresh view over the same bytes: no copy, and independent of whatever the parser did with its stream.
             using var pdf = new MemoryStream(buffer.GetBuffer(), 0, length, writable: false);
+            using var visualTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            visualTimeout.CancelAfter(TimeSpan.FromSeconds(options.Value.VisualTimeoutSeconds));
             visuals = await DocumentVisuals.ImportAsync(documentId, pdf, result, questions, storedKeys, storage, clock.GetUtcNow(),
-                logger, timeout.Token, ct);
+                logger, visualTimeout.Token, ct);
             db.QuestionVisuals.AddRange(visuals.Visuals);
         }
 
