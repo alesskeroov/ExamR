@@ -253,18 +253,10 @@ public static class ExamEndpoints
             return Problem(StatusCodes.Status400BadRequest, "Variant bu suala aid deyil.");
         }
 
-        if (exam.RevealMode == RevealMode.Immediate)
+        // Answers can be changed until the exam ends in every mode; Immediate mode only disallows clearing.
+        if (exam.RevealMode == RevealMode.Immediate && request.SelectedOptionId is null)
         {
-            // The correct answer is shown right after answering, so the first answer is final.
-            if (question.SelectedOptionId is not null)
-            {
-                return Problem(StatusCodes.Status409Conflict, "Bu rejimdə cavab verildikdən sonra dəyişdirilə bilməz.");
-            }
-
-            if (request.SelectedOptionId is null)
-            {
-                return Problem(StatusCodes.Status400BadRequest, "Variant seçilməyib.");
-            }
+            return Problem(StatusCodes.Status400BadRequest, "Variant seçilməyib.");
         }
 
         question.SelectedOptionId = request.SelectedOptionId;

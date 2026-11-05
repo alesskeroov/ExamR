@@ -82,7 +82,7 @@ public class OptionSnapshot
 
 public enum RevealMode
 {
-    /// <summary>The correct answer is shown right after answering; the answer is then locked.</summary>
+    /// <summary>The correct answer is shown right after answering; the answer can still be changed until the exam ends.</summary>
     Immediate,
 
     /// <summary>Correct answers are shown only on the result page.</summary>

@@ -78,7 +78,6 @@ function ExamRunner({ session }: { session: ExamSession }) {
   const title = summary ? sourceName(summary.source) : null
 
   const answered = session.questions.filter((q) => q.selectedOptionId).length
-  const locked = immediate && question.selectedOptionId !== null
   const isRevealed = revealed.has(question.examQuestionId)
   const noteOpen = isRevealed && question.reveal !== null && !closedNotes.has(question.examQuestionId)
   const setNoteClosed = (closed: boolean) => setClosedNotes(current => {
@@ -99,10 +98,11 @@ function ExamRunner({ session }: { session: ExamSession }) {
 
   const choose = useCallback(
     (optionId: string | null) => {
-      if (locked || finish.isPending) return
+      // Answers stay changeable until the exam ends, in both reveal modes.
+      if (finish.isPending) return
       answer.mutate({ examQuestionId: question.examQuestionId, selectedOptionId: optionId })
     },
-    [answer, finish.isPending, locked, question.examQuestionId],
+    [answer, finish.isPending, question.examQuestionId],
   )
 
   const submit = useCallback(() => {
@@ -193,7 +193,6 @@ function ExamRunner({ session }: { session: ExamSession }) {
             visualSrc={visualUrls.exam(session.id)}
             number={index + 1}
             immediate={immediate}
-            locked={locked}
             revealed={isRevealed}
             onReveal={reveal}
             flagged={flagged.has(question.examQuestionId)}
@@ -265,7 +264,6 @@ interface QuestionPanelProps {
   visualSrc: (id: string) => string
   number: number
   immediate: boolean
-  locked: boolean
   revealed: boolean
   onReveal: () => void
   flagged: boolean
@@ -273,7 +271,7 @@ interface QuestionPanelProps {
   onChoose: (optionId: string | null) => void
 }
 
-function QuestionPanel({ question, visualSrc, number, immediate, locked, revealed, onReveal, flagged, onFlag, onChoose }: QuestionPanelProps) {
+function QuestionPanel({ question, visualSrc, number, immediate, revealed, onReveal, flagged, onFlag, onChoose }: QuestionPanelProps) {
   // Immediate mode gets the result with the saved answer, but shows it only after the student asks for it.
   const reveal = revealed ? question.reveal : null
   const headingId = `question-${question.examQuestionId}`
@@ -306,7 +304,6 @@ function QuestionPanel({ question, visualSrc, number, immediate, locked, reveale
               type="button"
               role="radio"
               aria-checked={selected}
-              aria-disabled={locked || undefined}
               onClick={() => onChoose(option.id)}
               className={cn(
                 'exam-option flex min-h-12 w-full min-w-0 items-start gap-3 rounded-xl border px-3 py-2.5 text-left sm:py-3 text-sm text-slate-700 sm:px-4 sm:text-[15px]',
@@ -315,7 +312,6 @@ function QuestionPanel({ question, visualSrc, number, immediate, locked, reveale
                 !reveal && selected && 'border-indigo-500 bg-indigo-50 text-slate-900',
                 !reveal && !selected && 'border-slate-200 hover:border-slate-300 hover:bg-slate-50',
                 reveal && !isCorrect && !isWrongPick && 'border-slate-200',
-                locked && 'cursor-default',
               )}
             >
               <span

@@ -175,6 +175,8 @@ interface AnswerResponse {
 export const answerMutationKey = (examId: string) => ['exams', 'answer', examId] as const
 
 /** Saves an answer immediately; the UI updates optimistically and rolls back if the server rejects it. */
+const answerSequences: Record<string, Map<string, number>> = {}
+
 export function useAnswerQuestion(examId: string) {
   const queryClient = useQueryClient()
   const key = queryKeys.exams.session(examId)
@@ -187,18 +189,29 @@ export function useAnswerQuestion(examId: string) {
       },
     )
 
+  // Latest pick per question: a slower, older response must not overwrite a newer choice.
+  const latest = (answerSequences[examId] ??= new Map<string, number>())
+
   return useMutation({
     mutationKey: answerMutationKey(examId),
+    // Answer requests of one exam run one after another, so the server always stores the last pick.
+    scope: { id: `exam-answer:${examId}` },
     mutationFn: ({ examQuestionId, selectedOptionId }: AnswerVariables) =>
       api.put<AnswerResponse>(`/exams/${examId}/answers/${examQuestionId}`, { selectedOptionId }),
     onMutate: ({ examQuestionId, selectedOptionId }) => {
-      const previous = queryClient.getQueryData<ExamSession>(key)?.questions.find((q) => q.examQuestionId === examQuestionId)
+      const sequence = (latest.get(examQuestionId) ?? 0) + 1
+      latest.set(examQuestionId, sequence)
       patch(examQuestionId, { selectedOptionId })
-      return { previous }
+      return { sequence }
     },
-    onSuccess: (response) => patch(response.examQuestionId, { selectedOptionId: response.selectedOptionId, reveal: response.reveal }),
+    onSuccess: (response, { examQuestionId }, context) => {
+      if (latest.get(examQuestionId) !== context.sequence) return
+      patch(response.examQuestionId, { selectedOptionId: response.selectedOptionId, reveal: response.reveal })
+    },
     onError: (_error, { examQuestionId }, context) => {
-      if (context?.previous) patch(examQuestionId, context.previous)
+      if (!context || latest.get(examQuestionId) !== context.sequence) return
+      // Show what the server really stored instead of guessing an earlier optimistic value.
+      void queryClient.invalidateQueries({ queryKey: key })
     },
   })
 }
