@@ -136,9 +136,25 @@ public class ExplanationEngineTests
     }
 
     [Fact]
+    public void Image_questions_list_their_images_and_count_image_tokens()
+    {
+        var images = new ExplanationImage[] { new(null, "q.png", "image/png"), new("B", "b.png", "image/png") };
+        var plain = Candidate("[Şəkil]", ExplanationQuestionType.Math);
+        var withImages = plain with { Images = images };
+
+        using var doc = JsonDocument.Parse(ExplanationGenerator.UserMessage([withImages], 2000));
+        var places = doc.RootElement.GetProperty("questions")[0].GetProperty("images").EnumerateArray().Select(e => e.GetString()).ToList();
+        Assert.Equal(["sual", "B"], places);
+
+        var o = new ExplanationAiOptions { ImageInputTokens = 1000 };
+        Assert.Equal(ExplanationEngine.Tokens([plain], o).Input + 2000, ExplanationEngine.Tokens([withImages], o).Input);
+    }
+
+    [Fact]
     public async Task Mock_provider_never_calls_the_model_and_reports_tokens()
     {
-        var generator = new ExplanationGenerator(new ThrowingChatModel(), Microsoft.Extensions.Options.Options.Create(new ExplanationAiOptions()));
+        var generator = new ExplanationGenerator(new ThrowingChatModel(), Microsoft.Extensions.Options.Options.Create(new ExplanationAiOptions()),
+            null!, Microsoft.Extensions.Logging.Abstractions.NullLogger<ExplanationGenerator>.Instance); // mock never reads files
         var batch = new[] { Candidate("Sual?"), Candidate("Başqa sual? [mock-mismatch]") };
 
         var (json, usage, model) = await generator.GenerateAsync(batch, CancellationToken.None);

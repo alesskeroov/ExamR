@@ -4,11 +4,13 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Alert } from '../../components/common/Alert'
 import { Button } from '../../components/common/Button'
 import { EmptyState } from '../../components/common/EmptyState'
+import { QuestionVisuals } from '../../components/common/QuestionVisuals'
 import { StatusBadge, type BadgeTone } from '../../components/common/StatusBadge'
 import { formatNumber } from '../../lib/format'
 import { queryKeys } from '../../lib/query-keys'
 import { useConfirm } from '../../lib/use-confirm'
 import { cn } from '../../lib/utils'
+import { bodyVisuals, optionVisuals, visibleText, visualUrls } from '../../lib/visuals'
 import {
   isActiveJob, useCancelExplanationJob, useExplanationAction, useExplanationDocuments, useExplanationEstimate, useExplanationJobs,
   useExplanationQuestions, useExplanationStatus, useSaveExplanation, useStartExplanationJob,
@@ -231,6 +233,9 @@ function QuestionRow({ question: q, documentId, busy, onAction }: {
   const [editing, setEditing] = useState(false)
   const e = q.explanation
   const confirm = useConfirm()
+  const visualSrc = visualUrls.explanationBank(documentId)
+  const images = bodyVisuals(q.visuals)
+  const text = visibleText(q.text, images.length > 0)
 
   async function regenerate() {
     if (!e) return
@@ -241,11 +246,16 @@ function QuestionRow({ question: q, documentId, busy, onAction }: {
   return <li className={cn(card, 'p-4 sm:p-5')}>
     <header className="flex items-start gap-3">
       <span className="mt-0.5 shrink-0 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 tabular-nums">#{q.sourceNumber}</span>
-      <h3 className="min-w-0 flex-1 text-[15px] leading-6 font-medium whitespace-pre-wrap wrap-anywhere">{q.text}</h3>
+      <h3 className="min-w-0 flex-1 text-[15px] leading-6 font-medium whitespace-pre-wrap wrap-anywhere">{text ?? <span className="sr-only">Şəkilli sual</span>}</h3>
     </header>
+    <QuestionVisuals visuals={images} src={visualSrc} className="mt-3" />
     <ul className="mt-3 grid gap-1 text-sm sm:grid-cols-2">
-      {q.options.map(o => <li key={o.label} className={cn('flex min-w-0 gap-2 rounded-lg px-2 py-1', o.isCorrect ? 'bg-emerald-50 font-medium text-emerald-900' : 'text-slate-600')}>
-        <span className="shrink-0 font-semibold">{o.label})</span><span className="min-w-0 wrap-anywhere">{o.text}</span></li>)}
+      {q.options.map(o => {
+        const own = optionVisuals(q.visuals, o.id)
+        return <li key={o.id} className={cn('flex min-w-0 gap-2 rounded-lg px-2 py-1', o.isCorrect ? 'bg-emerald-50 font-medium text-emerald-900' : 'text-slate-600')}>
+          <span className="shrink-0 font-semibold">{o.label})</span><span className="min-w-0 wrap-anywhere">{visibleText(o.text, own.length > 0)}
+            <QuestionVisuals visuals={own} src={visualSrc} size="option" /></span></li>
+      })}
     </ul>
 
     <div className="mt-4 border-t border-slate-100 pt-3">

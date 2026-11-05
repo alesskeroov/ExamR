@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api-client'
 import { queryKeys } from '../../lib/query-keys'
+import type { VisualDto } from '../../lib/visuals'
 
 export type ExplanationStatus = 'Draft' | 'Review' | 'Approved' | 'Rejected'
 export type ExplanationQuestionType = 'Theory' | 'Math'
@@ -39,10 +40,11 @@ export interface AdminExplanationQuestion {
   questionId: string
   sourceNumber: number
   text: string
-  options: { label: string; text: string; isCorrect: boolean }[]
+  options: { id: string; label: string; text: string; isCorrect: boolean }[]
   explainable: boolean
   failedLastRun: boolean
   explanation: AdminExplanation | null
+  visuals: VisualDto[]
 }
 
 export interface ExplanationCounts { total: number; notExplainable: number; missing: number; draft: number; review: number; approved: number; rejected: number; failed: number }

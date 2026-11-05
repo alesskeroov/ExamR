@@ -7,9 +7,12 @@ namespace ExamFlow.Api.Features.Explanations;
 
 public sealed record ExplanationOption(string Label, string Text);
 
-/// <summary>A bank question that still needs an explanation, with its answer key.</summary>
+/// <summary>A stored image of the question body (<see cref="OptionLabel"/> null) or of one option.</summary>
+public sealed record ExplanationImage(string? OptionLabel, string StorageKey, string ContentType);
+
+/// <summary>A bank question that still needs an explanation, with its answer key and images (sent to the model too).</summary>
 public sealed record ExplanationCandidate(Guid QuestionId, byte[] Fingerprint, string Text, IReadOnlyList<ExplanationOption> Options,
-    string CorrectLabel, ExplanationQuestionType Type);
+    string CorrectLabel, ExplanationQuestionType Type, IReadOnlyList<ExplanationImage>? Images = null);
 
 public sealed record ExplanationEstimate(int Questions, int TheoryQuestions, int MathQuestions, int Requests, int InputTokens, int OutputTokens, decimal EstimatedUsd);
 
@@ -52,15 +55,16 @@ public static partial class ExplanationEngine
         return options.Count > 0 && options.Count(o => NumericOption().IsMatch(o.Trim())) * 2 > options.Count;
     }
 
-    public static int InputTokens(ExplanationCandidate c, int maxQuestionCharacters) =>
-        (int)Math.Ceiling((Math.Min(c.Text.Length, maxQuestionCharacters) + c.Options.Sum(o => o.Text.Length + 8) + 60) / 3.0);
+    public static int InputTokens(ExplanationCandidate c, int maxQuestionCharacters, int imageTokens = 0) =>
+        (int)Math.Ceiling((Math.Min(c.Text.Length, maxQuestionCharacters) + c.Options.Sum(o => o.Text.Length + 8) + 60) / 3.0)
+        + (c.Images?.Count ?? 0) * imageTokens;
 
     /// <summary>Requests of one type each (theory and math use different models), in the candidates' order.</summary>
     public static IEnumerable<IReadOnlyList<ExplanationCandidate>> Batches(IEnumerable<ExplanationCandidate> candidates, ExplanationAiOptions o) =>
         candidates.GroupBy(c => c.Type).SelectMany(g => g.Chunk(o.BatchSizeFor(g.Key)).Select(chunk => (IReadOnlyList<ExplanationCandidate>)chunk));
 
     public static (int Input, int Output) Tokens(IReadOnlyList<ExplanationCandidate> batch, ExplanationAiOptions o) =>
-        (SystemPromptTokens + batch.Sum(c => InputTokens(c, o.MaxQuestionCharacters)), batch.Count * o.OutputTokensFor(batch[0].Type));
+        (SystemPromptTokens + batch.Sum(c => InputTokens(c, o.MaxQuestionCharacters, o.ImageInputTokens)), batch.Count * o.OutputTokensFor(batch[0].Type));
 
     /// <summary>Most a request may cost: every input token plus every allowed output token at the full price.</summary>
     public static decimal WorstCaseCost(IReadOnlyList<ExplanationCandidate> batch, ExplanationAiOptions o)

@@ -9,7 +9,11 @@ using Microsoft.Extensions.Options;
 
 namespace ExamFlow.Api.Features.Learning;
 
-public sealed record ChatModelMessage(string Role, string Content);
+/// <summary><see cref="Parts"/> follow <see cref="Content"/> in the same message (e.g. images); only <c>CompleteJsonAsync</c> sends them.</summary>
+public sealed record ChatModelMessage(string Role, string Content, IReadOnlyList<ChatModelPart>? Parts = null);
+
+/// <summary>Either a text part or an image given as a data URL.</summary>
+public sealed record ChatModelPart(string? Text, string? ImageDataUrl);
 public sealed record ChatModelUsage(int InputTokens, int CachedInputTokens, int OutputTokens);
 
 /// <summary>A streamed piece: text delta, or the final usage (sent last).</summary>
@@ -93,7 +97,7 @@ public sealed class OpenAiChatClient(HttpClient http, IOptions<LearningAiOptions
         var body = JsonSerializer.Serialize(new
         {
             model,
-            messages = messages.Select(m => new { role = m.Role, content = m.Content }),
+            messages = messages.Select(m => new { role = m.Role, content = Content(m) }),
             max_completion_tokens = maxOutputTokens,
             temperature = 0.2,
             response_format = new { type = "json_schema", json_schema = new { name = schemaName, strict = true, schema } },
@@ -128,6 +132,14 @@ public sealed class OpenAiChatClient(HttpClient http, IOptions<LearningAiOptions
             throw new ChatModelException(ChatModelFailure.InvalidOutput, null, usage);
         }
     }
+
+    private static object Content(ChatModelMessage message) => message.Parts is not { Count: > 0 } parts
+        ? message.Content
+        : parts.Select(p => p.ImageDataUrl is { } url
+                ? (object)new { type = "image_url", image_url = new { url, detail = "high" } }
+                : new { type = "text", text = p.Text ?? "" })
+            .Prepend(new { type = "text", text = message.Content })
+            .ToList();
 
     private async Task<HttpResponseMessage> SendAsync(Uri uri, string key, string body, CancellationToken token, CancellationToken caller)
     {

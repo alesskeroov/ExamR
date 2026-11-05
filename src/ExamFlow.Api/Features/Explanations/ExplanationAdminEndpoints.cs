@@ -6,6 +6,7 @@ using ExamFlow.Api.Features.Learning;
 using ExamFlow.Api.Features.Questions;
 using ExamFlow.Api.Infrastructure.Data;
 using ExamFlow.Api.Infrastructure.Security;
+using ExamFlow.Api.Infrastructure.Storage;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -27,11 +28,11 @@ public sealed record ExplanationDocumentDto(Guid Id, string Name, int Questions)
 public sealed record AdminExplanationDto(Guid Id, ExplanationStatus Status, ExplanationQuestionType QuestionType, string Explanation, string? ReviewReason,
     string? Model, decimal CostUsd, bool Shared, DateTimeOffset UpdatedAt, string RowVersion);
 
-public sealed record AdminExplanationOptionDto(string Label, string Text, bool IsCorrect);
+public sealed record AdminExplanationOptionDto(Guid Id, string Label, string Text, bool IsCorrect);
 
 /// <summary><see cref="Explainable"/> is false when the answer key is unknown (nothing safe to explain).</summary>
 public sealed record AdminExplanationQuestionDto(Guid QuestionId, int SourceNumber, string Text, IReadOnlyList<AdminExplanationOptionDto> Options,
-    bool Explainable, bool FailedLastRun, AdminExplanationDto? Explanation);
+    bool Explainable, bool FailedLastRun, AdminExplanationDto? Explanation, IReadOnlyList<VisualDto> Visuals);
 
 public sealed record ExplanationCountsDto(int Total, int NotExplainable, int Missing, int Draft, int Review, int Approved, int Rejected, int Failed);
 
@@ -83,6 +84,7 @@ public static class ExplanationAdminEndpoints
 
         group.MapGet("/documents", Documents);
         group.MapGet("/documents/{documentId:guid}/questions", Questions);
+        group.MapGet("/documents/{documentId:guid}/visuals/{visualId:guid}", Visual);
         group.MapPut("/questions/{questionId:guid}", Save).Validate<SaveExplanationRequest>();
         group.MapPost("/approve", ApproveMany).Validate<ApproveExplanationsRequest>();
         group.MapPost("/{id:guid}/approve", (Guid id, ClaimsPrincipal user, AppDbContext db, TimeProvider clock, CancellationToken ct) =>
@@ -113,7 +115,7 @@ public static class ExplanationAdminEndpoints
             .Select(q => new
             {
                 q.Id, q.SourceNumber, q.Text, Unverified = q.VerificationStatus == VerificationStatus.Unverified,
-                Options = q.Options.OrderBy(o => o.Position).Select(o => new AdminExplanationOptionDto(o.Label, o.Text, o.IsCorrect)).ToList(),
+                Options = q.Options.OrderBy(o => o.Position).Select(o => new AdminExplanationOptionDto(o.Id, o.Label, o.Text, o.IsCorrect)).ToList(),
             })
             .ToListAsync(ct);
 
@@ -136,7 +138,7 @@ public static class ExplanationAdminEndpoints
             var dto = row is null ? null : new AdminExplanationDto(row.Id, row.Status, row.QuestionType, row.Explanation, row.ReviewReason, row.Model, row.CostUsd,
                 row.SourceQuestionId is not { } source || !ownIds.Contains(source), row.UpdatedAt, Convert.ToBase64String(row.RowVersion));
             return new AdminExplanationQuestionDto(x.Question.Id, x.Question.SourceNumber, x.Question.Text, x.Question.Options, x.Key is not null,
-                row is null && failed.Contains(x.Question.Id), dto);
+                row is null && failed.Contains(x.Question.Id), dto, []);
         }).ToList();
 
         var counts = new ExplanationCountsDto(items.Count, items.Count(i => !i.Explainable), items.Count(i => i.Explainable && i.Explanation is null),
@@ -158,7 +160,25 @@ public static class ExplanationAdminEndpoints
         if (search?.Trim() is { Length: > 0 } term)
             filtered = filtered.Where(i => i.Text.Contains(term, StringComparison.CurrentCultureIgnoreCase) || i.SourceNumber.ToString() == term);
         var list = filtered.ToList();
-        return TypedResults.Ok(new AdminExplanationPageDto(list.Skip((page - 1) * pageSize).Take(pageSize).ToList(), page, pageSize, list.Count, counts));
+        var pageItems = list.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        var visuals = await QuestionVisuals.ForQuestionsAsync(db, pageItems.Select(i => i.QuestionId).ToList(), ct);
+        pageItems = pageItems.Select(i => visuals.Contains(i.QuestionId)
+                ? i with { Visuals = visuals[i.QuestionId].Select(v => QuestionVisuals.ToDto(v, i.Options.Select(o => o.Id).ToList())).ToList() }
+                : i)
+            .ToList();
+        return TypedResults.Ok(new AdminExplanationPageDto(pageItems, page, pageSize, list.Count, counts));
+    }
+
+    /// <summary>An image of a bank question; admins see every completed PDF here, not only the ones shared with them.</summary>
+    private static async Task<IResult> Visual(Guid documentId, Guid visualId, AppDbContext db, IFileStorage storage, HttpResponse response, CancellationToken ct)
+    {
+        var visual = await db.QuestionVisuals.AsNoTracking()
+            .Where(v => v.Id == visualId && v.DocumentId == documentId)
+            .Select(v => new { v.StorageKey, v.ContentType })
+            .FirstOrDefaultAsync(ct);
+        return visual is null
+            ? TypedResults.Problem("Şəkil tapılmadı.", statusCode: StatusCodes.Status404NotFound)
+            : QuestionVisuals.File(storage, response, visual.StorageKey, visual.ContentType);
     }
 
     /// <summary>Writes or edits the explanation of a bank question by hand. A save moves it to Draft unless it is approved in the same step.</summary>

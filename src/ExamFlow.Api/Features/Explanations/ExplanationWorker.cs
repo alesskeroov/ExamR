@@ -34,8 +34,14 @@ public sealed class ExplanationService(AppDbContext db, TimeProvider clock)
             .Where(q => q.DocumentId == documentId && q.VerificationStatus != VerificationStatus.Unverified
                 && q.Options.Count >= 2 && q.Options.Count(o => o.IsCorrect) == 1)
             .OrderBy(q => q.SourceNumber)
-            .Select(q => new { q.Id, q.Text, Options = q.Options.OrderBy(o => o.Position).Select(o => new { o.Label, o.Text, o.IsCorrect }).ToList() })
+            .Select(q => new { q.Id, q.Text, Options = q.Options.OrderBy(o => o.Position).Select(o => new { o.Position, o.Label, o.Text, o.IsCorrect }).ToList() })
             .ToListAsync(ct);
+        var visuals = (await db.QuestionVisuals.AsNoTracking()
+            .Where(v => v.DocumentId == documentId && v.QuestionId != null && v.MappingStatus != QuestionVisualStatus.Ignored
+                && v.StorageKey != null && v.ContentType != null)
+            .OrderBy(v => v.SortOrder)
+            .Select(v => new { QuestionId = v.QuestionId!.Value, v.OptionPosition, StorageKey = v.StorageKey!, ContentType = v.ContentType! })
+            .ToListAsync(ct)).ToLookup(v => v.QuestionId);
 
         var candidates = questions
             .Where(q => !skip.Contains(q.Id))
@@ -43,8 +49,13 @@ public sealed class ExplanationService(AppDbContext db, TimeProvider clock)
             {
                 var correct = q.Options.First(o => o.IsCorrect);
                 var options = q.Options.Select(o => new ExplanationOption(o.Label, o.Text)).ToList();
-                var type = ExplanationEngine.IsMath(q.Text, options.Select(o => o.Text).ToList()) ? ExplanationQuestionType.Math : ExplanationQuestionType.Theory;
-                return new ExplanationCandidate(q.Id, ExplanationEngine.Fingerprint(q.Text, options.Select(o => o.Text), correct.Text)!, q.Text, options, correct.Label, type);
+                var images = visuals[q.Id].Select(v => new ExplanationImage(
+                    v.OptionPosition is { } p ? q.Options.FirstOrDefault(o => o.Position == p)?.Label : null, v.StorageKey, v.ContentType)).ToList();
+                // Image questions go to the math model: they usually need visual reasoning, and its image tokens are cheaper.
+                var type = images.Count > 0 || ExplanationEngine.IsMath(q.Text, options.Select(o => o.Text).ToList())
+                    ? ExplanationQuestionType.Math : ExplanationQuestionType.Theory;
+                return new ExplanationCandidate(q.Id, ExplanationEngine.Fingerprint(q.Text, options.Select(o => o.Text), correct.Text)!, q.Text, options,
+                    correct.Label, type, images);
             })
             .DistinctBy(c => Convert.ToHexString(c.Fingerprint))
             .ToList();

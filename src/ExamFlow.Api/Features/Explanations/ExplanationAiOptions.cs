@@ -35,6 +35,15 @@ public sealed class ExplanationAiOptions
     [Range(128, 2000)] public int MathOutputTokensPerQuestion { get; set; } = 600;
     [Range(200, 8000)] public int MaxQuestionCharacters { get; set; } = 2000;
 
+    /// <summary>
+    /// Estimated input tokens per question image (sent at high detail). Image questions use the math model, whose
+    /// image tokens stay below this; 4o-class mini models count images far higher.
+    /// </summary>
+    [Range(0, 50000)] public int ImageInputTokens { get; set; } = 2500;
+
+    /// <summary>Larger image files are not sent; the question is still explained from its text.</summary>
+    [Range(1, 20)] public int MaxImageMegabytes { get; set; } = 4;
+
     /// <summary>Transient failures in a row (rate limit, timeout, outage) before a run stops; no endless retry.</summary>
     [Range(1, 10)] public int MaxConsecutiveFailures { get; set; } = 3;
 
