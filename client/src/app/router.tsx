@@ -1,9 +1,7 @@
 import { AdminPage } from '../features/admin/AdminPage'
-import { FocusPage } from '../features/focus/FocusPage'
 import { GroupDetailPage, GroupsAdminPage, GroupsPage } from '../features/groups/GroupsPage'
-import { StudyPage } from '../features/study/StudyPage'
 import { TutorPage } from '../features/tutor/TutorPage'
-import { createBrowserRouter } from 'react-router'
+import { createBrowserRouter, Navigate } from 'react-router'
 import { ResetPasswordPage } from '../features/auth/ResetPasswordPage'
 import { VerifyEmailPage } from '../features/auth/VerifyEmailPage'
 import { BattleHomePage } from '../features/battle/BattleHomePage'
@@ -36,9 +34,10 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <DashboardPage /> },
       { path: 'upload', element: <UploadPage /> },
-      { path: 'study', element: <StudyPage /> },
+      // Retired features (Learning Assistant, Focus Mode): old links land on the dashboard.
+      { path: 'study', element: <Navigate to="/" replace /> },
       { path: 'tutor', element: <TutorPage /> },
-      { path: 'focus', element: <FocusPage /> },
+      { path: 'focus', element: <Navigate to="/" replace /> },
       { path: 'questions', element: <QuestionBankPage /> },
       { path: 'exams/new', element: <ExamSetupPage /> },
       { path: 'exams', element: <ExamHistoryPage /> },

@@ -109,7 +109,6 @@ function LastResult({ exam }: { exam: ExamSummary }) {
     <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-3">
       <Link to={exam.source.documentId ? `/exams/new?document=${exam.source.documentId}` : '/exams/new'} className="btn-primary inline-flex h-11 items-center gap-2 rounded-[10px] px-4 text-sm font-semibold">Yenidən sına <ArrowRight className="size-4" aria-hidden /></Link>
       <Link to={`/exams/${exam.id}/result`} className="ds-link text-sm">Cavablara bax</Link>
-      <Link to="/focus" className="ds-link text-sm">Səhvləri təkrarla</Link>
     </div>
   </div>
 }
@@ -118,7 +117,7 @@ function Onboarding({ hasDocument }: { hasDocument: boolean }) {
   const steps = [
     { done: hasDocument, title: 'Sənəd yüklə', text: 'Sual-cavab olan PDF və ya DOCX faylı.', to: '/upload' },
     { done: false, title: 'İlk imtahanı ver', text: 'Sual aralığını və sayını seç, vaxt başlasın.', to: '/exams/new' },
-    { done: false, title: 'Nəticəni təhlil et', text: 'Səhvlərini Focus Mode-da təkrar et.', to: '/focus' },
+    { done: false, title: 'Nəticəni təhlil et', text: 'Səhvlərinə nəticə səhifəsində bax.', to: '/exams' },
   ]
   const next = steps.findIndex(s => !s.done)
   return <div>
