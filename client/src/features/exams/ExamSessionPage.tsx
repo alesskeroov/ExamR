@@ -201,7 +201,8 @@ function ExamRunner({ session }: { session: ExamSession }) {
           />
 
           <div ref={controlsRef} className="exam-controls fixed inset-x-0 bottom-0 z-20 border-t px-3 pt-2.5 min-[900px]:static min-[900px]:border-0 min-[900px]:bg-transparent min-[900px]:p-0">
-            {noteOpen && question.reveal && (
+            {/* Gradable results are shown on the option cards only; the sheet remains for unknown answers. */}
+            {noteOpen && question.reveal && !question.reveal.isGradable && (
               <AnswerSheet reveal={question.reveal} options={question.options} selectedOptionId={question.selectedOptionId} onClose={() => setNoteClosed(true)} />
             )}
             <div className="relative mx-auto grid max-w-2xl grid-cols-[1fr_auto_1fr] items-center gap-2 min-[900px]:flex min-[900px]:max-w-none">
@@ -341,7 +342,7 @@ function QuestionPanel({ question, visualSrc, number, immediate, revealed, onRev
       </div>
 
       {/* Below laptop width the answer is shown in the action bar instead (AnswerSheet). */}
-      {reveal && <RevealNote reveal={reveal} selectedOptionId={question.selectedOptionId} className="hidden min-[900px]:flex" />}
+      {reveal && <RevealNote reveal={reveal} className="hidden min-[900px]:flex" />}
 
       {!reveal && question.reveal && (
         <div className="mt-4 hidden items-center justify-between gap-2 min-[900px]:flex">
@@ -362,7 +363,7 @@ function QuestionPanel({ question, visualSrc, number, immediate, revealed, onRev
   )
 }
 
-function RevealNote({ reveal, selectedOptionId, className }: { reveal: NonNullable<ExamSessionQuestion['reveal']>; selectedOptionId: string | null; className?: string }) {
+function RevealNote({ reveal, className }: { reveal: NonNullable<ExamSessionQuestion['reveal']>; className?: string }) {
   if (!reveal.isGradable) {
     return (
       <p role="status" className={cn('mt-4 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-amber-800', className)}>
@@ -372,12 +373,8 @@ function RevealNote({ reveal, selectedOptionId, className }: { reveal: NonNullab
     )
   }
 
-  const correct = reveal.correctOptionId === selectedOptionId
-  return (
-    <p role="status" className={cn('mt-4 rounded-lg px-3 py-2 font-medium', correct ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-800', className)}>
-      {correct ? 'Düzgün cavab!' : 'Yanlış cavab. Düzgün variant yaşılla göstərilib.'}
-    </p>
-  )
+  // Gradable result: the option cards already show it (green check / red x), no extra status text.
+  return null
 }
 
 /** Mobile/tablet: the revealed answer sits just above the action bar, so no scrolling is needed to read it. */
