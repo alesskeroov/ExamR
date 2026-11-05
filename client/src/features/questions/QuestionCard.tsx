@@ -1,6 +1,8 @@
 import { AlertTriangle, Check } from 'lucide-react'
+import { QuestionVisuals } from '../../components/common/QuestionVisuals'
 import { StatusBadge, type BadgeTone } from '../../components/common/StatusBadge'
 import { cn } from '../../lib/utils'
+import { bodyVisuals, optionVisuals, visibleText, visualUrls } from '../../lib/visuals'
 import type { QuestionDto, VerificationStatus } from '../documents/api'
 
 const statusBadge: Record<VerificationStatus, { tone: BadgeTone; label: string }> = {
@@ -11,6 +13,8 @@ const statusBadge: Record<VerificationStatus, { tone: BadgeTone; label: string }
 
 export function QuestionCard({ question }: { question: QuestionDto }) {
   const badge = statusBadge[question.verificationStatus]
+  const visualSrc = visualUrls.document(question.documentId)
+  const images = bodyVisuals(question.visuals)
 
   return (
     <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" aria-labelledby={`q-${question.id}`}>
@@ -19,12 +23,13 @@ export function QuestionCard({ question }: { question: QuestionDto }) {
           #{question.sourceNumber}
         </span>
         <h3 id={`q-${question.id}`} className="flex-1 text-[15px] leading-6 font-medium text-slate-900">
-          {question.text}
+          {visibleText(question.text, images.length > 0) ?? <span className="sr-only">Şəkilli sual #{question.sourceNumber}</span>}
         </h3>
         <span className="shrink-0">
           <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
         </span>
       </header>
+      <QuestionVisuals visuals={images} src={visualSrc} className="mb-3" />
 
       <ul className="flex flex-col gap-1.5">
         {question.options.map((option) => (
@@ -48,7 +53,8 @@ export function QuestionCard({ question }: { question: QuestionDto }) {
               <span className="sr-only">
                 {option.label}){option.isCorrect ? ' (düzgün cavab)' : ''}{' '}
               </span>
-              {option.text}
+              {visibleText(option.text, optionVisuals(question.visuals, option.id).length > 0)}
+              <QuestionVisuals visuals={optionVisuals(question.visuals, option.id)} src={visualSrc} size="option" />
             </span>
           </li>
         ))}

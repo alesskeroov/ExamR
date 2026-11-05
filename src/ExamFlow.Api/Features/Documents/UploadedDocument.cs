@@ -38,5 +38,7 @@ public class ProcessingReport
     public int AutoDetected { get; set; }
     public int Unverified { get; set; }
     public int DuplicatesSkipped { get; set; }
+    public int VisualsFound { get; set; }
+    public int VisualsNeedingReview { get; set; }
     public List<string> Warnings { get; set; } = [];
 }

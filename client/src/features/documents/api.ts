@@ -1,6 +1,7 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, uploadFile } from '../../lib/api-client'
 import { queryKeys } from '../../lib/query-keys'
+import type { VisualDto } from '../../lib/visuals'
 
 export type DocumentStatus = 'Pending' | 'Processing' | 'Completed' | 'Failed'
 export type VerificationStatus = 'Unverified' | 'AutoDetected' | 'Verified'
@@ -55,6 +56,7 @@ export interface QuestionDto {
   answer: string | null
   isBookmarked: boolean
   canEdit: boolean
+  visuals?: VisualDto[]
 }
 
 export type QuestionFilter = 'all' | 'answered' | 'unverified' | 'warnings'

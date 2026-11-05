@@ -45,7 +45,8 @@ public sealed record BattleParticipantDto(
 
 /// <summary>The current question as players see it — no correct answer.</summary>
 public sealed record BattleQuestionDto(
-    int Index, int Total, string Text, IReadOnlyList<ExamOptionDto> Options, DateTimeOffset EndsAt, int SecondsPerQuestion);
+    int Index, int Total, string Text, IReadOnlyList<ExamOptionDto> Options, DateTimeOffset EndsAt, int SecondsPerQuestion,
+    IReadOnlyList<Questions.VisualDto> Visuals);
 
 /// <summary>Sent only after the question has closed.</summary>
 public sealed record BattleRevealDto(int Index, Guid? CorrectOptionId);

@@ -17,9 +17,11 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
 import { Button } from '../../components/common/Button'
+import { QuestionVisuals } from '../../components/common/QuestionVisuals'
 import { formatNumber } from '../../lib/format'
 import { useConfirm } from '../../lib/use-confirm'
 import { cn } from '../../lib/utils'
+import { bodyVisuals, optionVisuals, visibleText, visualUrls } from '../../lib/visuals'
 import { NotificationBell } from '../friends/NotificationBell'
 import { BattleMessageButton, ChatPanel } from './ChatPanel'
 import { RoomInviteModal } from './RoomInviteModal'
@@ -263,6 +265,8 @@ function Stage({ state, room, isHost, myId }: { state: BattleState; room: Room; 
   const answered = room.myAnswerOptionId
   const online = state.participants.filter((p) => p.isConnected).length
   const isLast = question.index + 1 === question.total
+  const visualSrc = visualUrls.battle(state.code)
+  const images = bodyVisuals(question.visuals)
 
   return (
     <>
@@ -285,7 +289,10 @@ function Stage({ state, room, isHost, myId }: { state: BattleState; room: Room; 
       {!reveal && <Countdown endsAt={question.endsAt} seconds={question.secondsPerQuestion} offset={room.serverOffset} />}
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
-        <h1 className="text-lg leading-8 font-medium break-words text-slate-900 sm:text-xl">{question.text}</h1>
+        <h1 className="text-lg leading-8 font-medium break-words text-slate-900 sm:text-xl">
+          {visibleText(question.text, images.length > 0) ?? <span className="sr-only">Şəkilli sual</span>}
+        </h1>
+        <QuestionVisuals visuals={images} src={visualSrc} className="mt-3" />
       </section>
 
       <div role="radiogroup" aria-label="Variantlar" className="flex flex-col gap-2.5">
@@ -319,7 +326,10 @@ function Stage({ state, room, isHost, myId }: { state: BattleState; room: Room; 
                     : isMine ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
                       : 'border-slate-200 bg-slate-50 text-slate-500',
               )} aria-hidden>{option.label}</span>
-              <span className="min-w-0 flex-1 pt-0.5 leading-6 break-words">{option.text}</span>
+              <span className="min-w-0 flex-1 pt-0.5 leading-6 break-words">
+                {visibleText(option.text, optionVisuals(question.visuals, option.id).length > 0)}
+                <QuestionVisuals visuals={optionVisuals(question.visuals, option.id)} src={visualSrc} size="option" />
+              </span>
               {isCorrect && <Check className="mt-1 size-4 shrink-0 text-emerald-700" aria-label="Düzgün cavab" />}
               {isWrongPick && <X className="mt-1 size-4 shrink-0 text-rose-700" aria-label="Sizin cavabınız, yanlış" />}
               {isMine && !reveal && <Check className="mt-1 size-4 shrink-0 text-indigo-600" aria-label="Seçilmiş cavab" />}

@@ -561,6 +561,34 @@ public sealed partial class BattleService(
         }
     }
 
+    /// <summary>
+    /// An image of a question the room has already shown, for its participants only; future questions stay hidden.
+    /// </summary>
+    public async Task<VisualSnapshot?> FindVisualAsync(string code, Guid userId, Guid visualId)
+    {
+        if (!_rooms.TryGetValue(code, out var room))
+        {
+            return null;
+        }
+
+        await room.Gate.WaitAsync();
+        try
+        {
+            if (!room.Participants.ContainsKey(userId) || room.Status == BattleStatus.Lobby)
+            {
+                return null;
+            }
+
+            return room.Questions.Take(Math.Min(room.CurrentIndex + 1, room.Questions.Count))
+                .SelectMany(q => q.Snapshot.Visuals ?? [])
+                .FirstOrDefault(v => v.VisualId == visualId);
+        }
+        finally
+        {
+            room.Gate.Release();
+        }
+    }
+
     private async Task<List<ExamQuestion>> LoadQuestionsAsync(BattleSettings settings)
     {
         using var scope = scopes.CreateScope();
@@ -586,8 +614,9 @@ public sealed partial class BattleService(
             .Include(q => q.Options)
             .Where(q => pickedIds.Contains(q.Id))
             .ToDictionaryAsync(q => q.Id);
+        var visuals = await Questions.QuestionVisuals.ForQuestionsAsync(db, pickedIds, default);
 
-        return pickedIds.Select((id, position) => ExamEndpoints.Freeze(questions[id], position)).ToList();
+        return pickedIds.Select((id, position) => ExamEndpoints.Freeze(questions[id], position, visuals[id])).ToList();
     }
 
     private async Task CloseAsync(BattleRoom room, string message)
@@ -660,7 +689,8 @@ public sealed partial class BattleService(
                 current.Snapshot.Text,
                 current.Snapshot.Options.Select(o => new ExamOptionDto(o.OptionId, o.Label, o.Text)).ToList(),
                 room.Deadline,
-                room.Settings.SecondsPerQuestion)
+                room.Settings.SecondsPerQuestion,
+                ExamEndpoints.Visuals(current))
             : null;
 
         var reveal = room.Status == BattleStatus.Reveal && current is not null

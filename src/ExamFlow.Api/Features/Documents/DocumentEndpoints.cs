@@ -25,6 +25,7 @@ public static class DocumentEndpoints
         group.MapGet("/", List);
         group.MapGet("/{id:guid}", Get);
         group.MapGet("/{id:guid}/download", Download);
+        group.MapGet("/{id:guid}/visuals/{visualId:guid}", Visual);
         group.MapPost("/{id:guid}/reprocess", Reprocess);
         group.MapDelete("/{id:guid}", Delete);
     }
@@ -182,6 +183,20 @@ public static class DocumentEndpoints
         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException) { return NotFound(); }
     }
 
+    /// <summary>An image of the document's questions; same permissions as the PDF itself.</summary>
+    private static async Task<IResult> Visual(
+        Guid id, Guid visualId, ClaimsPrincipal user, AppDbContext db, IFileStorage storage, HttpResponse response, CancellationToken ct)
+    {
+        var readable = DocumentAccess.Readable(db, user.GetUserId());
+        var visual = await db.QuestionVisuals.AsNoTracking()
+            .Where(v => v.Id == visualId && v.DocumentId == id && readable.Any(d => d.Id == id))
+            .Select(v => new { v.StorageKey, v.ContentType })
+            .FirstOrDefaultAsync(ct);
+        return visual is null
+            ? TypedResults.Problem("Şəkil tapılmadı.", statusCode: StatusCodes.Status404NotFound)
+            : Features.Questions.QuestionVisuals.File(storage, response, visual.StorageKey, visual.ContentType);
+    }
+
     private static async Task<IResult> Reprocess(
         Guid id, ClaimsPrincipal user, AppDbContext db, ProcessingQueue queue, CancellationToken ct)
     {
@@ -218,9 +233,24 @@ public static class DocumentEndpoints
             return TypedResults.Problem("Sənəd hazırda emal olunur, sonra yenidən cəhd edin.", statusCode: StatusCodes.Status409Conflict);
         }
 
-        db.Documents.Remove(document); // Questions and options cascade in the database.
+        // Visuals are removed explicitly (deleted before the questions they reference); questions and options cascade.
+        var visuals = await db.QuestionVisuals.Where(v => v.DocumentId == id).ToListAsync(ct);
+        db.QuestionVisuals.RemoveRange(visuals);
+        db.Documents.Remove(document);
         await db.SaveChangesAsync(ct);
         storage.Delete(document.StoredFileName);
+
+        foreach (var key in visuals.Where(v => v.StorageKey is not null).Select(v => v.StorageKey!).Distinct())
+        {
+            try
+            {
+                storage.Delete(key);
+            }
+            catch (Exception)
+            {
+                // Best effort: the document is gone; an orphaned image file is harmless and unreachable.
+            }
+        }
 
         return TypedResults.NoContent();
     }

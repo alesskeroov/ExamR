@@ -22,7 +22,8 @@ public sealed class LocalFileStorage : IFileStorage
 
     public async Task SaveAsync(string fileName, Stream content, CancellationToken ct)
     {
-        await using var file = new FileStream(PathFor(fileName), FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, useAsync: true);
+        // Overwrite like R2: content-addressed image keys are rewritten when a document is processed again.
+        await using var file = new FileStream(PathFor(fileName), FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
         await content.CopyToAsync(file, ct);
     }
 

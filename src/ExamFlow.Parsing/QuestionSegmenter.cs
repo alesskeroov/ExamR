@@ -49,7 +49,7 @@ public static partial class QuestionSegmenter
                 && int.TryParse(match.Groups["n"].Value, out var number)
                 && AcceptsNumber(current, number, match.Groups["prefix"].Success))
             {
-                var next = new RawQuestion(number);
+                var next = new RawQuestion(number) { Anchor = SourceAnchor.Of(line) };
                 if (current is not null && number != current.Number + 1)
                 {
                     next.Warnings.Add($"Sual nömrəsi {current.Number}-dən {number}-ə keçir");
@@ -81,7 +81,7 @@ public static partial class QuestionSegmenter
 
             if (TryReadLabel(line.Tokens, 0, ExpectedLetter(current), allowDot: true, out var consumed, out var rest))
             {
-                ReadOptions(current, line.Tokens, consumed, rest);
+                ReadOptions(current, line, consumed, rest);
                 continue;
             }
 
@@ -197,9 +197,11 @@ public static partial class QuestionSegmenter
         question.Options.Count < MaxOptions ? (char)('A' + question.Options.Count) : null;
 
     /// <summary>Reads one option starting at the line, plus further inline options ("A) x  B) y").</summary>
-    private static void ReadOptions(RawQuestion question, IReadOnlyList<TextToken> tokens, int consumed, TextToken[] labelAndRest)
+    private static void ReadOptions(RawQuestion question, TextLine line, int consumed, TextToken[] labelAndRest)
     {
-        var option = StartOption(question, labelAndRest);
+        var tokens = line.Tokens;
+        var anchor = SourceAnchor.Of(line);
+        var option = StartOption(question, labelAndRest, anchor);
         var lettered = !IsMarker(labelAndRest[0].Text[0]);
         for (var i = consumed; i < tokens.Count; i++)
         {
@@ -207,7 +209,7 @@ public static partial class QuestionSegmenter
             // Bullet-marker options are one per line, so "B)" inside their text stays text.
             if (lettered && TryReadLabel(tokens, i, ExpectedLetter(question), allowDot: false, out var used, out var rest))
             {
-                option = StartOption(question, rest);
+                option = StartOption(question, rest, anchor);
                 i += used - 1;
                 continue;
             }
@@ -216,9 +218,9 @@ public static partial class QuestionSegmenter
         }
     }
 
-    private static RawOption StartOption(RawQuestion question, TextToken[] labelAndRest)
+    private static RawOption StartOption(RawQuestion question, TextToken[] labelAndRest, SourceAnchor? anchor)
     {
-        var option = new RawOption((char)('A' + question.Options.Count));
+        var option = new RawOption((char)('A' + question.Options.Count)) { Anchor = anchor };
         option.LabelTokens.Add(labelAndRest[0]);
         option.TextTokens.AddRange(labelAndRest.Skip(1));
         question.Options.Add(option);

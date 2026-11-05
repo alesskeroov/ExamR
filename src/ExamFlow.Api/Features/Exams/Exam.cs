@@ -53,6 +53,23 @@ public class QuestionSnapshot
 {
     public string Text { get; set; } = string.Empty;
     public List<OptionSnapshot> Options { get; set; } = [];
+
+    /// <summary>Images frozen with the question; missing (null) in exams created before visuals existed.</summary>
+    public List<VisualSnapshot>? Visuals { get; set; } = [];
+}
+
+/// <summary>An image of a frozen question. <see cref="StorageKey"/> never leaves the server.</summary>
+public class VisualSnapshot
+{
+    public Guid VisualId { get; set; }
+
+    /// <summary>The option (<see cref="OptionSnapshot.OptionId"/>) the image belongs to; null = question body.</summary>
+    public Guid? OptionId { get; set; }
+    public string? StorageKey { get; set; }
+    public string? ContentType { get; set; }
+    public int PageNumber { get; set; }
+    public double Width { get; set; }
+    public double Height { get; set; }
 }
 
 public class OptionSnapshot

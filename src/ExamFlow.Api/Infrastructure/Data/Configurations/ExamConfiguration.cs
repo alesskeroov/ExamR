@@ -52,6 +52,7 @@ public class ExamQuestionConfiguration : IEntityTypeConfiguration<ExamQuestion>
         {
             snapshot.ToJson();
             snapshot.OwnsMany(s => s.Options);
+            snapshot.OwnsMany(s => s.Visuals);
         });
 
         // Deleting a bank question keeps past exams intact (they use the snapshot).

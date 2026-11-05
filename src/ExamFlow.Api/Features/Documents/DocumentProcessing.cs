@@ -104,12 +104,14 @@ public sealed class DocumentProcessor(
 
         var isDocx = string.Equals(Path.GetExtension(document.StoredFileName), ".docx", StringComparison.OrdinalIgnoreCase);
         ParseResult result;
+        using var buffer = new MemoryStream();
+        var length = 0;
         try
         {
             await using var stream = storage.OpenRead(document.StoredFileName);
-            using var buffer = new MemoryStream();
             await stream.CopyToAsync(buffer, timeout.Token);
             buffer.Position = 0;
+            length = (int)buffer.Length;
 
             // CPU-bound; keep it off the request/IO threads.
             result = await Task.Run(() => isDocx ? docxParser.Parse(buffer, timeout.Token) : parser.Parse(buffer, timeout.Token), timeout.Token);
@@ -161,10 +163,25 @@ public sealed class DocumentProcessor(
             return;
         }
 
-        // Reprocessing replaces earlier questions; one SaveChanges keeps it atomic.
+        // Reprocessing replaces earlier questions and their visuals; one SaveChanges keeps it atomic.
+        // Old visual files stay in storage: same images get the same keys, so they are reused, not duplicated.
+        var existingVisuals = await db.QuestionVisuals.Where(v => v.DocumentId == documentId).ToListAsync(ct);
         var existing = await db.Questions.Where(q => q.DocumentId == documentId).ToListAsync(ct);
+        db.QuestionVisuals.RemoveRange(existingVisuals);
         db.Questions.RemoveRange(existing);
-        db.Questions.AddRange(result.Questions.Select(q => ToEntity(documentId, q)));
+        var questions = result.Questions.Select(q => ToEntity(documentId, q)).ToList();
+        db.Questions.AddRange(questions);
+
+        var visuals = VisualImport.None;
+        if (!isDocx && options.Value.ExtractVisuals)
+        {
+            var storedKeys = existingVisuals.Where(v => v.StorageKey is not null).Select(v => v.StorageKey!).ToHashSet();
+            // A fresh view over the same bytes: no copy, and independent of whatever the parser did with its stream.
+            using var pdf = new MemoryStream(buffer.GetBuffer(), 0, length, writable: false);
+            visuals = await DocumentVisuals.ImportAsync(documentId, pdf, result, questions, storedKeys, storage, clock.GetUtcNow(),
+                logger, timeout.Token, ct);
+            db.QuestionVisuals.AddRange(visuals.Visuals);
+        }
 
         document.Status = DocumentStatus.Completed;
         document.PageCount = isDocx ? null : result.PageCount;
@@ -176,7 +193,9 @@ public sealed class DocumentProcessor(
             AutoDetected = result.Questions.Count(q => q.CorrectIndex is not null),
             Unverified = result.Questions.Count(q => q.CorrectIndex is null),
             DuplicatesSkipped = result.DuplicatesSkipped,
-            Warnings = result.Warnings.Take(MaxReportWarnings).ToList(),
+            VisualsFound = visuals.Visuals.Count,
+            VisualsNeedingReview = visuals.Visuals.Count(v => v.MappingStatus == QuestionVisualStatus.NeedsReview),
+            Warnings = visuals.Warnings.Concat(result.Warnings).Take(MaxReportWarnings).ToList(),
         };
 
         await db.SaveChangesAsync(ct);

@@ -4,6 +4,8 @@ using ExamFlow.Api.Common;
 using ExamFlow.Api.Features.Exams;
 using ExamFlow.Api.Infrastructure.Data;
 using ExamFlow.Api.Infrastructure.Security;
+using ExamFlow.Api.Infrastructure.Storage;
+using ExamFlow.Api.Features.Questions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.SignalR;
 
@@ -18,6 +20,16 @@ public static class BattleEndpoints
         group.MapGet("/history", History);
         group.MapGet("/rooms", MyRooms);
         group.MapPost("/rooms/{code}/close", CloseRoom);
+        group.MapGet("/rooms/{code}/visuals/{visualId:guid}", Visual);
+    }
+
+    private static async Task<IResult> Visual(
+        string code, Guid visualId, ClaimsPrincipal user, BattleService battles, IFileStorage storage, HttpResponse response)
+    {
+        var visual = await battles.FindVisualAsync(code, user.GetUserId(), visualId);
+        return visual is null
+            ? TypedResults.Problem("Şəkil tapılmadı.", statusCode: StatusCodes.Status404NotFound)
+            : QuestionVisuals.File(storage, response, visual.StorageKey, visual.ContentType);
     }
 
     /// <summary>Creates a room; the caller becomes its host. Players then join over SignalR with the code.</summary>

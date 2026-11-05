@@ -20,9 +20,17 @@ public sealed class TextLine(int pageNumber, IReadOnlyList<TextToken> tokens, do
     public string Text { get; } = string.Join(' ', tokens.Select(t => t.Text));
 }
 
+/// <summary>Where a question or option starts in the PDF: page and baseline Y in PDF points (larger is higher).</summary>
+public sealed record SourceAnchor(int PageNumber, double Y)
+{
+    /// <summary>Null for lines without a known position (DOCX, test lines).</summary>
+    public static SourceAnchor? Of(TextLine line) => double.IsNaN(line.Y) ? null : new(line.PageNumber, line.Y);
+}
+
 public sealed class RawQuestion(int number)
 {
     public int Number { get; } = number;
+    public SourceAnchor? Anchor { get; set; }
     public List<TextToken> TextTokens { get; } = [];
     public List<RawOption> Options { get; } = [];
     public List<TextToken> AnswerTokens { get; } = [];
@@ -33,6 +41,7 @@ public sealed class RawQuestion(int number)
 public sealed class RawOption(char letter)
 {
     public char Letter { get; } = letter;
+    public SourceAnchor? Anchor { get; set; }
     public List<TextToken> LabelTokens { get; } = [];
     public List<TextToken> TextTokens { get; } = [];
 }
@@ -48,6 +57,12 @@ public sealed record ParsedQuestion(
     byte[] ContentHash)
 {
     public string? Explanation { get; init; }
+
+    /// <summary>Position metadata for attaching visuals; never affects parsing or <see cref="ContentHash"/>.</summary>
+    public SourceAnchor? Anchor { get; init; }
+
+    /// <summary>One entry per option, same order as <see cref="Options"/>.</summary>
+    public IReadOnlyList<SourceAnchor?> OptionAnchors { get; init; } = [];
 }
 
 public enum ParseFailure
@@ -65,6 +80,9 @@ public sealed class ParseResult
     public IReadOnlyList<string> Warnings { get; init; } = [];
     public int PageCount { get; init; }
     public int DuplicatesSkipped { get; init; }
+
+    /// <summary>Starts of segmented questions that were dropped (empty or duplicate); they still bound visual regions.</summary>
+    public IReadOnlyList<SourceAnchor> SkippedAnchors { get; init; } = [];
     public ParseFailure Failure { get; init; }
     public bool IsSuccess => Failure == ParseFailure.None;
 

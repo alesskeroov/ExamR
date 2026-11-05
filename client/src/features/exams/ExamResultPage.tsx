@@ -7,8 +7,10 @@ import { Alert } from '../../components/common/Alert'
 import { Button } from '../../components/common/Button'
 import { EmptyState } from '../../components/common/EmptyState'
 import { PageHeader } from '../../components/common/PageHeader'
+import { QuestionVisuals } from '../../components/common/QuestionVisuals'
 import { formatDate, formatNumber } from '../../lib/format'
 import { cn } from '../../lib/utils'
+import { bodyVisuals, optionVisuals, visibleText, visualUrls } from '../../lib/visuals'
 import { useCreateExam, useExamResult, type ExamOutcome, type ExamResult, type ExamResultQuestion } from './api'
 import { sourceName, sourceRange } from './examSource'
 
@@ -203,7 +205,7 @@ function ResultView({ result }: { result: ExamResult }) {
         {questions.length === 0 ? (
           <EmptyState title="Bu filtrə uyğun sual yoxdur" />
         ) : (
-          questions.map((q) => <ReviewCard key={q.position} question={q} highlighted={focused === q.position} />)
+          questions.map((q) => <ReviewCard key={q.position} question={q} visualSrc={visualUrls.exam(result.id)} highlighted={focused === q.position} />)
         )}
         </div>
       </section>
@@ -266,7 +268,7 @@ const outcomeBadge: Record<ExamOutcome, { label: string; className: string }> = 
   Ungraded: { label: 'Qiymətləndirilməyib', className: 'bg-amber-50 text-amber-800 ring-amber-200' },
 }
 
-function ReviewCard({ question, highlighted }: { question: ExamResultQuestion; highlighted: boolean }) {
+function ReviewCard({ question, visualSrc, highlighted }: { question: ExamResultQuestion; visualSrc: (id: string) => string; highlighted: boolean }) {
   const badge = outcomeBadge[question.outcome]
   const unanswered = question.outcome === 'Unanswered'
   // Unanswered questions list every option so the student sees what they skipped.
@@ -278,9 +280,12 @@ function ReviewCard({ question, highlighted }: { question: ExamResultQuestion; h
         <span className="mt-0.5 shrink-0 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 tabular-nums">
           {question.position + 1}
         </span>
-        <h3 className="exam-question-text min-w-0 basis-[calc(100%-3rem)] flex-1 text-[15px] leading-6 font-medium">{question.text}</h3>
+        <h3 className="exam-question-text min-w-0 basis-[calc(100%-3rem)] flex-1 text-[15px] leading-6 font-medium">
+          {visibleText(question.text, bodyVisuals(question.visuals).length > 0) ?? <span className="sr-only">Şəkilli sual</span>}
+        </h3>
         <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset', badge.className)}>{badge.label}</span>
       </header>
+      <QuestionVisuals visuals={bodyVisuals(question.visuals)} src={visualSrc} className="mb-3" />
 
       {unanswered && (
         <p className="mb-2.5 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-600">Bu suala cavab verməmisiniz.</p>
@@ -311,7 +316,8 @@ function ReviewCard({ question, highlighted }: { question: ExamResultQuestion; h
               </span>
               <span className={cn('exam-question-text min-w-0 flex-1 text-sm leading-6', isCorrect ? 'font-medium text-emerald-900' : isWrongPick ? 'text-rose-900' : 'text-slate-700')}>
                 {(isSelected || isCorrect) && <span className="mb-1 block text-xs font-medium text-slate-500">{isSelected && isCorrect ? 'Sizin cavab · düzgün' : isSelected ? 'Sizin cavab' : 'Düzgün cavab'} · {option.label}</span>}
-                {answerDisplayText(option.text)}
+                {visibleText(answerDisplayText(option.text), optionVisuals(question.visuals, option.id).length > 0)}
+                <QuestionVisuals visuals={optionVisuals(question.visuals, option.id)} src={visualSrc} size="option" />
               </span>
 
             </li>

@@ -1382,6 +1382,88 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.ToTable("QuestionBookmarks", (string)null);
                 });
 
+            modelBuilder.Entity("ExamFlow.Api.Features.Questions.QuestionVisual", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<double>("Bottom")
+                        .HasColumnType("float");
+
+                    b.Property<int>("ByteSize")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ContentType")
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetimeoffset(3)");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<double>("Height")
+                        .HasColumnType("float");
+
+                    b.Property<double>("Left")
+                        .HasColumnType("float");
+
+                    b.Property<string>("MappingStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<byte?>("OptionPosition")
+                        .HasColumnType("tinyint");
+
+                    b.Property<int>("PageNumber")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PixelHeight")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PixelWidth")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("QuestionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("Sha256")
+                        .IsRequired()
+                        .HasColumnType("binary(32)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StorageKey")
+                        .HasMaxLength(120)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(120)");
+
+                    b.Property<double>("Width")
+                        .HasColumnType("float");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QuestionId");
+
+                    b.HasIndex("DocumentId", "SortOrder");
+
+                    b.ToTable("QuestionVisuals", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_QuestionVisuals_OptionPosition", "[OptionPosition] IS NULL OR [OptionPosition] BETWEEN 0 AND 5");
+                        });
+                });
+
             modelBuilder.Entity("ExamFlow.Api.Features.Study.StudyAiTurn", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1757,6 +1839,12 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                             b1.Property<int>("Unverified")
                                 .HasColumnType("int");
 
+                            b1.Property<int>("VisualsFound")
+                                .HasColumnType("int");
+
+                            b1.Property<int>("VisualsNeedingReview")
+                                .HasColumnType("int");
+
                             b1.PrimitiveCollection<string>("Warnings")
                                 .IsRequired()
                                 .HasColumnType("nvarchar(max)");
@@ -1850,7 +1938,47 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                                         .HasForeignKey("QuestionSnapshotExamQuestionId");
                                 });
 
+                            b1.OwnsMany("ExamFlow.Api.Features.Exams.VisualSnapshot", "Visuals", b2 =>
+                                {
+                                    b2.Property<Guid>("QuestionSnapshotExamQuestionId")
+                                        .HasColumnType("uniqueidentifier");
+
+                                    b2.Property<int>("__synthesizedOrdinal")
+                                        .ValueGeneratedOnAdd()
+                                        .HasColumnType("int");
+
+                                    b2.Property<string>("ContentType")
+                                        .HasColumnType("nvarchar(max)");
+
+                                    b2.Property<double>("Height")
+                                        .HasColumnType("float");
+
+                                    b2.Property<Guid?>("OptionId")
+                                        .HasColumnType("uniqueidentifier");
+
+                                    b2.Property<int>("PageNumber")
+                                        .HasColumnType("int");
+
+                                    b2.Property<string>("StorageKey")
+                                        .HasColumnType("nvarchar(max)");
+
+                                    b2.Property<Guid>("VisualId")
+                                        .HasColumnType("uniqueidentifier");
+
+                                    b2.Property<double>("Width")
+                                        .HasColumnType("float");
+
+                                    b2.HasKey("QuestionSnapshotExamQuestionId", "__synthesizedOrdinal");
+
+                                    b2.ToTable("ExamQuestions");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("QuestionSnapshotExamQuestionId");
+                                });
+
                             b1.Navigation("Options");
+
+                            b1.Navigation("Visuals");
                         });
 
                     b.Navigation("Question");
@@ -2054,6 +2182,24 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Questions.QuestionVisual", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Documents.UploadedDocument", "Document")
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ExamFlow.Api.Features.Questions.Question", "Question")
+                        .WithMany()
+                        .HasForeignKey("QuestionId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Document");
+
+                    b.Navigation("Question");
                 });
 
             modelBuilder.Entity("ExamFlow.Api.Features.Study.StudyAiTurn", b =>

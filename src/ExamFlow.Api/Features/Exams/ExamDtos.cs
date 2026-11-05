@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using ExamFlow.Api.Features.Questions;
 
 namespace ExamFlow.Api.Features.Exams;
 
@@ -36,7 +37,8 @@ public sealed record ExamSessionQuestionDto(
     string Text,
     IReadOnlyList<ExamOptionDto> Options,
     Guid? SelectedOptionId,
-    AnswerRevealDto? Reveal);
+    AnswerRevealDto? Reveal,
+    IReadOnlyList<VisualDto> Visuals);
 
 public sealed record ExamSessionDto(
     Guid Id,
@@ -56,7 +58,8 @@ public sealed record ExamResultQuestionDto(
     IReadOnlyList<ExamOptionDto> Options,
     Guid? SelectedOptionId,
     Guid? CorrectOptionId,
-    ExamOutcome Outcome);
+    ExamOutcome Outcome,
+    IReadOnlyList<VisualDto> Visuals);
 
 /// <summary>Where the exam's questions came from. DocumentName is null when the PDF was deleted.</summary>
 public sealed record ExamSourceDto(Guid? DocumentId, string? DocumentName, int? RangeFrom, int? RangeTo);

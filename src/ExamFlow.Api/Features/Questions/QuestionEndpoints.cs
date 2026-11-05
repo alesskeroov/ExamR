@@ -94,8 +94,15 @@ public static class QuestionEndpoints
                 q.Document.OriginalFileName,
                 q.Explanation,
                 db.QuestionBookmarks.Any(b => b.QuestionId == q.Id && b.UserId == userId),
-                q.Document.UploadedByUserId == userId))
+                q.Document.UploadedByUserId == userId,
+                Array.Empty<VisualDto>()))
             .ToListAsync(ct);
+
+        var visuals = await QuestionVisuals.ForQuestionsAsync(db, items.Select(i => i.Id).ToList(), ct);
+        items = items.Select(i => visuals.Contains(i.Id)
+                ? i with { Visuals = visuals[i.Id].Select(v => QuestionVisuals.ToDto(v, i.Options.Select(o => o.Id).ToList())).ToList() }
+                : i)
+            .ToList();
 
         return TypedResults.Ok(new PagedResult<QuestionDto>(items, pageNumber, size, total));
     }
@@ -187,7 +194,8 @@ public sealed record QuestionDto(
     string DocumentName,
     string? Answer,
     bool IsBookmarked,
-    bool CanEdit);
+    bool CanEdit,
+    IReadOnlyList<VisualDto> Visuals);
 
 public sealed record QuestionStatsDto(int TotalQuestions, int DocumentCount, int BookmarkCount);
 

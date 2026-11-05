@@ -2,6 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { api, ApiError } from '../../lib/api-client'
 import { queryKeys } from '../../lib/query-keys'
 import type { PagedResult } from '../documents/api'
+import type { VisualDto } from '../../lib/visuals'
 
 export type RevealMode = 'Immediate' | 'AtEnd'
 export type ExamStatus = 'InProgress' | 'Completed'
@@ -26,6 +27,8 @@ export interface ExamSessionQuestion {
   options: ExamOption[]
   selectedOptionId: string | null
   reveal: AnswerReveal | null
+  /** Missing in responses cached before images were supported. */
+  visuals?: VisualDto[]
 }
 
 export interface ExamSession {
@@ -46,6 +49,7 @@ export interface ExamResultQuestion {
   selectedOptionId: string | null
   correctOptionId: string | null
   outcome: ExamOutcome
+  visuals?: VisualDto[]
 }
 
 /** Source PDF and question range. documentName is null if the PDF was deleted; range is null on older exams. */

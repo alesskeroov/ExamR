@@ -20,6 +20,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<DocumentUserShare> DocumentUserShares => Set<DocumentUserShare>();
     public DbSet<DocumentGroupShare> DocumentGroupShares => Set<DocumentGroupShare>();
     public DbSet<Question> Questions => Set<Question>();
+    public DbSet<QuestionVisual> QuestionVisuals => Set<QuestionVisual>();
     // Data Protection keys survive restarts of hosts with an ephemeral disk (Render).
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
     public DbSet<QuestionBookmark> QuestionBookmarks => Set<QuestionBookmark>();

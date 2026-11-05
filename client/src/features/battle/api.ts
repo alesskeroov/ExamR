@@ -5,6 +5,7 @@ import { api } from '../../lib/api-client'
 import { queryKeys } from '../../lib/query-keys'
 import type { PagedResult } from '../documents/api'
 import type { ExamOption, ExamSource } from '../exams/api'
+import type { VisualDto } from '../../lib/visuals'
 import { useCurrentUser } from '../auth/api'
 
 export type BattleStatus = 'Lobby' | 'Question' | 'Reveal' | 'Finished' | 'Closed'
@@ -40,6 +41,7 @@ export interface BattleQuestion {
   options: ExamOption[]
   endsAt: string
   secondsPerQuestion: number
+  visuals?: VisualDto[]
 }
 
 export interface BattleState {

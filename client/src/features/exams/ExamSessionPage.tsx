@@ -6,7 +6,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
 import { Button } from '../../components/common/Button'
+import { QuestionVisuals } from '../../components/common/QuestionVisuals'
 import { cn } from '../../lib/utils'
+import { bodyVisuals, optionVisuals, visibleText, visualUrls } from '../../lib/visuals'
 import { NotificationBell } from '../friends/NotificationBell'
 import {
   answerMutationKey,
@@ -188,6 +190,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
           <QuestionPanel
             key={question.examQuestionId}
             question={question}
+            visualSrc={visualUrls.exam(session.id)}
             number={index + 1}
             immediate={immediate}
             locked={locked}
@@ -259,6 +262,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
 
 interface QuestionPanelProps {
   question: ExamSessionQuestion
+  visualSrc: (id: string) => string
   number: number
   immediate: boolean
   locked: boolean
@@ -269,7 +273,7 @@ interface QuestionPanelProps {
   onChoose: (optionId: string | null) => void
 }
 
-function QuestionPanel({ question, number, immediate, locked, revealed, onReveal, flagged, onFlag, onChoose }: QuestionPanelProps) {
+function QuestionPanel({ question, visualSrc, number, immediate, locked, revealed, onReveal, flagged, onFlag, onChoose }: QuestionPanelProps) {
   // Immediate mode gets the result with the saved answer, but shows it only after the student asks for it.
   const reveal = revealed ? question.reveal : null
   const headingId = `question-${question.examQuestionId}`
@@ -285,11 +289,13 @@ function QuestionPanel({ question, number, immediate, locked, revealed, onReveal
         </button>
       </div>
       <h1 id={headingId} className="exam-question-text max-w-[72ch] text-base leading-7 font-semibold text-slate-900 sm:text-[17px] min-[900px]:text-lg min-[900px]:leading-8">
-        {question.text}
+        {visibleText(question.text, bodyVisuals(question.visuals).length > 0) ?? <span className="sr-only">Sual {number} (şəkilli)</span>}
       </h1>
+      <QuestionVisuals visuals={bodyVisuals(question.visuals)} src={visualSrc} className="mt-3" />
 
       <div role="radiogroup" aria-labelledby={headingId} className="mt-4 flex flex-col gap-2 sm:mt-5 sm:gap-2.5">
         {question.options.map((option) => {
+          const images = optionVisuals(question.visuals, option.id)
           const selected = question.selectedOptionId === option.id
           const isCorrect = reveal?.correctOptionId === option.id
           const isWrongPick = !!reveal?.isGradable && selected && !isCorrect
@@ -325,7 +331,8 @@ function QuestionPanel({ question, number, immediate, locked, revealed, onReveal
                 {option.label}
               </span>
               <span className="exam-question-text min-w-0 flex-1 leading-6">
-                {answerDisplayText(option.text)}
+                {visibleText(answerDisplayText(option.text), images.length > 0)}
+                <QuestionVisuals visuals={images} src={visualSrc} size="option" />
                 {isCorrect && <span className="sr-only"> (düzgün cavab)</span>}
                 {isWrongPick && <span className="sr-only"> (sizin cavabınız, yanlış)</span>}
               </span>

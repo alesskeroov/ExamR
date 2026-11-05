@@ -4,8 +4,10 @@ import { Alert } from '../../components/common/Alert'
 import { Button } from '../../components/common/Button'
 import { EmptyState } from '../../components/common/EmptyState'
 import { PageHeader } from '../../components/common/PageHeader'
+import { QuestionVisuals } from '../../components/common/QuestionVisuals'
 import { StatusBadge, type BadgeTone } from '../../components/common/StatusBadge'
 import { cn } from '../../lib/utils'
+import { bodyVisuals, optionVisuals, visibleText, visualUrls } from '../../lib/visuals'
 import type { QuestionDto, VerificationStatus } from '../documents/api'
 import { BANK_PAGE_SIZE, useBankDocuments, useQuestionAction, useQuestionBank, useQuestionStats, type BankFilters } from './api'
 
@@ -90,10 +92,12 @@ function QuestionItem({ question: q, busy, onBookmark, onVerify, onEdit }: { que
   const badge = statusBadge[q.verificationStatus]
   const isOpen = q.options.length === 0
   const long = (q.answer?.length ?? 0) > 280
+  const visualSrc = visualUrls.document(q.documentId)
+  const images = bodyVisuals(q.visuals)
   return <article className={cn(card, 'p-4 transition-shadow hover:shadow-md sm:p-5')}>
     <header className="flex items-start gap-3">
       <span className="mt-0.5 shrink-0 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 tabular-nums">#{q.sourceNumber}</span>
-      <h3 className="min-w-0 flex-1 wrap-anywhere text-[15px] leading-6 font-medium">{q.text}</h3>
+      <h3 className="min-w-0 flex-1 wrap-anywhere text-[15px] leading-6 font-medium">{visibleText(q.text, images.length > 0) ?? <span className="sr-only">Şəkilli sual #{q.sourceNumber}</span>}</h3>
       <button type="button" disabled={busy} onClick={onBookmark} aria-pressed={q.isBookmarked} aria-label={q.isBookmarked ? 'Seçilmişlərdən çıxar' : 'Seçilmişlərə əlavə et'} className="-m-1 grid size-10 shrink-0 place-items-center rounded-lg text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 disabled:opacity-50 sm:m-0 sm:size-8">
         <Bookmark className={cn('size-5', q.isBookmarked && 'fill-indigo-600 text-indigo-600')} aria-hidden /></button>
     </header>
@@ -101,7 +105,9 @@ function QuestionItem({ question: q, busy, onBookmark, onVerify, onEdit }: { que
       <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
       <span className="rounded-full bg-slate-100 px-2 py-0.5">{isOpen ? 'Açıq sual' : 'Variantlı'}</span>
       <span className="flex min-w-0 max-w-full items-center gap-1"><FileText className="size-3.5 shrink-0" aria-hidden /><span className="truncate">{q.documentName}</span></span>
+      {q.visuals?.some(v => v.needsReview) && <StatusBadge tone="warning">Şəklin yeri yoxlanmalıdır</StatusBadge>}
     </div>
+    <QuestionVisuals visuals={images} src={visualSrc} className="mb-3" />
     {isOpen ? <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-700">
         <p className={cn('whitespace-pre-wrap wrap-anywhere', long && !open && 'line-clamp-4')}>{q.answer || 'Cavab yoxdur.'}</p>
         {long && <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} className="mt-1 flex items-center gap-1 text-xs font-medium text-indigo-600">
@@ -109,7 +115,8 @@ function QuestionItem({ question: q, busy, onBookmark, onVerify, onEdit }: { que
       </div>
       : <ul className="flex flex-col gap-1.5">{q.options.map(o => <li key={o.id} className={cn('flex items-start gap-3 rounded-lg border px-3 py-2', o.isCorrect ? 'border-emerald-200 bg-emerald-50' : 'border-transparent')}>
         <span className={cn('flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold', o.isCorrect ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600')} aria-hidden>{o.isCorrect ? <Check className="size-3.5" strokeWidth={3} /> : o.label}</span>
-        <span className={cn('min-w-0 flex-1 wrap-anywhere leading-6', o.isCorrect ? 'font-medium text-emerald-900' : 'text-slate-700')}><span className="sr-only">{o.label}){o.isCorrect ? ' (düzgün cavab)' : ''} </span>{o.text}</span>
+        <span className={cn('min-w-0 flex-1 wrap-anywhere leading-6', o.isCorrect ? 'font-medium text-emerald-900' : 'text-slate-700')}><span className="sr-only">{o.label}){o.isCorrect ? ' (düzgün cavab)' : ''} </span>{visibleText(o.text, optionVisuals(q.visuals, o.id).length > 0)}
+          <QuestionVisuals visuals={optionVisuals(q.visuals, o.id)} src={visualSrc} size="option" /></span>
       </li>)}</ul>}
     {q.canEdit && <footer className="mt-4 flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-3">
       {q.verificationStatus !== 'Verified' && <Button variant="ghost" className="h-9 px-3 text-xs" disabled={busy} onClick={onVerify}><ShieldCheck className="size-3.5" aria-hidden />Təsdiqlə</Button>}

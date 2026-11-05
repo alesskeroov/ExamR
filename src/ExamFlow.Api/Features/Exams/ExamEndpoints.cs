@@ -4,6 +4,7 @@ using ExamFlow.Api.Features.Questions;
 using ExamFlow.Api.Features.Documents;
 using ExamFlow.Api.Infrastructure.Data;
 using ExamFlow.Api.Infrastructure.Security;
+using ExamFlow.Api.Infrastructure.Storage;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -23,6 +24,7 @@ public static class ExamEndpoints
         group.MapPut("/{id:guid}/answers/{examQuestionId:guid}", Answer).Validate<AnswerRequest>();
         group.MapPost("/{id:guid}/finish", Finish);
         group.MapGet("/{id:guid}/result", Result);
+        group.MapGet("/{id:guid}/visuals/{visualId:guid}", Visual);
     }
 
     /// <summary>
@@ -100,6 +102,7 @@ public static class ExamEndpoints
             .Include(q => q.Options)
             .Where(q => pickedIds.Contains(q.Id))
             .ToDictionaryAsync(q => q.Id, ct);
+        var visuals = await QuestionVisuals.ForQuestionsAsync(db, pickedIds, ct);
 
         var exam = new Exam
         {
@@ -112,7 +115,7 @@ public static class ExamEndpoints
             Status = ExamStatus.InProgress,
             StartedAt = now,
             ExpiresAt = now + settings.DurationFor(request.QuestionCount),
-            Questions = pickedIds.Select((id, position) => Freeze(questions[id], position)).ToList(),
+            Questions = pickedIds.Select((id, position) => Freeze(questions[id], position, visuals[id])).ToList(),
         };
 
         db.Exams.Add(exam);
@@ -261,6 +264,20 @@ public static class ExamEndpoints
             : Problem(StatusCodes.Status409Conflict, "İmtahan hələ bitməyib.");
     }
 
+    /// <summary>
+    /// An image of one of the exam's frozen questions. Served from the snapshot, so it stays tied to the exam
+    /// even if the PDF is reprocessed; the same access rule as the exam itself applies.
+    /// </summary>
+    private static async Task<IResult> Visual(
+        Guid id, Guid visualId, ClaimsPrincipal user, AppDbContext db, IFileStorage storage, HttpResponse response, CancellationToken ct)
+    {
+        var exam = await LoadAsync(db, id, user.GetUserId(), ct);
+        var visual = exam?.Questions.SelectMany(q => q.Snapshot.Visuals ?? []).FirstOrDefault(v => v.VisualId == visualId);
+        return visual is null
+            ? Problem(StatusCodes.Status404NotFound, "Şəkil tapılmadı.")
+            : QuestionVisuals.File(storage, response, visual.StorageKey, visual.ContentType);
+    }
+
     /// <summary>Usable questions of one PDF whose original number lies in [from, to].</summary>
     internal static Task<List<ExamCandidate>> Candidates(AppDbContext db, Guid documentId, int from, int to, CancellationToken ct) =>
         db.Questions.AsNoTracking()
@@ -284,7 +301,7 @@ public static class ExamEndpoints
     }
 
     /// <summary>Copies the question into the exam with its options in a new random order.</summary>
-    internal static ExamQuestion Freeze(Question question, int position)
+    internal static ExamQuestion Freeze(Question question, int position, IEnumerable<QuestionVisual>? visuals = null)
     {
         var options = question.Options.OrderBy(o => o.Position).ToList();
         ExamEngine.Shuffle(options, Random.Shared);
@@ -297,6 +314,7 @@ public static class ExamEndpoints
             {
                 Text = question.Text,
                 Options = options.Select((o, i) => new OptionSnapshot { OptionId = o.Id, Label = ((char)('A' + i)).ToString(), Text = o.Text }).ToList(),
+                Visuals = visuals?.Select(v => QuestionVisuals.ToSnapshot(v, question.Options)).ToList() ?? [],
             },
             CorrectOptionId = question.VerificationStatus == VerificationStatus.Unverified ? null : options.FirstOrDefault(o => o.IsCorrect)?.Id,
         };
@@ -342,10 +360,13 @@ public static class ExamEndpoints
     private static IReadOnlyList<ExamOptionDto> Options(ExamQuestion question) =>
         question.Snapshot.Options.Select(o => new ExamOptionDto(o.OptionId, o.Label, o.Text)).ToList();
 
+    internal static IReadOnlyList<VisualDto> Visuals(ExamQuestion question) =>
+        question.Snapshot.Visuals?.Select(QuestionVisuals.ToDto).ToList() ?? [];
+
     private static ExamSessionDto ToSession(Exam exam, DateTimeOffset now) => new(
         exam.Id, exam.Status, exam.RevealMode, exam.QuestionCount, exam.StartedAt, exam.ExpiresAt, now,
         exam.Questions.OrderBy(q => q.Position)
-            .Select(q => new ExamSessionQuestionDto(q.Id, q.Position, q.Snapshot.Text, Options(q), q.SelectedOptionId, RevealFor(exam, q)))
+            .Select(q => new ExamSessionQuestionDto(q.Id, q.Position, q.Snapshot.Text, Options(q), q.SelectedOptionId, RevealFor(exam, q), Visuals(q)))
             .ToList());
 
     private static ExamResultDto ToResult(Exam exam, IReadOnlyDictionary<Guid, string> documentNames)
@@ -357,7 +378,7 @@ public static class ExamEndpoints
             exam.StartedAt, completedAt, (int)Math.Round((completedAt - exam.StartedAt).TotalSeconds),
             exam.Questions.OrderBy(q => q.Position)
                 .Select(q => new ExamResultQuestionDto(q.Position, q.Snapshot.Text, Options(q), q.SelectedOptionId, q.CorrectOptionId,
-                    q.Outcome ?? ExamEngine.OutcomeOf(q)))
+                    q.Outcome ?? ExamEngine.OutcomeOf(q), Visuals(q)))
                 .ToList());
     }
 

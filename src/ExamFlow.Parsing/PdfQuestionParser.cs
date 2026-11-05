@@ -12,6 +12,9 @@ public sealed class PdfQuestionParser(IEnumerable<IAnswerDetector>? detectors = 
     private const int MinCharactersPerPage = 20;
     private const double MaxUnknownGlyphRatio = 0.05;
 
+    /// <summary>Text of a question whose stem is only an image (its images keep it apart from other such questions).</summary>
+    public const string ImageOnlyQuestionText = "[Şəkil]";
+
     // DI passes an empty sequence when nothing is registered; never run without a detector.
     private readonly IReadOnlyList<IAnswerDetector> _detectors =
         detectors?.ToList() is { Count: > 0 } configured ? configured : DefaultDetectors;
@@ -69,12 +72,25 @@ public sealed class PdfQuestionParser(IEnumerable<IAnswerDetector>? detectors = 
                 return ParseResult.Failed(ParseFailure.Scanned, content.PageCount);
             }
 
-            return ParseLines(content.Lines, content.PageCount);
+            return ParseLines(content.Lines, content.PageCount, LocateVisuals(document, ct));
+        }
+    }
+
+    /// <summary>Images only refine duplicate detection; if they cannot be read, parsing continues text-only.</summary>
+    private static IReadOnlyList<VisualLocation> LocateVisuals(PdfDocument document, CancellationToken ct)
+    {
+        try
+        {
+            return PdfVisualExtractor.Locate(document, ct: ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return [];
         }
     }
 
     /// <summary>Parses already extracted lines; used directly by tests.</summary>
-    public ParseResult ParseLines(IReadOnlyList<TextLine> lines, int pageCount)
+    public ParseResult ParseLines(IReadOnlyList<TextLine> lines, int pageCount, IReadOnlyList<VisualLocation>? visuals = null)
     {
         var warnings = new List<string>();
         var allText = string.Concat(lines.Select(l => l.Text));
@@ -86,9 +102,14 @@ public sealed class PdfQuestionParser(IEnumerable<IAnswerDetector>? detectors = 
         var questions = new List<ParsedQuestion>();
         var seenHashes = new HashSet<string>();
         var duplicates = 0;
+        var skippedAnchors = new List<SourceAnchor>();
 
-        foreach (var raw in QuestionSegmenter.Segment(LayoutCleaner.Clean(lines)))
+        var raws = QuestionSegmenter.Segment(LayoutCleaner.Clean(lines));
+        var visualKeys = VisualKeysByQuestion(raws, visuals ?? []);
+
+        foreach (var raw in raws)
         {
+            var questionVisuals = visualKeys.GetValueOrDefault(raw);
             var questionWarnings = new List<string>(raw.Warnings);
             var questionText = Join(raw.TextTokens);
             string? answerText = raw.ReadingAnswer ? Join(raw.AnswerTokens) : null;
@@ -102,9 +123,17 @@ public sealed class PdfQuestionParser(IEnumerable<IAnswerDetector>? detectors = 
                 }
             }
             var text = Truncate(questionText, MaxQuestionLength, "Sual mətni", questionWarnings);
+            // Formula images often leave only stray punctuation ("." or "..") in the text layer.
+            if (questionVisuals is not null && !text.Any(char.IsLetterOrDigit))
+            {
+                text = ImageOnlyQuestionText;
+                questionWarnings.Add("Sual mətni yalnız şəkildir");
+            }
+
             if (text.Length == 0)
             {
                 warnings.Add($"Sual {raw.Number}: mətn boşdur, atlandı");
+                if (raw.Anchor is not null) skippedAnchors.Add(raw.Anchor);
                 continue;
             }
 
@@ -124,10 +153,12 @@ public sealed class PdfQuestionParser(IEnumerable<IAnswerDetector>? detectors = 
                 questionWarnings.Add(detection.Warning);
             }
 
-            var hash = ContentHasher.Compute(text, options.Select(o => o.Text).Concat(explanation is null ? [] : new[] { explanation }));
+            var hash = ContentHasher.Compute(text, options.Select(o => o.Text).Concat(explanation is null ? [] : new[] { explanation }),
+                questionVisuals);
             if (!seenHashes.Add(Convert.ToHexString(hash)))
             {
                 duplicates++;
+                if (raw.Anchor is not null) skippedAnchors.Add(raw.Anchor);
                 continue;
             }
 
@@ -137,7 +168,12 @@ public sealed class PdfQuestionParser(IEnumerable<IAnswerDetector>? detectors = 
                 warnings.Add($"Sual {raw.Number}: {warning}");
             }
 
-            questions.Add(new ParsedQuestion(raw.Number, text, options, detection.CorrectIndex, warning, hash) { Explanation = explanation });
+            questions.Add(new ParsedQuestion(raw.Number, text, options, detection.CorrectIndex, warning, hash)
+            {
+                Explanation = explanation,
+                Anchor = raw.Anchor,
+                OptionAnchors = raw.Options.Select(o => o.Anchor).ToList(),
+            });
         }
 
         return new ParseResult
@@ -146,8 +182,42 @@ public sealed class PdfQuestionParser(IEnumerable<IAnswerDetector>? detectors = 
             Warnings = warnings,
             PageCount = pageCount,
             DuplicatesSkipped = duplicates,
+            SkippedAnchors = skippedAnchors,
             Failure = questions.Count == 0 ? ParseFailure.NoQuestions : ParseFailure.None,
         };
+    }
+
+    /// <summary>
+    /// Image hashes per question, by the same ownership rule as <see cref="VisualMapper"/>. Questions whose text is
+    /// only placeholders (e.g. formulas drawn as images) are then not dropped as duplicates of each other.
+    /// </summary>
+    private static Dictionary<RawQuestion, List<string>> VisualKeysByQuestion(IReadOnlyList<RawQuestion> raws, IReadOnlyList<VisualLocation> visuals)
+    {
+        var result = new Dictionary<RawQuestion, List<string>>(ReferenceEqualityComparer.Instance);
+        if (visuals.Count == 0 || raws.Count == 0 || raws.Any(r => r.Anchor is null))
+        {
+            return result;
+        }
+
+        var ordered = raws.OrderBy(r => r.Anchor!.PageNumber).ThenByDescending(r => r.Anchor!.Y).ToList();
+        var anchors = ordered.Select(r => r.Anchor!).ToList();
+        foreach (var visual in visuals)
+        {
+            var (owner, _) = VisualMapper.FindOwner(anchors, visual.PageNumber, visual.Bounds);
+            if (owner < 0)
+            {
+                continue;
+            }
+
+            if (!result.TryGetValue(ordered[owner], out var keys))
+            {
+                result[ordered[owner]] = keys = [];
+            }
+
+            keys.Add(Convert.ToHexString(visual.RawHash));
+        }
+
+        return result;
     }
 
     private AnswerDetection Detect(RawQuestion question)
