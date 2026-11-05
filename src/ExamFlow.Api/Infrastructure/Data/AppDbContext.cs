@@ -3,6 +3,7 @@ using ExamFlow.Api.Features.Study;
 using ExamFlow.Api.Features.Battles;
 using ExamFlow.Api.Features.Documents;
 using ExamFlow.Api.Features.Exams;
+using ExamFlow.Api.Features.Explanations;
 using ExamFlow.Api.Features.Friends;
 using ExamFlow.Api.Features.Groups;
 using ExamFlow.Api.Features.Questions;
@@ -41,6 +42,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<StudyAiTurn> StudyAiTurns => Set<StudyAiTurn>();
     public DbSet<StudyAttempt> StudyAttempts => Set<StudyAttempt>();
+
+    public DbSet<QuestionExplanation> QuestionExplanations => Set<QuestionExplanation>();
+    public DbSet<ExplanationJob> ExplanationJobs => Set<ExplanationJob>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

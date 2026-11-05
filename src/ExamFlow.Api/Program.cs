@@ -10,6 +10,7 @@ using ExamFlow.Api.Features.Exams;
 using ExamFlow.Api.Features.Health;
 using ExamFlow.Api.Features.Focus;
 using ExamFlow.Api.Features.Learning;
+using ExamFlow.Api.Features.Explanations;
 using ExamFlow.Api.Features.Friends;
 using ExamFlow.Api.Features.Groups;
 using ExamFlow.Api.Features.Questions;
@@ -105,6 +106,14 @@ builder.Services.AddOptions<StudyAiOptions>()
 builder.Services.AddHttpClient<StudyAiClient>(client => client.Timeout = TimeSpan.FromSeconds(100));
 
 builder.Services.Configure<ExamOptions>(builder.Configuration.GetSection(ExamOptions.Section));
+
+// Explanation bank: admin-started AI generation in the background (off and on the mock provider by default).
+builder.Services.AddOptions<ExplanationAiOptions>()
+    .Bind(builder.Configuration.GetSection(ExplanationAiOptions.Section)).ValidateDataAnnotations().ValidateOnStart();
+builder.Services.AddSingleton<ExplanationQueue>();
+builder.Services.AddScoped<ExplanationService>();
+builder.Services.AddScoped<ExplanationGenerator>();
+builder.Services.AddHostedService<ExplanationWorker>();
 
 // Battle mode: SignalR (built into ASP.NET Core) + in-memory rooms on this single server.
 builder.Services.AddSignalR(options => { options.MaximumReceiveMessageSize = 8 * 1024; options.AddFilter<ActiveAccountHubFilter>(); })
@@ -224,6 +233,7 @@ api.MapBattleRankEndpoints();
 api.MapFriendsEndpoints();
 api.MapGroupEndpoints();
 api.MapAdminEndpoints();
+api.MapExplanationAdminEndpoints();
 api.MapLearningEndpoints();
 api.MapLearningChatEndpoints();
 api.MapLearningStudyEndpoints();

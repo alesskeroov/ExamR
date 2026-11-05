@@ -4,6 +4,15 @@ export const queryKeys = {
     list: ['admins', 'list'] as const,
     search: (term: string) => ['admins', 'search', term] as const,
   },
+  explanations: {
+    all: ['explanations'] as const,
+    status: ['explanations', 'status'] as const,
+    documents: ['explanations', 'documents'] as const,
+    document: (documentId: string) => ['explanations', 'document', documentId] as const,
+    questions: (documentId: string, params: string) => ['explanations', 'document', documentId, 'questions', params] as const,
+    estimate: (documentId: string) => ['explanations', 'document', documentId, 'estimate'] as const,
+    jobs: (documentId: string) => ['explanations', 'document', documentId, 'jobs'] as const,
+  },
   groups: {
     all: ['groups'] as const,
     list: (userId: string, admin: boolean) => ['groups', userId, 'list', admin] as const,

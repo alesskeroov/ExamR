@@ -2,6 +2,7 @@ using System.Security.Claims;
 using ExamFlow.Api.Common;
 using ExamFlow.Api.Features.Questions;
 using ExamFlow.Api.Features.Documents;
+using ExamFlow.Api.Features.Explanations;
 using ExamFlow.Api.Infrastructure.Data;
 using ExamFlow.Api.Infrastructure.Security;
 using ExamFlow.Api.Infrastructure.Storage;
@@ -25,7 +26,51 @@ public static class ExamEndpoints
         group.MapPost("/{id:guid}/finish", Finish);
         group.MapGet("/{id:guid}/result", Result);
         group.MapGet("/{id:guid}/visuals/{visualId:guid}", Visual);
+        group.MapGet("/{id:guid}/explanations", Explanations);
+        group.MapGet("/{id:guid}/questions/{examQuestionId:guid}/explanation", QuestionExplanation);
     }
+
+    /// <summary>Approved explanations of a finished exam's questions (database only, no AI call).</summary>
+    private static async Task<IResult> Explanations(
+        Guid id, ClaimsPrincipal user, AppDbContext db, TimeProvider clock, IOptions<ExamOptions> options, CancellationToken ct)
+    {
+        var exam = await LoadAsync(db, id, user.GetUserId(), ct);
+        if (exam is null) return NotFound();
+        if (!await FinalizeIfExpiredAsync(db, exam, clock.GetUtcNow(), options.Value, ct))
+            return Problem(StatusCodes.Status409Conflict, "İmtahan hələ bitməyib.");
+
+        var keyed = exam.Questions.Select(q => (q.Position, Key: ExplanationFingerprint(q))).Where(x => x.Key is not null).ToList();
+        var found = await ExplanationLookup.ApprovedAsync(db, keyed.Select(x => x.Key!), ct);
+        return TypedResults.Ok(keyed
+            .Select(x => (x.Position, Dto: found.GetValueOrDefault(Convert.ToHexString(x.Key!))))
+            .Where(x => x.Dto is not null)
+            .OrderBy(x => x.Position)
+            .Select(x => new ExamExplanationDto(x.Position, x.Dto!.QuestionType!.Value, x.Dto.Explanation!))
+            .ToList());
+    }
+
+    /// <summary>One question's explanation, only once the answer itself may be shown (Immediate mode after answering, or a finished exam).</summary>
+    private static async Task<IResult> QuestionExplanation(
+        Guid id, Guid examQuestionId, ClaimsPrincipal user, AppDbContext db, TimeProvider clock, IOptions<ExamOptions> options, CancellationToken ct)
+    {
+        var exam = await LoadAsync(db, id, user.GetUserId(), ct);
+        var question = exam?.Questions.FirstOrDefault(q => q.Id == examQuestionId);
+        if (exam is null || question is null) return NotFound();
+        var finished = await FinalizeIfExpiredAsync(db, exam, clock.GetUtcNow(), options.Value, ct);
+        // The explanation names the correct answer, so it follows the same reveal rules as the answer.
+        if (!finished && RevealFor(exam, question) is null)
+            return Problem(StatusCodes.Status409Conflict, "İzah cavab göstərildikdən sonra açılır.");
+
+        var key = ExplanationFingerprint(question);
+        if (key is null) return TypedResults.Ok(new QuestionExplanationDto(null, null));
+        var found = await ExplanationLookup.ApprovedAsync(db, [key], ct);
+        return TypedResults.Ok(found.GetValueOrDefault(Convert.ToHexString(key)) ?? new QuestionExplanationDto(null, null));
+    }
+
+    private static byte[]? ExplanationFingerprint(ExamQuestion question) => ExplanationEngine.Fingerprint(
+        question.Snapshot.Text,
+        question.Snapshot.Options.Select(o => o.Text),
+        question.Snapshot.Options.FirstOrDefault(o => o.OptionId == question.CorrectOptionId)?.Text);
 
     /// <summary>
     /// The PDF's question-number span and how many distinct questions a range of it holds.
