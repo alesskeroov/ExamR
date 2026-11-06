@@ -9,12 +9,12 @@ export function ProductPreview() {
     <div className="lp-stage" aria-label="ExamR interfeysinin nümunəsi" role="img">
       <div className="lp-sheetdoc" aria-hidden>
         <div className="flex items-center justify-between gap-2">
-          <span className="flex items-center gap-1.5 text-[12px] font-semibold"><FileText className="size-3.5" />biologiya-final.pdf</span>
+          <span className="flex items-center gap-1.5 text-[12px] font-semibold"><FileText className="size-3.5" />informatika-final.pdf</span>
           <span className="lp-chip"><Check className="size-3" strokeWidth={3} />48 sual</span>
         </div>
         <div className="lp-sheetdoc-line" style={{ width: '92%' }} />
         <div className="lp-sheetdoc-line" style={{ width: '78%' }} />
-        <p className="lp-sheetdoc-q">7. Hüceyrədə enerjinin əsas hissəsi harada istehsal olunur?</p>
+        <p className="lp-sheetdoc-q">7. OSI modelində IP ünvanlaması hansı səviyyədə həyata keçirilir?</p>
         <div className="lp-sheetdoc-line" style={{ width: '64%' }} />
         <div className="lp-sheetdoc-line" style={{ width: '85%' }} />
         <div className="lp-sheetdoc-line" style={{ width: '40%' }} />
@@ -26,12 +26,12 @@ export function ProductPreview() {
           <span className="lp-timer lp-mono">18:42</span>
         </div>
         <div className="lp-examcard-body">
-          <p className="lp-q">Hüceyrədə enerjinin əsas hissəsi harada istehsal olunur?</p>
+          <p className="lp-q">OSI modelində IP ünvanlaması hansı səviyyədə həyata keçirilir?</p>
           <div className="lp-options">
-            <div className="lp-option"><b>A</b>Ribosom</div>
-            <div className="lp-option" data-state="picked"><b>B</b>Mitoxondri</div>
-            <div className="lp-option"><b>C</b>Holci aparatı</div>
-            <div className="lp-option"><b>D</b>Lizosom</div>
+            <div className="lp-option"><b>A</b>Fiziki səviyyə</div>
+            <div className="lp-option"><b>B</b>Kanal səviyyəsi</div>
+            <div className="lp-option" data-state="picked"><b>C</b>Şəbəkə səviyyəsi</div>
+            <div className="lp-option"><b>D</b>Nəqliyyat səviyyəsi</div>
           </div>
         </div>
         <div className="lp-grid20">{grid.map((s, i) => <i key={i} data-s={s} />)}</div>

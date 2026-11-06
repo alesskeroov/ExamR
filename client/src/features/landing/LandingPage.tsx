@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
-import { ArrowRight, ArrowUpRight, Menu, Moon, Plus, Sun, X } from 'lucide-react'
+import { ArrowRight, ArrowUpRight, Check, Menu, Moon, Plus, Sun, X } from 'lucide-react'
 import { Link, useLocation } from 'react-router'
 import { useTheme } from '../../lib/use-theme'
 import { ProductPreview } from './ProductPreview'
@@ -9,6 +9,7 @@ const nav = [['#imkanlar', 'Rejimlər'], ['#nece-isleyir', 'Addımlar'], ['#haqq
 const YEAR = new Date().getFullYear()
 const hints = ['İmtahan, öyrənmə, Battle və statistika', 'Fayldan ilk nəticəyə qədər', 'Layihə niyə yaradılıb', 'Tez-tez verilən suallar']
 const auth = (mode: 'login' | 'register') => `/?auth=${mode}`
+const subjects = ['Proqramlaşdırma', 'Kompüter şəbəkələri', 'Verilənlər bazası', 'Kibertəhlükəsizlik', 'Əməliyyat sistemləri']
 
 export function LandingPage() {
   const { dark, toggleTheme } = useTheme()
@@ -119,14 +120,20 @@ export function LandingPage() {
         <section className="lp-hero" aria-labelledby="hero-title">
           <div className="lp-wrap lp-hero-grid">
             <div>
-              <p className="lp-eyebrow">PDF · DOCX → imtahan</p>
+              <p className="lp-eyebrow">PDF · DOCX → interaktiv imtahan</p>
               <h1 id="hero-title" className="lp-h1 mt-4">Konspektin artıq <span className="lp-mark">imtahandır.</span></h1>
-              <p className="lp-lead">Sual-cavab sənədini yüklə — ExamR sualları özü çıxarır. Vaxtlı imtahan ver, öyrənmə rejimində təkrar et, dostunla yarış. Nə öyrəndiyini rəqəmlərlə gör.</p>
+              <p className="lp-lead">Sual-cavab faylını yüklə — ExamR sualları, variantları və düzgün cavabları özü tanıyır. Vaxtlı imtahan ver, səhvlərini təkrar et, dostunla yarış və irəliləyişini rəqəmlərlə izlə.</p>
               <div className="lp-cta">
                 <Link viewTransition to={auth('register')} className="lp-btn lp-btn-primary">İlk faylını yüklə <ArrowRight className="lp-arrow size-4" aria-hidden /></Link>
                 <a href="#imkanlar" onClick={e => go(e, '#imkanlar')} className="lp-btn lp-btn-quiet">Rejimlərə bax</a>
               </div>
-              <div className="lp-facts"><span>Azərbaycan dilində</span><span>PDF və Word</span><span>Hazırda demo mərhələsində</span></div>
+              <ul className="lp-facts" aria-label="Əsas üstünlüklər">
+                {['Azərbaycan dilində', 'PDF və Word faylları', 'Pulsuz demo'].map(f => <li key={f}><Check className="size-3.5" strokeWidth={3} aria-hidden />{f}</li>)}
+              </ul>
+              <div className="lp-subjects">
+                <p>Məsələn, İT fənləri üçün:</p>
+                <ul aria-label="Nümunə fənlər">{subjects.map(s => <li key={s}>{s}</li>)}</ul>
+              </div>
             </div>
             <ProductPreview />
           </div>
@@ -302,7 +309,7 @@ function FeatureTabs() {
 
 const panels: Record<(typeof features)[number]['id'], ReactNode> = {
   doc: <div className="grid gap-3">
-    <div className="lp-mini flex items-center gap-3 p-4"><span className="lp-chip">PDF</span><span className="min-w-0 flex-1 truncate font-semibold">fizika-mexanika.pdf</span><span className="lp-mono text-[12px] lp-muted">2.4 MB</span></div>
+    <div className="lp-mini flex items-center gap-3 p-4"><span className="lp-chip">PDF</span><span className="min-w-0 flex-1 truncate font-semibold">komputer-sebekeleri.pdf</span><span className="lp-mono text-[12px] lp-muted">2.4 MB</span></div>
     <div className="lp-mini p-4">
       <div className="flex items-baseline justify-between"><span className="font-semibold">Emal tamamlandı</span><span className="lp-mono text-[12px] lp-muted">12 san</span></div>
       <div className="lp-bar mt-3"><i style={{ width: '100%' }} /></div>
@@ -314,16 +321,16 @@ const panels: Record<(typeof features)[number]['id'], ReactNode> = {
   </div>,
   exam: <div className="lp-mini overflow-hidden">
     <div className="lp-examcard-head"><span className="lp-mono">Sual 12 / 30</span><span className="lp-timer lp-mono">21:05</span></div>
-    <div className="p-4"><p className="lp-q">Sürət vahid zamanda qət edilən … ilə ölçülür.</p>
-      <div className="lp-options"><div className="lp-option" data-state="picked"><b>A</b>yol</div><div className="lp-option"><b>B</b>qüvvə</div><div className="lp-option"><b>C</b>kütlə</div></div></div>
+    <div className="p-4"><p className="lp-q">Veb səhifənin strukturu hansı dildə yazılır?</p>
+      <div className="lp-options"><div className="lp-option" data-state="picked"><b>A</b>HTML</div><div className="lp-option"><b>B</b>SQL</div><div className="lp-option"><b>C</b>Python</div></div></div>
     <div className="flex items-center justify-between border-t px-4 py-3 text-[12.5px] lp-muted" style={{ borderColor: 'var(--lp-line)' }}><span>Aralıq: 1–120</span><span>Cavablar sonda göstərilir</span></div>
   </div>,
   learn: <div className="lp-mini p-5">
     <p className="text-[12px] lp-muted">Sual 4 · Məni yoxla</p>
-    <p className="lp-q mt-1">Fotosintez nədir?</p>
-    <div className="mt-3 rounded-lg p-3 text-[13.5px] leading-6" style={{ background: 'var(--lp-sunken)' }}>Bitkilərin işıq enerjisi ilə karbon qazı və sudan qlükoza yaratması…</div>
+    <p className="lp-q mt-1">DNS nə üçün istifadə olunur?</p>
+    <div className="mt-3 rounded-lg p-3 text-[13.5px] leading-6" style={{ background: 'var(--lp-sunken)' }}>Sayt adını (məsələn, examr.az) kompüterin başa düşdüyü ünvana çevirir…</div>
     <div className="mt-4 flex items-center gap-3"><div className="lp-bar flex-1"><i style={{ width: '72%' }} /></div><span className="lp-mono text-[13px] font-bold">72%</span></div>
-    <p className="mt-2 text-[12.5px] lp-muted">Çatışmayan anlayış: <b style={{ color: 'var(--lp-ink)' }}>xlorofil</b></p>
+    <p className="mt-2 text-[12.5px] lp-muted">Çatışmayan anlayış: <b style={{ color: 'var(--lp-ink)' }}>IP ünvanı</b></p>
   </div>,
   battle: <div className="lp-mini p-5">
     <div className="flex items-center justify-between"><span className="font-semibold">Otaq · 4 nəfər</span><span className="lp-chip">canlı</span></div>
