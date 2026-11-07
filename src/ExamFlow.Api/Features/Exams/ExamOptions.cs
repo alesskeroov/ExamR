@@ -8,7 +8,8 @@ public sealed class ExamOptions
     public const int HardMaxQuestions = 200;
 
     public int MaxQuestions { get; set; } = HardMaxQuestions;
-    public double MinutesPerQuestion { get; set; } = 1;
+    /// <summary>Time limit when the user does not choose one, whatever the question count.</summary>
+    public int DefaultDurationMinutes { get; set; } = 30;
 
     /// <summary>Tolerance for answers that were sent just before the deadline.</summary>
     public int AnswerGraceSeconds { get; set; } = 5;
@@ -16,5 +17,5 @@ public sealed class ExamOptions
     /// <summary>Upper bound of a time limit chosen by the user (minutes).</summary>
     public const int MaxDurationMinutes = 600;
 
-    public TimeSpan DurationFor(int questionCount) => TimeSpan.FromMinutes(questionCount * MinutesPerQuestion);
+    public TimeSpan DefaultDuration => TimeSpan.FromMinutes(DefaultDurationMinutes);
 }

@@ -11,7 +11,7 @@ public class Exam
     public short QuestionCount { get; set; }
     public RevealMode RevealMode { get; set; }
 
-    /// <summary>Immediate mode only: a question locks once answered correctly or once its answer is revealed.</summary>
+    /// <summary>Legacy setting, no longer used: Immediate exams now lock a question only when its answer is revealed.</summary>
     public bool LockAfterCorrect { get; set; }
 
     /// <summary>Document the questions were drawn from (one item). Older exams may hold none (= all documents).</summary>
@@ -51,7 +51,7 @@ public class ExamQuestion
     public DateTimeOffset? AnsweredAt { get; set; }
     public ExamOutcome? Outcome { get; set; }
 
-    /// <summary>When the answer was locked (LockAfterCorrect exams); a locked answer can no longer be changed.</summary>
+    /// <summary>When the user revealed the correct answer (Immediate exams); a locked answer can no longer be changed.</summary>
     public DateTimeOffset? LockedAt { get; set; }
 }
 

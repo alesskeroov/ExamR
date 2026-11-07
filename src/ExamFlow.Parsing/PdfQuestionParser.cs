@@ -138,7 +138,7 @@ public sealed class PdfQuestionParser(IEnumerable<IAnswerDetector>? detectors = 
             }
 
             var options = raw.Options
-                .Select(o => new ParsedOption(o.Letter.ToString(), Truncate(Join(o.TextTokens), MaxOptionLength, $"Variant {o.Letter}", questionWarnings)))
+                .Select(o => new ParsedOption(o.Letter.ToString(), Truncate(OptionText.Clean(Join(o.TextTokens)), MaxOptionLength, $"Variant {o.Letter}", questionWarnings)))
                 .ToList();
 
             var explanation = !string.IsNullOrWhiteSpace(answerText) ? Truncate(answerText, 16000, "Cavab mətni", questionWarnings) : null;

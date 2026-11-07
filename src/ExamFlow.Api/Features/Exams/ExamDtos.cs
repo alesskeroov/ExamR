@@ -20,10 +20,7 @@ public sealed class CreateExamRequest
 
     public RevealMode RevealMode { get; init; } = RevealMode.AtEnd;
 
-    /// <summary>Lock a question after a correct answer or a reveal; ignored unless <see cref="RevealMode"/> is Immediate.</summary>
-    public bool LockAfterCorrect { get; init; }
-
-    /// <summary>Time limit in minutes; null = <see cref="ExamOptions.MinutesPerQuestion"/> × question count.</summary>
+    /// <summary>Time limit in minutes; null = <see cref="ExamOptions.DefaultDurationMinutes"/>.</summary>
     [Range(1, ExamOptions.MaxDurationMinutes)]
     public int? DurationMinutes { get; init; }
 }
@@ -35,7 +32,7 @@ public sealed class AnswerRequest
 
 public sealed record ExamOptionDto(Guid Id, string Label, string Text);
 
-/// <summary>Correct answer shown during the exam; only in Immediate mode and only after answering.</summary>
+/// <summary>Correct answer shown during the exam; only in Immediate mode and only after the user revealed it.</summary>
 public sealed record AnswerRevealDto(Guid? CorrectOptionId, bool IsGradable);
 
 public sealed record ExamSessionQuestionDto(
@@ -52,7 +49,6 @@ public sealed record ExamSessionDto(
     Guid Id,
     ExamStatus Status,
     RevealMode RevealMode,
-    bool LockAfterCorrect,
     int QuestionCount,
     DateTimeOffset StartedAt,
     DateTimeOffset ExpiresAt,
@@ -77,7 +73,6 @@ public sealed record ExamResultDto(
     Guid Id,
     int QuestionCount,
     RevealMode RevealMode,
-    bool LockAfterCorrect,
     int TimeLimitMinutes,
     ExamSourceDto Source,
     CompletionReason CompletionReason,
@@ -109,6 +104,6 @@ public sealed record ExamSummaryDto(
 
 /// <summary>Questions available in a PDF range; FirstNumber/LastNumber are the PDF's own question numbers.</summary>
 public sealed record ExamAvailabilityDto(
-    int Available, int Ungraded, int? FirstNumber, int? LastNumber, int MaxQuestions, double MinutesPerQuestion);
+    int Available, int Ungraded, int? FirstNumber, int? LastNumber, int MaxQuestions, int DefaultDurationMinutes);
 
 public sealed record ActiveExamDto(Guid Id);

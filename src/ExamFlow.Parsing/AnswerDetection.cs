@@ -11,13 +11,14 @@ public interface IAnswerDetector
     AnswerDetection Detect(RawQuestion question);
 }
 
-/// <summary>Detects the correct option from a check-mark bullet (√ ✓ ✔ ☑) used instead of the normal bullet.</summary>
+/// <summary>Detects the correct option from a check mark (√ ✓ ✔ ☑) used as its bullet or written right after its label.</summary>
 public sealed class MarkerAnswerDetector : IAnswerDetector
 {
     public AnswerDetection Detect(RawQuestion question)
     {
         var marked = Enumerable.Range(0, question.Options.Count)
-            .Where(i => question.Options[i].LabelTokens is [{ Text: [var c] }] && QuestionSegmenter.CorrectMarkers.Contains(c))
+            .Where(i => question.Options[i].LabelTokens is [{ Text: [var c] }] && QuestionSegmenter.CorrectMarkers.Contains(c)
+                || OptionText.HasCorrectMarker(string.Join(' ', question.Options[i].TextTokens.Select(t => t.Text))))
             .ToList();
 
         return marked.Count switch

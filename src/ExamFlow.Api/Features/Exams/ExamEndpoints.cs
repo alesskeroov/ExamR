@@ -100,7 +100,7 @@ public static class ExamEndpoints
             numbers?.First,
             numbers?.Last,
             options.Value.MaxQuestions,
-            options.Value.MinutesPerQuestion));
+            options.Value.DefaultDurationMinutes));
     }
 
     private static async Task<IResult> Create(
@@ -155,13 +155,12 @@ public static class ExamEndpoints
             UserId = userId,
             QuestionCount = (short)request.QuestionCount,
             RevealMode = request.RevealMode,
-            LockAfterCorrect = request.RevealMode == RevealMode.Immediate && request.LockAfterCorrect,
             SourceDocumentIds = [documentId],
             RangeFrom = request.RangeFrom,
             RangeTo = request.RangeTo,
             Status = ExamStatus.InProgress,
             StartedAt = now,
-            ExpiresAt = now + ExamEngine.Duration(request.QuestionCount, request.DurationMinutes, settings),
+            ExpiresAt = now + ExamEngine.Duration(request.DurationMinutes, settings),
             Questions = pickedIds.Select((id, position) => Freeze(questions[id], position, visuals[id])).ToList(),
         };
 
@@ -273,7 +272,6 @@ public static class ExamEndpoints
 
         question.SelectedOptionId = request.SelectedOptionId;
         question.AnsweredAt = request.SelectedOptionId is null ? null : now;
-        if (ExamEngine.LocksOnAnswer(exam, question)) question.LockedAt = now;
         // Saved under the exam row lock: an answer is either stored before a concurrent finish grades the exam,
         // or rejected after it; it can never be stored but missing from the result. The same lock serialises it
         // with a concurrent answer/reveal of this exam, so the question's lock is re-read from the database here.
@@ -281,7 +279,7 @@ public static class ExamEndpoints
         {
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
             if (await LockInProgressAsync(db, exam.Id, ct) == 0) return SaveResult.Finished;
-            if (exam.LockAfterCorrect && await IsQuestionLockedAsync(db, question.Id, ct)) return SaveResult.Locked;
+            if (await IsQuestionLockedAsync(db, question.Id, ct)) return SaveResult.Locked;
             await db.SaveChangesAsync(acceptAllChangesOnSuccess: false, ct);
             await transaction.CommitAsync(ct);
             db.ChangeTracker.AcceptAllChanges();
@@ -296,8 +294,8 @@ public static class ExamEndpoints
     }
 
     /// <summary>
-    /// "Show the correct answer" in a LockAfterCorrect exam: locks the question (whatever its answer) and returns
-    /// the correct answer. Idempotent. Other exams already get the answer with the saved pick (Immediate) or never.
+    /// "Show the correct answer" in an Immediate exam: locks the question (whatever its answer) and returns the
+    /// correct answer. Idempotent. AtEnd exams never reveal answers before the exam ends.
     /// </summary>
     private static async Task<IResult> Reveal(
         Guid id, Guid examQuestionId, ClaimsPrincipal user, AppDbContext db,
@@ -316,7 +314,7 @@ public static class ExamEndpoints
             return Problem(StatusCodes.Status409Conflict, "İmtahan artıq bitib.");
         }
 
-        if (!exam.LockAfterCorrect || exam.RevealMode != RevealMode.Immediate)
+        if (exam.RevealMode != RevealMode.Immediate)
         {
             return Problem(StatusCodes.Status400BadRequest, "Bu imtahanda cavab bu yolla açılmır.");
         }
@@ -431,7 +429,7 @@ public static class ExamEndpoints
             Snapshot = new QuestionSnapshot
             {
                 Text = question.Text,
-                Options = options.Select((o, i) => new OptionSnapshot { OptionId = o.Id, Label = ((char)('A' + i)).ToString(), Text = o.Text }).ToList(),
+                Options = options.Select((o, i) => new OptionSnapshot { OptionId = o.Id, Label = ((char)('A' + i)).ToString(), Text = ExamFlow.Parsing.OptionText.Clean(o.Text) }).ToList(),
                 Visuals = visuals?.Select(v => QuestionVisuals.ToSnapshot(v, question.Options)).ToList() ?? [],
             },
             CorrectOptionId = question.VerificationStatus == VerificationStatus.Unverified ? null : options.FirstOrDefault(o => o.IsCorrect)?.Id,
@@ -532,7 +530,7 @@ public static class ExamEndpoints
         question.Snapshot.Visuals?.Select(QuestionVisuals.ToDto).ToList() ?? [];
 
     private static ExamSessionDto ToSession(Exam exam, DateTimeOffset now) => new(
-        exam.Id, exam.Status, exam.RevealMode, exam.LockAfterCorrect, exam.QuestionCount, exam.StartedAt, exam.ExpiresAt, now,
+        exam.Id, exam.Status, exam.RevealMode, exam.QuestionCount, exam.StartedAt, exam.ExpiresAt, now,
         exam.Questions.OrderBy(q => q.Position)
             .Select(q => new ExamSessionQuestionDto(q.Id, q.Position, q.Snapshot.Text, Options(q), q.SelectedOptionId, RevealFor(exam, q), Visuals(q),
                 q.LockedAt is not null))
@@ -542,7 +540,7 @@ public static class ExamEndpoints
     {
         var completedAt = exam.CompletedAt ?? exam.ExpiresAt;
         return new ExamResultDto(
-            exam.Id, exam.QuestionCount, exam.RevealMode, exam.LockAfterCorrect, ExamEngine.TimeLimitMinutes(exam), Source(exam, documentNames), exam.CompletionReason ?? CompletionReason.Submitted,
+            exam.Id, exam.QuestionCount, exam.RevealMode, ExamEngine.TimeLimitMinutes(exam), Source(exam, documentNames), exam.CompletionReason ?? CompletionReason.Submitted,
             exam.CorrectCount ?? 0, exam.IncorrectCount ?? 0, exam.UnansweredCount ?? 0, exam.UngradedCount ?? 0, exam.ScorePercent,
             exam.StartedAt, completedAt, (int)Math.Round((completedAt - exam.StartedAt).TotalSeconds),
             exam.Questions.OrderBy(q => q.Position)

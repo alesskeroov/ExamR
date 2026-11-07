@@ -31,8 +31,7 @@ export function ExamSetupPage() {
   const [rangeInput, setRangeInput] = useState<{ from: string; to: string } | null>(null)
   const [count, setCount] = useState(20)
   const [revealMode, setRevealMode] = useState<RevealMode>('AtEnd')
-  const [lockAfterCorrect, setLockAfterCorrect] = useState(false)
-  // Typed time limit in minutes; null = automatic (question count × minutes per question).
+  // Typed time limit in minutes; null = automatic (the server's default, 30 minutes).
   const [minutesInput, setMinutesInput] = useState<number | null>(null)
 
   // Apply the previous exam's settings once both it and the readable PDFs are loaded. The PDF is only selected
@@ -49,7 +48,6 @@ export function ExamSetupPage() {
     }
     setCount(p.questionCount)
     setRevealMode(p.revealMode)
-    setLockAfterCorrect(p.lockAfterCorrect)
     setMinutesInput(p.timeLimitMinutes)
   }
   const retakeNotice = !retakeId ? null
@@ -79,7 +77,7 @@ export function ExamSetupPage() {
       : count > max
         ? `Bu aralıqda ən çox ${formatNumber(max)} sual seçmək olar.`
         : null
-  const autoMinutes = Math.ceil((Number.isFinite(count) ? count : 0) * (availability.data?.minutesPerQuestion ?? 1))
+  const autoMinutes = availability.data?.defaultDurationMinutes ?? 30
   const minutes = minutesInput ?? autoMinutes
   const timeError = !Number.isInteger(minutes) || minutes < 1 || minutes > MAX_MINUTES
     ? `Vaxt 1–${MAX_MINUTES} dəqiqə arasında olmalıdır.`
@@ -101,7 +99,7 @@ export function ExamSetupPage() {
   function start() {
     if (!range) return
     create.mutate(
-      { questionCount: count, documentId, rangeFrom: range.from, rangeTo: range.to, revealMode, lockAfterCorrect: revealMode === 'Immediate' && lockAfterCorrect,
+      { questionCount: count, documentId, rangeFrom: range.from, rangeTo: range.to, revealMode,
         durationMinutes: minutesInput ?? undefined },
       { onSuccess: (session) => navigate(`/exams/${session.id}`) },
     )
@@ -238,27 +236,15 @@ export function ExamSetupPage() {
               )}
             </div>
             <p id="time-limit-hint" className={cn('mt-2', timeError ? 'text-rose-600' : 'text-slate-500')}>
-              {timeError ?? (minutesInput === null ? 'Avtomatik: hər sual üçün 1 dəqiqə.' : 'Vaxt sizin seçiminizdir.')}
+              {timeError ?? (minutesInput === null ? `Avtomatik: ${autoMinutes} dəqiqə.` : 'Vaxt sizin seçiminizdir.')}
             </p>
           </Section>
 
           <Section step={5} title="Düzgün cavablar nə vaxt göstərilsin?">
             <div className="grid gap-3 sm:grid-cols-2">
               <ChoiceCard name="reveal" checked={revealMode === 'AtEnd'} onChange={() => setRevealMode('AtEnd')} icon={<EyeOff className="size-5" />} title="İmtahan bitdikdə" description="Cavablar sona qədər dəyişdirilə bilər" />
-              <ChoiceCard name="reveal" checked={revealMode === 'Immediate'} onChange={() => setRevealMode('Immediate')} icon={<Eye className="size-5" />} title="Hər sualdan sonra" description="Cavab verdikdən sonra düzgün cavabı görə bilərsiniz" />
+              <ChoiceCard name="reveal" checked={revealMode === 'Immediate'} onChange={() => setRevealMode('Immediate')} icon={<Eye className="size-5" />} title="Hər sualdan sonra" description="Hər sualda “Cavabı göstər” ilə düzgün cavabı görə bilərsiniz; göstərildikdən sonra variant dəyişmir" />
             </div>
-            {revealMode === 'Immediate' && (
-              <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm hover:bg-slate-50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-indigo-500">
-                <input type="checkbox" checked={lockAfterCorrect} onChange={(e) => setLockAfterCorrect(e.target.checked)}
-                  className="mt-0.5 size-4 shrink-0 accent-indigo-600" />
-                <span>
-                  <span className="block font-medium">Düzgün cavabdan sonra kilidlə</span>
-                  <span className="mt-1 block text-xs leading-5 text-slate-500">
-                    Düzgün cavab seçildikdə və ya “Doğru cavabı göstər” basıldıqda sualın cavabı daha dəyişdirilə bilməz.
-                  </span>
-                </span>
-              </label>
-            )}
           </Section>
         </div>
 
@@ -282,7 +268,7 @@ export function ExamSetupPage() {
                   {range && !countError && !timeError ? `${minutes} dəqiqə` : '—'}
                 </span>
               </SummaryRow>
-              <SummaryRow label="Cavablar">{revealMode === 'AtEnd' ? 'Sonda' : lockAfterCorrect ? 'Dərhal, kilidli' : 'Dərhal'}</SummaryRow>
+              <SummaryRow label="Cavablar">{revealMode === 'AtEnd' ? 'Sonda' : 'Hər sualdan sonra'}</SummaryRow>
             </dl>
             {range && !!availability.data?.ungraded && (
               <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-amber-800">

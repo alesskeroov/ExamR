@@ -98,55 +98,31 @@ public class ExamEngineTests
     }
 
     [Fact]
-    public void Lock_mode_locks_only_a_correct_answer()
+    public void Immediate_mode_reveals_the_answer_only_after_the_user_asked_for_it()
     {
-        var correct = Guid.NewGuid();
-        var exam = new Exam { RevealMode = RevealMode.Immediate, LockAfterCorrect = true };
-
-        Assert.True(ExamEngine.LocksOnAnswer(exam, new() { CorrectOptionId = correct, SelectedOptionId = correct }));
-        Assert.False(ExamEngine.LocksOnAnswer(exam, new() { CorrectOptionId = correct, SelectedOptionId = Guid.NewGuid() }));
-        // Unknown answer: nothing to compare with, so it is never locked by answering.
-        Assert.False(ExamEngine.LocksOnAnswer(exam, new() { CorrectOptionId = null, SelectedOptionId = correct }));
-    }
-
-    [Fact]
-    public void Lock_is_off_without_the_setting_or_outside_immediate_mode()
-    {
-        var correct = Guid.NewGuid();
-        var question = new ExamQuestion { CorrectOptionId = correct, SelectedOptionId = correct };
-
-        Assert.False(ExamEngine.LocksOnAnswer(new Exam { RevealMode = RevealMode.Immediate }, question));
-        Assert.False(ExamEngine.LocksOnAnswer(new Exam { RevealMode = RevealMode.AtEnd, LockAfterCorrect = true }, question));
-    }
-
-    [Fact]
-    public void Lock_mode_reveals_the_answer_only_for_locked_questions()
-    {
-        var exam = new Exam { RevealMode = RevealMode.Immediate, LockAfterCorrect = true };
-        var wrongPick = new ExamQuestion { CorrectOptionId = Guid.NewGuid(), SelectedOptionId = Guid.NewGuid() };
+        var exam = new Exam { RevealMode = RevealMode.Immediate };
+        var picked = new ExamQuestion { CorrectOptionId = Guid.NewGuid(), SelectedOptionId = Guid.NewGuid() };
         var revealedUnanswered = new ExamQuestion { CorrectOptionId = Guid.NewGuid(), LockedAt = DateTimeOffset.UnixEpoch };
 
-        Assert.False(ExamEngine.MayReveal(exam, wrongPick));
+        Assert.False(ExamEngine.MayReveal(exam, picked));
         Assert.True(ExamEngine.MayReveal(exam, revealedUnanswered));
     }
 
     [Fact]
-    public void Reveal_rules_of_other_modes_are_unchanged()
+    public void At_end_mode_never_reveals_during_the_exam()
     {
-        var answered = new ExamQuestion { CorrectOptionId = Guid.NewGuid(), SelectedOptionId = Guid.NewGuid() };
+        var revealed = new ExamQuestion { CorrectOptionId = Guid.NewGuid(), SelectedOptionId = Guid.NewGuid(), LockedAt = DateTimeOffset.UnixEpoch };
 
-        Assert.True(ExamEngine.MayReveal(new Exam { RevealMode = RevealMode.Immediate }, answered));
-        Assert.False(ExamEngine.MayReveal(new Exam { RevealMode = RevealMode.Immediate }, new ExamQuestion { CorrectOptionId = Guid.NewGuid() }));
-        Assert.False(ExamEngine.MayReveal(new Exam { RevealMode = RevealMode.AtEnd }, answered));
+        Assert.False(ExamEngine.MayReveal(new Exam { RevealMode = RevealMode.AtEnd }, revealed));
     }
 
     [Fact]
-    public void Chosen_time_limit_overrides_the_per_question_default()
+    public void Chosen_time_limit_overrides_the_default()
     {
-        var options = new ExamOptions { MinutesPerQuestion = 1 };
+        var options = new ExamOptions();
 
-        Assert.Equal(TimeSpan.FromMinutes(20), ExamEngine.Duration(20, null, options));
-        Assert.Equal(TimeSpan.FromMinutes(45), ExamEngine.Duration(20, 45, options));
+        Assert.Equal(TimeSpan.FromMinutes(30), ExamEngine.Duration(null, options));
+        Assert.Equal(TimeSpan.FromMinutes(45), ExamEngine.Duration(45, options));
     }
 
     [Fact]
@@ -178,12 +154,9 @@ public class ExamEngineTests
         Assert.Equal(CompletionReason.TimeExpired, exam.CompletionReason);
     }
 
-    [Theory]
-    [InlineData(30, 30)]
-    [InlineData(50, 50)]
-    [InlineData(17, 17)]
-    public void Duration_is_one_minute_per_question(int questions, int minutes)
+    [Fact]
+    public void Default_time_limit_is_30_minutes_whatever_the_question_count()
     {
-        Assert.Equal(TimeSpan.FromMinutes(minutes), new ExamOptions().DurationFor(questions));
+        Assert.Equal(TimeSpan.FromMinutes(30), new ExamOptions().DefaultDuration);
     }
 }

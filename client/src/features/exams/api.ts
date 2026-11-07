@@ -29,7 +29,7 @@ export interface ExamSessionQuestion {
   reveal: AnswerReveal | null
   /** Missing in responses cached before images were supported. */
   visuals?: VisualDto[]
-  /** Answer locked by the server (lockAfterCorrect exams): it can no longer be changed. */
+  /** Answer locked by the server once it was shown (Immediate exams): it can no longer be changed. */
   locked: boolean
 }
 
@@ -37,7 +37,6 @@ export interface ExamSession {
   id: string
   status: ExamStatus
   revealMode: RevealMode
-  lockAfterCorrect: boolean
   questionCount: number
   startedAt: string
   expiresAt: string
@@ -67,7 +66,6 @@ export interface ExamResult {
   id: string
   questionCount: number
   revealMode: RevealMode
-  lockAfterCorrect: boolean
   /** Time limit the exam had, in minutes (a retake starts from it). */
   timeLimitMinutes: number
   source: ExamSource
@@ -107,7 +105,8 @@ export interface ExamAvailability {
   firstNumber: number | null
   lastNumber: number | null
   maxQuestions: number
-  minutesPerQuestion: number
+  /** Time limit used when none is chosen. */
+  defaultDurationMinutes: number
 }
 
 export interface CreateExamRequest {
@@ -116,8 +115,7 @@ export interface CreateExamRequest {
   rangeFrom: number
   rangeTo: number
   revealMode: RevealMode
-  lockAfterCorrect: boolean
-  /** Omitted = question count × minutesPerQuestion. */
+  /** Omitted = defaultDurationMinutes. */
   durationMinutes?: number
 }
 
@@ -226,7 +224,7 @@ export function useAnswerQuestion(examId: string) {
   })
 }
 
-/** lockAfterCorrect exams: shows the correct answer and locks the question on the server. */
+/** Immediate exams: shows the correct answer and locks the question on the server. */
 export function useRevealAnswer(examId: string) {
   const queryClient = useQueryClient()
   const key = queryKeys.exams.session(examId)

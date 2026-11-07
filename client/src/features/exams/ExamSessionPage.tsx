@@ -61,9 +61,8 @@ function ExamRunner({ session }: { session: ExamSession }) {
   const total = session.questions.length
   const index = Math.min(Math.max(Number(searchParams.get('q') ?? 1) - 1 || 0, 0), total - 1)
   const question = session.questions[index]
+  // Immediate mode: "show the answer" locks the question; the server sends the answer only for locked questions.
   const immediate = session.revealMode === 'Immediate'
-  // Lock mode: the server sends the answer only for locked questions and refuses changes to them.
-  const lockMode = immediate && session.lockAfterCorrect
 
   const answer = useAnswerQuestion(session.id)
   const finish = useFinishExam(session.id)
@@ -71,7 +70,6 @@ function ExamRunner({ session }: { session: ExamSession }) {
   const saving = useIsMutating({ mutationKey: answerMutationKey(session.id) }) > 0
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [mapOpen, setMapOpen] = useState(false)
-  const [revealed, toggleRevealed] = useStoredSet(`exam-revealed:${session.id}`)
   const [flagged, toggleFlag] = useStoredSet(`exam-flagged:${session.id}`)
   // Mobile answer panel: open by default for revealed questions, until the student closes it.
   const [closedNotes, setClosedNotes] = useState<ReadonlySet<string>>(new Set())
@@ -88,10 +86,10 @@ function ExamRunner({ session }: { session: ExamSession }) {
   const title = summary ? sourceName(summary.source) : null
 
   const answered = session.questions.filter((q) => q.selectedOptionId).length
-  const isShown = (q: ExamSessionQuestion) => (lockMode ? q.locked : revealed.has(q.examQuestionId))
+  const isShown = (q: ExamSessionQuestion) => immediate && q.locked
   const isRevealed = isShown(question)
-  // Lock mode offers "show the answer" until the question locks; otherwise only once the saved answer brought it.
-  const canReveal = lockMode ? !question.locked : question.reveal !== null
+  // Offered on every question of an Immediate exam, answered or not, until its answer has been shown.
+  const canReveal = immediate && !question.locked
   const noteOpen = isRevealed && question.reveal !== null && !closedNotes.has(question.examQuestionId)
   const setNoteClosed = (closed: boolean) => setClosedNotes(current => {
     const next = new Set(current)
@@ -99,9 +97,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
     return next
   })
   const reveal = () => {
-    if (lockMode) {
-      if (!revealAnswer.isPending) revealAnswer.mutate(question.examQuestionId)
-    } else toggleRevealed(question.examQuestionId, true)
+    if (!revealAnswer.isPending) revealAnswer.mutate(question.examQuestionId)
     setNoteClosed(false)
   }
 
@@ -116,7 +112,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
 
   const choose = useCallback(
     (optionId: string | null) => {
-      // Answers stay changeable until the exam ends, except locked ones (lock mode; the server enforces it too).
+      // Answers stay changeable until the exam ends, except once the answer was shown (the server enforces it too).
       if (finish.isPending || question.locked) return
       answer.mutate({ examQuestionId: question.examQuestionId, selectedOptionId: optionId })
     },
@@ -223,7 +219,6 @@ function ExamRunner({ session }: { session: ExamSession }) {
             visualSrc={visualUrls.exam(session.id)}
             number={index + 1}
             immediate={immediate}
-            lockMode={lockMode}
             revealed={isRevealed}
             canReveal={canReveal}
             revealing={revealAnswer.isPending}
@@ -255,7 +250,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
                 {(canReveal || question.reveal) && (
                   <button type="button" onClick={() => (noteOpen ? setNoteClosed(true) : reveal())} aria-pressed={noteOpen}
                     disabled={revealAnswer.isPending}
-                    aria-label={noteOpen ? 'Cavab panelini bağla' : lockMode && !question.locked ? 'Düzgün cavabı göstər, sual kilidlənəcək' : 'Cavabı göstər'}
+                    aria-label={noteOpen ? 'Cavab panelini bağla' : !question.locked ? 'Düzgün cavabı göstər, sual kilidlənəcək' : 'Cavabı göstər'}
                     className={cn('exam-map-button inline-flex h-11 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-semibold', noteOpen && 'exam-map-button-active')}>
                     <Eye className="size-4" aria-hidden />
                     <span className="max-[419px]:sr-only">Cavab</span>
@@ -305,7 +300,6 @@ interface QuestionPanelProps {
   visualSrc: (id: string) => string
   number: number
   immediate: boolean
-  lockMode: boolean
   revealed: boolean
   canReveal: boolean
   revealing: boolean
@@ -315,8 +309,7 @@ interface QuestionPanelProps {
   onChoose: (optionId: string | null) => void
 }
 
-function QuestionPanel({ question, visualSrc, number, immediate, lockMode, revealed, canReveal, revealing, onReveal, flagged, onFlag, onChoose }: QuestionPanelProps) {
-  // Immediate mode gets the result with the saved answer, but shows it only after the student asks for it.
+function QuestionPanel({ question, visualSrc, number, immediate, revealed, canReveal, revealing, onReveal, flagged, onFlag, onChoose }: QuestionPanelProps) {
   const reveal = revealed ? question.reveal : null
   const headingId = `question-${question.examQuestionId}`
 
@@ -401,13 +394,11 @@ function QuestionPanel({ question, visualSrc, number, immediate, lockMode, revea
       {!reveal && canReveal && (
         <div className="mt-4 hidden items-center justify-between gap-2 min-[900px]:flex">
           <p className="text-sm text-slate-500">
-            {lockMode
-              ? 'Düzgün cavab seçildikdə və ya cavab göstərildikdə sual kilidlənir.'
-              : 'Cavabın yadda saxlanıldı.'}
+            Cavab göstərildikdən sonra variantı dəyişmək olmur.
           </p>
           <Button variant="secondary" onClick={onReveal} loading={revealing} className="h-11 shrink-0">
             <Eye className="size-4" aria-hidden />
-            {lockMode ? 'Doğru cavabı göstər' : 'Cavabı göstər'}
+            Cavabı göstər
           </Button>
         </div>
       )}
