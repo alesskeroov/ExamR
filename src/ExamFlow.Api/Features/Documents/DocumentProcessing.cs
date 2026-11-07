@@ -53,7 +53,9 @@ public sealed class DocumentProcessingService(
             var ids = await db.Documents
                 .Where(d => d.Status == DocumentStatus.Pending || d.Status == DocumentStatus.Processing
                     || (d.Status == DocumentStatus.Completed && d.StoredFileName.EndsWith(".docx")
-                        && d.Questions.Any(q => q.Explanation == null || q.Explanation == "")))
+                        // Only open questions can be repaired; multiple-choice ones never have an explanation, and
+                        // matching them re-downloaded and re-parsed every such Word file on every restart.
+                        && d.Questions.Any(q => !q.Options.Any() && (q.Explanation == null || q.Explanation == ""))))
                 .OrderBy(d => d.CreatedAt)
                 .Select(d => d.Id)
                 .ToListAsync(ct);

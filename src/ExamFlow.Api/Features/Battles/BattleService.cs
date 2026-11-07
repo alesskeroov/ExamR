@@ -718,7 +718,9 @@ public sealed class BattleCleanupService(BattleService battles, ILogger<BattleCl
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await battles.RestoreActiveRoomsAsync(stoppingToken);
+        // A failed restore (database unreachable at startup) must not stop the host; rooms are then simply not resumed.
+        try { await battles.RestoreActiveRoomsAsync(stoppingToken); }
+        catch (Exception ex) when (ex is not OperationCanceledException) { logger.LogError(ex, "Restoring active battle rooms failed"); }
         using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {

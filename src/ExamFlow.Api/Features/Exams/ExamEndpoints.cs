@@ -261,7 +261,21 @@ public static class ExamEndpoints
 
         question.SelectedOptionId = request.SelectedOptionId;
         question.AnsweredAt = request.SelectedOptionId is null ? null : now;
-        await db.SaveChangesAsync(ct);
+        // Saved under the exam row lock: an answer is either stored before a concurrent finish grades the exam,
+        // or rejected after it; it can never be stored but missing from the result.
+        var saved = await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            if (await LockInProgressAsync(db, exam.Id, ct) == 0) return false;
+            await db.SaveChangesAsync(acceptAllChangesOnSuccess: false, ct);
+            await transaction.CommitAsync(ct);
+            db.ChangeTracker.AcceptAllChanges();
+            return true;
+        });
+        if (!saved)
+        {
+            return Problem(StatusCodes.Status409Conflict, "İmtahan artıq bitib.");
+        }
 
         return TypedResults.Ok(new AnswerResultDto(question.Id, question.SelectedOptionId, RevealFor(exam, question)));
     }
@@ -278,8 +292,7 @@ public static class ExamEndpoints
         if (exam.Status == ExamStatus.InProgress)
         {
             var now = clock.GetUtcNow();
-            ExamEngine.Grade(exam, now, now >= exam.ExpiresAt ? CompletionReason.TimeExpired : CompletionReason.Submitted);
-            await db.SaveChangesAsync(ct);
+            await GradeAsync(db, exam, now, now >= exam.ExpiresAt ? CompletionReason.TimeExpired : CompletionReason.Submitted, ct);
         }
 
         // Idempotent: a finished exam returns its stored result.
@@ -384,10 +397,50 @@ public static class ExamEndpoints
             return false;
         }
 
-        ExamEngine.Grade(exam, now, CompletionReason.TimeExpired);
-        await db.SaveChangesAsync(ct);
+        await GradeAsync(db, exam, now, CompletionReason.TimeExpired, ct);
         return true;
     }
+
+    /// <summary>
+    /// Takes the exam row's update lock if the exam is still in progress (a no-op UPDATE). Answer saving and grading
+    /// both take it inside their transaction, so they run one after the other; 0 = the exam is already completed.
+    /// </summary>
+    private static Task<int> LockInProgressAsync(AppDbContext db, Guid examId, CancellationToken ct) =>
+        db.Exams.Where(e => e.Id == examId && e.Status == ExamStatus.InProgress)
+            .ExecuteUpdateAsync(s => s.SetProperty(e => e.Status, e => e.Status), ct);
+
+    /// <summary>
+    /// Grades and completes the exam in one transaction, using the answers as committed after the lock, so an answer
+    /// saved by a concurrent request is never lost from the result. If another request completed the exam first,
+    /// its stored result is loaded instead of grading twice.
+    /// </summary>
+    private static Task GradeAsync(AppDbContext db, Exam exam, DateTimeOffset now, CompletionReason reason, CancellationToken ct) =>
+        db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            var locked = await LockInProgressAsync(db, exam.Id, ct) == 1;
+            if (!locked) await db.Entry(exam).ReloadAsync(ct);
+
+            var stored = await db.ExamQuestions.AsNoTracking().Where(q => q.ExamId == exam.Id)
+                .Select(q => new { q.Id, q.SelectedOptionId, q.AnsweredAt, q.Outcome })
+                .ToDictionaryAsync(q => q.Id, ct);
+            foreach (var question in exam.Questions)
+            {
+                if (!stored.TryGetValue(question.Id, out var row)) continue;
+                var entry = db.Entry(question);
+                entry.Property(q => q.SelectedOptionId).OriginalValue = entry.Property(q => q.SelectedOptionId).CurrentValue = row.SelectedOptionId;
+                entry.Property(q => q.AnsweredAt).OriginalValue = entry.Property(q => q.AnsweredAt).CurrentValue = row.AnsweredAt;
+                entry.Property(q => q.Outcome).OriginalValue = entry.Property(q => q.Outcome).CurrentValue = row.Outcome;
+            }
+
+            if (locked)
+            {
+                ExamEngine.Grade(exam, now, reason);
+                await db.SaveChangesAsync(acceptAllChangesOnSuccess: false, ct);
+            }
+            await transaction.CommitAsync(ct);
+            db.ChangeTracker.AcceptAllChanges();
+        });
 
     private static AnswerRevealDto? RevealFor(Exam exam, ExamQuestion question) =>
         exam.RevealMode == RevealMode.Immediate && question.SelectedOptionId is not null

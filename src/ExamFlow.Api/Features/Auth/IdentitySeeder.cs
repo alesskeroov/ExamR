@@ -1,3 +1,4 @@
+using System.Data.Common;
 using ExamFlow.Api.Infrastructure.Data;
 using ExamFlow.Api.Infrastructure.Security;
 using Microsoft.AspNetCore.Identity;
@@ -12,6 +13,21 @@ public static class IdentitySeeder
     {
         using var scope = app.Services.CreateScope();
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<AppDbContext>>();
+        try
+        {
+            await SeedAsync(app, scope, logger);
+        }
+        catch (Exception ex) when (ex is DbException or Microsoft.EntityFrameworkCore.Storage.RetryLimitExceededException)
+        {
+            // An unreachable database (firewall, paused, wrong connection string) must not kill the process: the
+            // liveness probe keeps answering, /api/health reports 503 and requests that need SQL still fail loudly.
+            // Roles and the configured admin are seeded on the next start once the database is reachable.
+            logger.LogCritical(ex, "Database is not reachable at startup; identity seed skipped");
+        }
+    }
+
+    private static async Task SeedAsync(WebApplication app, IServiceScope scope, ILogger logger)
+    {
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         if ((await db.Database.GetPendingMigrationsAsync()).Any())

@@ -90,9 +90,10 @@ public sealed class ExplanationWorker(IServiceScopeFactory scopes, ExplanationQu
     {
         while (!stoppingToken.IsCancellationRequested)
         {
+            var idle = false;
             try
             {
-                if (options.CurrentValue.Enabled) await RunPendingAsync(stoppingToken);
+                if (options.CurrentValue.Enabled) idle = !await RunPendingAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { return; }
             catch (Exception ex)
@@ -100,30 +101,34 @@ public sealed class ExplanationWorker(IServiceScopeFactory scopes, ExplanationQu
                 logger.LogError(ex, "Explanation worker loop failed");
             }
 
-            try { await queue.WaitAsync(Poll, stoppingToken); }
+            // No job left: sleep until an admin starts one (Notify) instead of querying the database every 30 seconds,
+            // which would keep a serverless Azure SQL database from ever auto-pausing.
+            try { await queue.WaitAsync(idle ? Timeout.InfiniteTimeSpan : Poll, stoppingToken); }
             catch (OperationCanceledException) { return; }
         }
     }
 
-    private async Task RunPendingAsync(CancellationToken ct)
+    /// <summary>Runs queued jobs; returns false when the database has no pending or running job.</summary>
+    private async Task<bool> RunPendingAsync(CancellationToken ct)
     {
         using var scope = scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        if (!await db.ExplanationJobs.AnyAsync(j => j.Status == ExplanationJobStatus.Pending || j.Status == ExplanationJobStatus.Running, ct)) return;
+        if (!await db.ExplanationJobs.AnyAsync(j => j.Status == ExplanationJobStatus.Pending || j.Status == ExplanationJobStatus.Running, ct)) return false;
 
         await db.Database.OpenConnectionAsync(ct);
         try
         {
-            if (!await TryLockAsync(db, ct)) return; // another instance is working
+            if (!await TryLockAsync(db, ct)) return true; // another instance is working
             while (!ct.IsCancellationRequested && options.CurrentValue.Enabled)
             {
                 var jobId = await db.ExplanationJobs.AsNoTracking()
                     .Where(j => j.Status == ExplanationJobStatus.Pending || j.Status == ExplanationJobStatus.Running)
                     .OrderBy(j => j.CreatedAt).Select(j => (Guid?)j.Id).FirstOrDefaultAsync(ct);
-                if (jobId is null) return;
+                if (jobId is null) return false;
                 using var jobScope = scopes.CreateScope();
                 await ProcessAsync(jobScope.ServiceProvider, jobId.Value, ct);
             }
+            return true; // switched off mid-run: Running jobs resume when it is switched on again
         }
         finally { await db.Database.CloseConnectionAsync(); }
     }

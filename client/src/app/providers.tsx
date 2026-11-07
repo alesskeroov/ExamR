@@ -4,6 +4,7 @@ import { ErrorBoundary } from '../components/common/ErrorBoundary'
 import { RouterProvider } from 'react-router'
 import { ApiError } from '../lib/api-client'
 import { clearToken } from '../lib/auth-token'
+import { pausePollingWhenIdle } from '../lib/idle-polling'
 import { queryKeys } from '../lib/query-keys'
 import { useTheme } from '../lib/use-theme'
 import { router } from './router'
@@ -27,6 +28,8 @@ const queryClient: QueryClient = new QueryClient({
     },
   },
 })
+
+pausePollingWhenIdle()
 
 export function Providers() {
   useTheme()

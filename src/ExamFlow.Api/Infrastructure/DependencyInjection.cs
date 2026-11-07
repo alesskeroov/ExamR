@@ -16,6 +16,18 @@ public static class DependencyInjection
                 "Production: set the ConnectionStrings__Default environment variable.");
         }
 
+        // Startup line showing only where the API connects (server and database names, never credentials).
+        try
+        {
+            var target = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString);
+            Console.WriteLine($"Database target: server '{target.DataSource}', database '{target.InitialCatalog}', " +
+                $"encrypt {target.Encrypt}, connect timeout {target.ConnectTimeout}s");
+        }
+        catch (ArgumentException)
+        {
+            Console.WriteLine("Database target: connection string could not be parsed");
+        }
+
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<AuditInterceptor>();
         services.AddDbContext<AppDbContext>((sp, options) => options
