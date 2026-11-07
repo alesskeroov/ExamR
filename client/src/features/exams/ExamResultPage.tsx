@@ -2,16 +2,15 @@ import './exam-flow.css'
 import { answerDisplayText } from './answer-display'
 import { AlertTriangle, Check, Clock, History, RotateCw, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
-import { Button } from '../../components/common/Button'
 import { EmptyState } from '../../components/common/EmptyState'
 import { PageHeader } from '../../components/common/PageHeader'
 import { QuestionVisuals } from '../../components/common/QuestionVisuals'
 import { formatDate, formatNumber } from '../../lib/format'
 import { cn } from '../../lib/utils'
 import { bodyVisuals, optionVisuals, visibleText, visualUrls } from '../../lib/visuals'
-import { useCreateExam, useExamResult, type ExamOutcome, type ExamResult, type ExamResultQuestion } from './api'
+import { useExamResult, type ExamOutcome, type ExamResult, type ExamResultQuestion } from './api'
 import { sourceName, sourceRange } from './examSource'
 
 type Filter = 'All' | 'Correct' | 'Incorrect' | 'Unanswered'
@@ -39,8 +38,6 @@ export function ExamResultPage() {
 }
 
 function ResultView({ result }: { result: ExamResult }) {
-  const navigate = useNavigate()
-  const retake = useCreateExam()
   const [filter, setFilter] = useState<Filter>('All')
   const [focused, setFocused] = useState<number | null>(null)
 
@@ -90,34 +87,15 @@ function ResultView({ result }: { result: ExamResult }) {
               Tarixçə
             </Link>
             {canRetake(result) && (
-              <Button
-                loading={retake.isPending}
-                onClick={() =>
-                  retake.mutate(
-                    {
-                      questionCount: result.questionCount,
-                      documentId: result.source.documentId!,
-                      rangeFrom: result.source.rangeFrom!,
-                      rangeTo: result.source.rangeTo!,
-                      revealMode: result.revealMode,
-                    },
-                    { onSuccess: (session) => navigate(`/exams/${session.id}`) },
-                  )
-                }
-              >
+              // Opens the setup with this exam's settings, so they can be reviewed and changed first.
+              <Link to={`/exams/new?retake=${result.id}`} className="inline-flex h-10 items-center gap-2 rounded-lg btn-primary px-4 font-medium">
                 <RotateCw className="size-4" aria-hidden />
                 Yenidən imtahan ver
-              </Button>
+              </Link>
             )}
           </div>
         }
       />
-
-      {retake.isError && (
-        <div className="mb-6">
-          <Alert title="Yeni imtahan başladılmadı">{retake.error.message}</Alert>
-        </div>
-      )}
 
       <section aria-label="Xülasə" className="result-reveal mb-5 rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
         <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
@@ -213,8 +191,8 @@ function ResultView({ result }: { result: ExamResult }) {
   )
 }
 
-/** Retake needs the same PDF and range; older exams (all PDFs) and deleted PDFs cannot be repeated. */
-const canRetake = ({ source }: ExamResult) => !!source.documentName && source.rangeFrom !== null && source.rangeTo !== null
+/** Retake needs one source PDF and a range; older exams (all PDFs) cannot be repeated. A deleted PDF is explained on the setup page. */
+const canRetake = ({ source }: ExamResult) => source.documentId !== null && source.rangeFrom !== null && source.rangeTo !== null
 
 interface Segment { value: ExamOutcome; label: string; count: number; swatch: string }
 

@@ -1,7 +1,7 @@
 import './exam-flow.css'
 import { answerDisplayText } from './answer-display'
 import { useIsMutating } from '@tanstack/react-query'
-import { AlertTriangle, Bookmark, BookmarkCheck, Check, ChevronLeft, ChevronRight, Clock, Eye, Flag, LayoutGrid, Loader2, Maximize2, Minimize2, X } from 'lucide-react'
+import { AlertTriangle, Bookmark, BookmarkCheck, Check, ChevronLeft, ChevronRight, Clock, Eye, Flag, LayoutGrid, Loader2, Lock, Maximize2, Minimize2, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
@@ -16,10 +16,12 @@ import {
   useExamHistory,
   useExamSession,
   useFinishExam,
+  useRevealAnswer,
   type ExamSession,
   type ExamSessionQuestion,
 } from './api'
 import { sourceName } from './examSource'
+import { useSwipeNavigation } from './useSwipeNavigation'
 
 export function ExamSessionPage() {
   const { id = '' } = useParams()
@@ -60,9 +62,12 @@ function ExamRunner({ session }: { session: ExamSession }) {
   const index = Math.min(Math.max(Number(searchParams.get('q') ?? 1) - 1 || 0, 0), total - 1)
   const question = session.questions[index]
   const immediate = session.revealMode === 'Immediate'
+  // Lock mode: the server sends the answer only for locked questions and refuses changes to them.
+  const lockMode = immediate && session.lockAfterCorrect
 
   const answer = useAnswerQuestion(session.id)
   const finish = useFinishExam(session.id)
+  const revealAnswer = useRevealAnswer(session.id)
   const saving = useIsMutating({ mutationKey: answerMutationKey(session.id) }) > 0
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [mapOpen, setMapOpen] = useState(false)
@@ -71,6 +76,11 @@ function ExamRunner({ session }: { session: ExamSession }) {
   // Mobile answer panel: open by default for revealed questions, until the student closes it.
   const [closedNotes, setClosedNotes] = useState<ReadonlySet<string>>(new Set())
   const controlsRef = useRef<HTMLDivElement>(null)
+  const swipeRef = useRef<HTMLDivElement>(null)
+  // Direction of the last move, so the next question slides in from the matching side.
+  const [move, setMove] = useState<{ index: number; from?: 'next' | 'prev' }>({ index })
+  if (move.index !== index) setMove({ index, from: index > move.index ? 'next' : 'prev' })
+  const enterFrom = move.from
   const layoutRef = useRef<HTMLElement>(null)
   // The session has no title; the exam is also listed (newest first) in the history, which names its PDF.
   const history = useExamHistory(1)
@@ -78,14 +88,22 @@ function ExamRunner({ session }: { session: ExamSession }) {
   const title = summary ? sourceName(summary.source) : null
 
   const answered = session.questions.filter((q) => q.selectedOptionId).length
-  const isRevealed = revealed.has(question.examQuestionId)
+  const isShown = (q: ExamSessionQuestion) => (lockMode ? q.locked : revealed.has(q.examQuestionId))
+  const isRevealed = isShown(question)
+  // Lock mode offers "show the answer" until the question locks; otherwise only once the saved answer brought it.
+  const canReveal = lockMode ? !question.locked : question.reveal !== null
   const noteOpen = isRevealed && question.reveal !== null && !closedNotes.has(question.examQuestionId)
   const setNoteClosed = (closed: boolean) => setClosedNotes(current => {
     const next = new Set(current)
     if (closed) next.add(question.examQuestionId); else next.delete(question.examQuestionId)
     return next
   })
-  const reveal = () => { toggleRevealed(question.examQuestionId, true); setNoteClosed(false) }
+  const reveal = () => {
+    if (lockMode) {
+      if (!revealAnswer.isPending) revealAnswer.mutate(question.examQuestionId)
+    } else toggleRevealed(question.examQuestionId, true)
+    setNoteClosed(false)
+  }
 
   const goTo = useCallback(
     (i: number) => {
@@ -98,17 +116,29 @@ function ExamRunner({ session }: { session: ExamSession }) {
 
   const choose = useCallback(
     (optionId: string | null) => {
-      // Answers stay changeable until the exam ends, in both reveal modes.
-      if (finish.isPending) return
+      // Answers stay changeable until the exam ends, except locked ones (lock mode; the server enforces it too).
+      if (finish.isPending || question.locked) return
       answer.mutate({ examQuestionId: question.examQuestionId, selectedOptionId: optionId })
     },
-    [answer, finish.isPending, question.examQuestionId],
+    [answer, finish.isPending, question.examQuestionId, question.locked],
   )
 
   const submit = useCallback(() => {
     if (finish.isPending || finish.isSuccess) return
-    finish.mutate(undefined, { onSuccess: () => navigate(`/exams/${session.id}/result`, { replace: true }) })
+    finish.mutate(undefined, {
+      onSuccess: () => {
+        clearStoredSets(session.id)
+        navigate(`/exams/${session.id}/result`, { replace: true })
+      },
+    })
   }, [finish, navigate, session.id])
+
+  // Touch: swipe left/right between questions (buttons and keyboard stay the primary controls).
+  useSwipeNavigation(swipeRef, {
+    enabled: !confirmOpen && !mapOpen,
+    onNext: () => { if (index >= total - 1) return false; goTo(index + 1); return true },
+    onPrev: () => { if (index <= 0) return false; goTo(index - 1); return true },
+  })
 
   // Keyboard: ←/→ navigate, A–F or 1–6 choose an option.
   useEffect(() => {
@@ -159,7 +189,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
   return (
     <div className="exam-flow exam-session min-h-dvh bg-slate-50">
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="exam-shell mx-auto flex min-h-14 items-center gap-2 px-3 py-2 sm:min-h-16 sm:gap-3 sm:px-4 min-[900px]:px-6">
+        <div className="exam-shell exam-header-bar mx-auto flex min-h-14 items-center gap-2 px-3 py-2 sm:min-h-16 sm:gap-3 sm:px-4 min-[900px]:px-6">
           <Link to="/" className="hidden items-center gap-2 font-semibold sm:flex" aria-label="ExamR ana səhifə">
             <img src="/favicon.svg" alt="" className="size-7" />
           </Link>
@@ -184,7 +214,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
       </header>
 
       <main ref={layoutRef} className="exam-shell exam-layout mx-auto grid gap-3 px-3 pt-3 sm:px-4 sm:pt-4 min-[900px]:gap-6 min-[900px]:px-6 min-[900px]:pt-6">
-        <div className="flex min-w-0 flex-col gap-4">
+        <div ref={swipeRef} data-enter-from={enterFrom} className="exam-swipe flex min-w-0 flex-col gap-4">
           {finish.isError && <Alert title="İmtahan bitirilmədi">{finish.error.message}</Alert>}
 
           <QuestionPanel
@@ -193,7 +223,10 @@ function ExamRunner({ session }: { session: ExamSession }) {
             visualSrc={visualUrls.exam(session.id)}
             number={index + 1}
             immediate={immediate}
+            lockMode={lockMode}
             revealed={isRevealed}
+            canReveal={canReveal}
+            revealing={revealAnswer.isPending}
             onReveal={reveal}
             flagged={flagged.has(question.examQuestionId)}
             onFlag={() => toggleFlag(question.examQuestionId)}
@@ -206,10 +239,11 @@ function ExamRunner({ session }: { session: ExamSession }) {
               <AnswerSheet reveal={question.reveal} options={question.options} selectedOptionId={question.selectedOptionId} onClose={() => setNoteClosed(true)} />
             )}
             <div className="relative mx-auto grid max-w-2xl grid-cols-[1fr_auto_1fr] items-center gap-2 min-[900px]:flex min-[900px]:max-w-none">
-              <SaveStatus saving={saving} error={answer.isError ? answer.error.message : null} />
+              <SaveStatus saving={saving || revealAnswer.isPending}
+              error={answer.isError ? answer.error.message : revealAnswer.isError ? revealAnswer.error.message : null} />
               <Button variant="secondary" disabled={index === 0} onClick={() => goTo(index - 1)} aria-label="Əvvəlki sual" className="exam-nav-button min-w-0 gap-1 px-2 whitespace-nowrap sm:gap-2 sm:px-3 min-[900px]:order-1">
                 <ChevronLeft className="size-4 shrink-0" aria-hidden />
-                <span className={cn(question.reveal && 'max-[379px]:sr-only')}>Əvvəlki</span>
+                <span className={cn((canReveal || question.reveal) && 'max-[379px]:sr-only')}>Əvvəlki</span>
               </Button>
               <div className="flex items-center gap-2 min-[900px]:hidden">
                 <button type="button" onClick={() => setMapOpen(true)} aria-haspopup="dialog" aria-expanded={mapOpen} aria-controls="exam-question-map"
@@ -217,10 +251,11 @@ function ExamRunner({ session }: { session: ExamSession }) {
                   <LayoutGrid className="size-4" aria-hidden />
                   <span className="sr-only">Suallar, </span>{index + 1}/{total}
                 </button>
-                {/* Only present when the exam settings already sent this question's result (Immediate mode, answered). */}
-                {question.reveal && (
+                {/* Present when the exam settings allow showing this question's result (Immediate mode). */}
+                {(canReveal || question.reveal) && (
                   <button type="button" onClick={() => (noteOpen ? setNoteClosed(true) : reveal())} aria-pressed={noteOpen}
-                    aria-label={noteOpen ? 'Cavab panelini bağla' : 'Cavabı göstər'}
+                    disabled={revealAnswer.isPending}
+                    aria-label={noteOpen ? 'Cavab panelini bağla' : lockMode && !question.locked ? 'Düzgün cavabı göstər, sual kilidlənəcək' : 'Cavabı göstər'}
                     className={cn('exam-map-button inline-flex h-11 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-semibold', noteOpen && 'exam-map-button-active')}>
                     <Eye className="size-4" aria-hidden />
                     <span className="max-[419px]:sr-only">Cavab</span>
@@ -229,7 +264,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
               </div>
               {index < total - 1 ? (
                 <Button onClick={() => goTo(index + 1)} aria-label="Növbəti sual" className="exam-nav-button min-w-0 gap-1 px-2 whitespace-nowrap sm:gap-2 sm:px-3 min-[900px]:order-3 min-[900px]:ml-auto">
-                  <span className={cn(question.reveal && 'max-[379px]:sr-only')}>Növbəti</span>
+                  <span className={cn((canReveal || question.reveal) && 'max-[379px]:sr-only')}>Növbəti</span>
                   <ChevronRight className="size-4 shrink-0" aria-hidden />
                 </Button>
               ) : (
@@ -242,7 +277,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
           </div>
         </div>
 
-        <QuestionNavigator questions={session.questions} current={index} immediate={immediate} revealed={revealed} flagged={flagged}
+        <QuestionNavigator questions={session.questions} current={index} immediate={immediate} isShown={isShown} flagged={flagged}
           onSelect={goTo} open={mapOpen} onClose={() => setMapOpen(false)} />
       </main>
 
@@ -250,6 +285,11 @@ function ExamRunner({ session }: { session: ExamSession }) {
         open={confirmOpen}
         answered={answered}
         unanswered={total - answered}
+        flagged={session.questions.filter((q) => flagged.has(q.examQuestionId)).length}
+        onReviewUnanswered={() => {
+          setConfirmOpen(false)
+          goTo(session.questions.findIndex((q) => !q.selectedOptionId))
+        }}
         onCancel={() => setConfirmOpen(false)}
         onConfirm={() => {
           setConfirmOpen(false)
@@ -265,14 +305,17 @@ interface QuestionPanelProps {
   visualSrc: (id: string) => string
   number: number
   immediate: boolean
+  lockMode: boolean
   revealed: boolean
+  canReveal: boolean
+  revealing: boolean
   onReveal: () => void
   flagged: boolean
   onFlag: () => void
   onChoose: (optionId: string | null) => void
 }
 
-function QuestionPanel({ question, visualSrc, number, immediate, revealed, onReveal, flagged, onFlag, onChoose }: QuestionPanelProps) {
+function QuestionPanel({ question, visualSrc, number, immediate, lockMode, revealed, canReveal, revealing, onReveal, flagged, onFlag, onChoose }: QuestionPanelProps) {
   // Immediate mode gets the result with the saved answer, but shows it only after the student asks for it.
   const reveal = revealed ? question.reveal : null
   const headingId = `question-${question.examQuestionId}`
@@ -280,7 +323,15 @@ function QuestionPanel({ question, visualSrc, number, immediate, revealed, onRev
   return (
     <section aria-labelledby={headingId} className="exam-question-enter min-w-0 rounded-xl border border-slate-200 bg-white px-3.5 pt-2 pb-4 sm:px-6 sm:pb-6 min-[900px]:px-7 min-[900px]:pb-7">
       <div className="mb-1 flex min-h-10 items-center justify-between gap-2 sm:mt-2">
-        <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">Sual {number}</p>
+        <p className="flex items-center gap-2 text-xs font-medium tracking-wide text-slate-500 uppercase">
+          Sual {number}
+          {question.locked && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] tracking-normal text-slate-600 normal-case">
+              <Lock className="size-3" aria-hidden />
+              Kilidlənib
+            </span>
+          )}
+        </p>
         <button type="button" onClick={onFlag} aria-pressed={flagged}
           className={cn('-mr-2 inline-flex h-10 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors', flagged ? 'text-amber-800 hover:bg-amber-50' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800')}>
           {flagged ? <BookmarkCheck className="size-4" aria-hidden /> : <Bookmark className="size-4" aria-hidden />}
@@ -305,13 +356,16 @@ function QuestionPanel({ question, visualSrc, number, immediate, revealed, onRev
               type="button"
               role="radio"
               aria-checked={selected}
+              aria-disabled={question.locked || undefined}
               onClick={() => onChoose(option.id)}
               className={cn(
                 'exam-option flex min-h-12 w-full min-w-0 items-start gap-3 rounded-xl border px-3 py-2.5 text-left sm:py-3 text-sm text-slate-700 sm:px-4 sm:text-[15px]',
                 isCorrect && 'border-emerald-300 bg-emerald-50/60',
                 isWrongPick && 'border-rose-300 bg-rose-50/60',
                 !reveal && selected && 'border-indigo-500 bg-indigo-50 text-slate-900',
-                !reveal && !selected && 'border-slate-200 hover:border-slate-300 hover:bg-slate-50',
+                !reveal && !selected && 'border-slate-200',
+                !reveal && !selected && !question.locked && 'hover:border-slate-300 hover:bg-slate-50',
+                question.locked && 'cursor-default',
                 reveal && !isCorrect && !isWrongPick && 'border-slate-200',
               )}
             >
@@ -344,12 +398,16 @@ function QuestionPanel({ question, visualSrc, number, immediate, revealed, onRev
       {/* Below laptop width the answer is shown in the action bar instead (AnswerSheet). */}
       {reveal && <RevealNote reveal={reveal} className="hidden min-[900px]:flex" />}
 
-      {!reveal && question.reveal && (
+      {!reveal && canReveal && (
         <div className="mt-4 hidden items-center justify-between gap-2 min-[900px]:flex">
-          <p className="text-sm text-slate-500">Cavabın yadda saxlanıldı.</p>
-          <Button variant="secondary" onClick={onReveal} className="h-11">
+          <p className="text-sm text-slate-500">
+            {lockMode
+              ? 'Düzgün cavab seçildikdə və ya cavab göstərildikdə sual kilidlənir.'
+              : 'Cavabın yadda saxlanıldı.'}
+          </p>
+          <Button variant="secondary" onClick={onReveal} loading={revealing} className="h-11 shrink-0">
             <Eye className="size-4" aria-hidden />
-            Cavabı göstər
+            {lockMode ? 'Doğru cavabı göstər' : 'Cavabı göstər'}
           </Button>
         </div>
       )}
@@ -406,10 +464,23 @@ function AnswerSheet({ reveal, options, selectedOptionId, onClose }: {
   )
 }
 
+/** Autosave state of the answers: saving → "saved" for two seconds → nothing; errors stay until the next save. */
 function SaveStatus({ saving, error }: { saving: boolean; error: string | null }) {
+  const [wasSaving, setWasSaving] = useState(saving)
+  const [justSaved, setJustSaved] = useState(false)
+  if (wasSaving !== saving) {
+    setWasSaving(saving)
+    setJustSaved(!saving)
+  }
+  useEffect(() => {
+    if (!justSaved) return
+    const timer = window.setTimeout(() => setJustSaved(false), 2000)
+    return () => window.clearTimeout(timer)
+  }, [justSaved])
+
   return (
-    <p aria-live="polite" className={cn('exam-save-status pointer-events-none absolute inset-x-0 bottom-full mb-2 text-center text-xs min-[900px]:static min-[900px]:order-2 min-[900px]:mb-0 min-[900px]:flex-1', error ? 'text-rose-600' : 'text-slate-500')}>
-      {saving ? 'Saxlanılır…' : error ? `Saxlanmadı: ${error}` : ''}
+    <p aria-live="polite" className={cn('exam-save-status pointer-events-none absolute inset-x-0 bottom-full mb-2 text-center text-xs min-[900px]:static min-[900px]:order-2 min-[900px]:mb-0 min-[900px]:flex-1', error ? 'text-rose-600' : justSaved && !saving ? 'text-emerald-700' : 'text-slate-500')}>
+      {saving ? 'Saxlanılır…' : error ? `Saxlanmadı: ${error}` : justSaved ? 'Yadda saxlanıldı ✓' : ''}
     </p>
   )
 }
@@ -418,7 +489,7 @@ interface QuestionNavigatorProps {
   questions: ExamSessionQuestion[]
   current: number
   immediate: boolean
-  revealed: ReadonlySet<string>
+  isShown: (question: ExamSessionQuestion) => boolean
   flagged: ReadonlySet<string>
   onSelect: (index: number) => void
   open: boolean
@@ -426,7 +497,7 @@ interface QuestionNavigatorProps {
 }
 
 /** Sidebar from laptop width; on smaller screens a bottom sheet opened from the action bar. */
-function QuestionNavigator({ questions, current, immediate, revealed, flagged, onSelect, open, onClose }: QuestionNavigatorProps) {
+function QuestionNavigator({ questions, current, immediate, isShown, flagged, onSelect, open, onClose }: QuestionNavigatorProps) {
   const answeredCount = questions.filter(q => q.selectedOptionId).length
   return (
     <>
@@ -444,7 +515,7 @@ function QuestionNavigator({ questions, current, immediate, revealed, flagged, o
         </div>
         <ol className="exam-question-map grid grid-cols-[repeat(auto-fill,minmax(44px,1fr))] gap-1.5 min-[900px]:grid-cols-[repeat(auto-fill,minmax(40px,1fr))]">
           {questions.map((q, i) => {
-            const reveal = immediate && revealed.has(q.examQuestionId) ? q.reveal : null
+            const reveal = immediate && isShown(q) ? q.reveal : null
             const isFlagged = flagged.has(q.examQuestionId)
             const state = !q.selectedOptionId
               ? 'empty'
@@ -458,7 +529,7 @@ function QuestionNavigator({ questions, current, immediate, revealed, flagged, o
                   type="button"
                   onClick={() => onSelect(i)}
                   aria-current={i === current ? 'step' : undefined}
-                  aria-label={`Sual ${i + 1}${q.selectedOptionId ? ', cavablanıb' : ''}${isFlagged ? ', işarələnib' : ''}`}
+                  aria-label={`Sual ${i + 1}${q.selectedOptionId ? ', cavablanıb' : ''}${q.locked ? ', kilidlənib' : ''}${isFlagged ? ', işarələnib' : ''}`}
                   className={cn(
                     'relative flex h-11 w-full items-center justify-center rounded-md border text-xs font-semibold tabular-nums transition-colors duration-150 min-[900px]:h-9',
                     state === 'empty' && 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50',
@@ -548,11 +619,13 @@ interface FinishDialogProps {
   open: boolean
   answered: number
   unanswered: number
+  flagged: number
+  onReviewUnanswered: () => void
   onCancel: () => void
   onConfirm: () => void
 }
 
-function FinishDialog({ open, answered, unanswered, onCancel, onConfirm }: FinishDialogProps) {
+function FinishDialog({ open, answered, unanswered, flagged, onReviewUnanswered, onCancel, onConfirm }: FinishDialogProps) {
   const ref = useRef<HTMLDialogElement>(null)
 
   useEffect(() => {
@@ -576,17 +649,26 @@ function FinishDialog({ open, answered, unanswered, onCancel, onConfirm }: Finis
       <h2 id="finish-title" className="text-lg font-semibold">
         İmtahanı bitirmək istəyirsiniz?
       </h2>
-      <dl className="mt-4 grid grid-cols-2 gap-2 text-center">
+      <dl className={cn('mt-4 grid gap-2 text-center', flagged > 0 ? 'grid-cols-3' : 'grid-cols-2')}>
         <div className="rounded-lg bg-slate-50 px-3 py-2"><dt className="text-xs text-slate-500">Cavablanıb</dt><dd className="text-lg font-semibold tabular-nums">{answered}</dd></div>
         <div className={cn('rounded-lg px-3 py-2', unanswered > 0 ? 'bg-amber-50' : 'bg-slate-50')}><dt className="text-xs text-slate-500">Boş</dt><dd className={cn('text-lg font-semibold tabular-nums', unanswered > 0 && 'text-amber-800')}>{unanswered}</dd></div>
+        {flagged > 0 && (
+          <div className="rounded-lg bg-slate-50 px-3 py-2"><dt className="text-xs text-slate-500">İşarələnmiş</dt><dd className="text-lg font-semibold tabular-nums">{flagged}</dd></div>
+        )}
       </dl>
       <p id="finish-description" className="mt-3 text-sm text-slate-600">
         {unanswered > 0 ? `${unanswered} sual cavabsızdır. Bitirdikdən sonra cavabları dəyişmək mümkün olmayacaq.` : 'Bütün suallar cavablanıb. Bitirdikdən sonra cavabları dəyişmək mümkün olmayacaq.'}
       </p>
       <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button variant="secondary" onClick={onCancel} autoFocus>
-          İmtahana qayıt
-        </Button>
+        {unanswered > 0 ? (
+          <Button variant="secondary" onClick={onReviewUnanswered} autoFocus>
+            İlk boş suala keç
+          </Button>
+        ) : (
+          <Button variant="secondary" onClick={onCancel} autoFocus>
+            İmtahana qayıt
+          </Button>
+        )}
         <Button onClick={onConfirm}>Bəli, bitir</Button>
       </div>
     </dialog>
@@ -613,16 +695,30 @@ function FullscreenToggle() {
   )
 }
 
-/** Per-exam set of question ids (revealed results, flags) kept in sessionStorage so a reload keeps them. */
+const STORED_SET_PREFIXES = ['exam-revealed:', 'exam-flagged:']
+
+/** Removes an exam's stored flags/reveals once it is finished. */
+function clearStoredSets(examId: string) {
+  for (const prefix of STORED_SET_PREFIXES) {
+    try { localStorage.removeItem(prefix + examId); sessionStorage.removeItem(prefix + examId) } catch { /* storage blocked */ }
+  }
+}
+
+/**
+ * Per-exam set of question ids (revealed results, flags) kept in localStorage, so a reload or reopening the exam in
+ * a new tab keeps them; older sessionStorage copies are still read. Cleared when the exam is finished.
+ */
 function useStoredSet(storageKey: string): [ReadonlySet<string>, (id: string, on?: boolean) => void] {
   const [items, setItems] = useState<ReadonlySet<string>>(() => {
-    try { return new Set(JSON.parse(sessionStorage.getItem(storageKey) ?? '[]') as string[]) } catch { return new Set() }
+    try {
+      return new Set(JSON.parse(localStorage.getItem(storageKey) ?? sessionStorage.getItem(storageKey) ?? '[]') as string[])
+    } catch { return new Set() }
   })
   const toggle = useCallback((id: string, on?: boolean) => {
     setItems(current => {
       const next = new Set(current)
       if (on ?? !next.has(id)) next.add(id); else next.delete(id)
-      try { sessionStorage.setItem(storageKey, JSON.stringify([...next])) } catch { /* storage blocked */ }
+      try { localStorage.setItem(storageKey, JSON.stringify([...next])) } catch { /* storage blocked */ }
       return next
     })
   }, [storageKey])

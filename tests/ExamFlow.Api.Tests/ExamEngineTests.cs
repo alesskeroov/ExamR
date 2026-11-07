@@ -98,6 +98,66 @@ public class ExamEngineTests
     }
 
     [Fact]
+    public void Lock_mode_locks_only_a_correct_answer()
+    {
+        var correct = Guid.NewGuid();
+        var exam = new Exam { RevealMode = RevealMode.Immediate, LockAfterCorrect = true };
+
+        Assert.True(ExamEngine.LocksOnAnswer(exam, new() { CorrectOptionId = correct, SelectedOptionId = correct }));
+        Assert.False(ExamEngine.LocksOnAnswer(exam, new() { CorrectOptionId = correct, SelectedOptionId = Guid.NewGuid() }));
+        // Unknown answer: nothing to compare with, so it is never locked by answering.
+        Assert.False(ExamEngine.LocksOnAnswer(exam, new() { CorrectOptionId = null, SelectedOptionId = correct }));
+    }
+
+    [Fact]
+    public void Lock_is_off_without_the_setting_or_outside_immediate_mode()
+    {
+        var correct = Guid.NewGuid();
+        var question = new ExamQuestion { CorrectOptionId = correct, SelectedOptionId = correct };
+
+        Assert.False(ExamEngine.LocksOnAnswer(new Exam { RevealMode = RevealMode.Immediate }, question));
+        Assert.False(ExamEngine.LocksOnAnswer(new Exam { RevealMode = RevealMode.AtEnd, LockAfterCorrect = true }, question));
+    }
+
+    [Fact]
+    public void Lock_mode_reveals_the_answer_only_for_locked_questions()
+    {
+        var exam = new Exam { RevealMode = RevealMode.Immediate, LockAfterCorrect = true };
+        var wrongPick = new ExamQuestion { CorrectOptionId = Guid.NewGuid(), SelectedOptionId = Guid.NewGuid() };
+        var revealedUnanswered = new ExamQuestion { CorrectOptionId = Guid.NewGuid(), LockedAt = DateTimeOffset.UnixEpoch };
+
+        Assert.False(ExamEngine.MayReveal(exam, wrongPick));
+        Assert.True(ExamEngine.MayReveal(exam, revealedUnanswered));
+    }
+
+    [Fact]
+    public void Reveal_rules_of_other_modes_are_unchanged()
+    {
+        var answered = new ExamQuestion { CorrectOptionId = Guid.NewGuid(), SelectedOptionId = Guid.NewGuid() };
+
+        Assert.True(ExamEngine.MayReveal(new Exam { RevealMode = RevealMode.Immediate }, answered));
+        Assert.False(ExamEngine.MayReveal(new Exam { RevealMode = RevealMode.Immediate }, new ExamQuestion { CorrectOptionId = Guid.NewGuid() }));
+        Assert.False(ExamEngine.MayReveal(new Exam { RevealMode = RevealMode.AtEnd }, answered));
+    }
+
+    [Fact]
+    public void Chosen_time_limit_overrides_the_per_question_default()
+    {
+        var options = new ExamOptions { MinutesPerQuestion = 1 };
+
+        Assert.Equal(TimeSpan.FromMinutes(20), ExamEngine.Duration(20, null, options));
+        Assert.Equal(TimeSpan.FromMinutes(45), ExamEngine.Duration(20, 45, options));
+    }
+
+    [Fact]
+    public void Time_limit_of_an_exam_is_its_start_to_deadline_span()
+    {
+        var exam = new Exam { StartedAt = DateTimeOffset.UnixEpoch, ExpiresAt = DateTimeOffset.UnixEpoch.AddMinutes(35) };
+
+        Assert.Equal(35, ExamEngine.TimeLimitMinutes(exam));
+    }
+
+    [Fact]
     public void Score_is_null_when_no_question_can_be_graded()
     {
         var exam = new Exam { ExpiresAt = DateTimeOffset.UnixEpoch, Questions = [new() { CorrectOptionId = null }] };

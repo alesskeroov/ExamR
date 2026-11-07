@@ -482,6 +482,9 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.Property<short?>("IncorrectCount")
                         .HasColumnType("smallint");
 
+                    b.Property<bool>("LockAfterCorrect")
+                        .HasColumnType("bit");
+
                     b.Property<short>("QuestionCount")
                         .HasColumnType("smallint");
 
@@ -555,6 +558,10 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
 
                     b.Property<Guid>("ExamId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("LockedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetimeoffset(3)");
 
                     b.Property<string>("Outcome")
                         .HasMaxLength(20)

@@ -53,6 +53,26 @@ public static class ExamEngine
         _ => ExamOutcome.Incorrect,
     };
 
+    /// <summary>Time limit of a new exam: the user's choice, or the default per-question allowance.</summary>
+    public static TimeSpan Duration(int questionCount, int? durationMinutes, ExamOptions options) =>
+        durationMinutes is { } minutes ? TimeSpan.FromMinutes(minutes) : options.DurationFor(questionCount);
+
+    /// <summary>The exam's time limit in whole minutes (what a retake starts from).</summary>
+    public static int TimeLimitMinutes(Exam exam) => (int)Math.Round((exam.ExpiresAt - exam.StartedAt).TotalMinutes);
+
+    /// <summary>
+    /// Whether the correct answer may be sent to the client while the exam runs. Immediate mode only: normally after
+    /// answering; in LockAfterCorrect exams only once the question is locked, so a wrong pick does not leak the answer.
+    /// </summary>
+    public static bool MayReveal(Exam exam, ExamQuestion question) =>
+        exam.RevealMode == RevealMode.Immediate
+        && (exam.LockAfterCorrect ? question.LockedAt is not null : question.SelectedOptionId is not null);
+
+    /// <summary>A LockAfterCorrect exam locks a question as soon as the stored answer is the known correct one.</summary>
+    public static bool LocksOnAnswer(Exam exam, ExamQuestion question) =>
+        exam.LockAfterCorrect && exam.RevealMode == RevealMode.Immediate
+        && question.CorrectOptionId is not null && question.SelectedOptionId == question.CorrectOptionId;
+
     /// <summary>
     /// Scores the exam on the server. Unanswered questions count against the score;
     /// questions whose answer is unknown (Ungraded) are left out of the percentage.

@@ -8,6 +8,7 @@ using ExamFlow.Api.Features.Documents;
 using ExamFlow.Api.Features.Exams;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.Extensions.Options;
 
 namespace ExamFlow.Api.Features.Questions;
 
@@ -31,7 +32,7 @@ public static class QuestionEndpoints
     }
 
     private static async Task<IResult> List(
-        ClaimsPrincipal user, AppDbContext db, CancellationToken ct,
+        ClaimsPrincipal user, AppDbContext db, TimeProvider clock, IOptions<ExamOptions> examOptions, CancellationToken ct,
         Guid? documentId = null, VerificationStatus? status = null, bool? hasWarning = null,
         string? search = null, string? type = null, bool? bookmarked = null, bool? wrong = null,
         int? page = null, int? pageSize = null)
@@ -42,6 +43,18 @@ public static class QuestionEndpoints
             .AnyAsync(d => d.Id == documentId, ct))
             return TypedResults.Problem("Sənəd tapılmadı.", statusCode: 404);
         var query = Readable(db, userId).AsNoTracking();
+
+        // The bank shows correct answers, so the PDF of a running exam stays hidden until the exam ends
+        // (same rule as Study practice); otherwise the reveal rules could be bypassed from here.
+        // Answers are still accepted during the grace period after the deadline, so the PDF stays hidden until then.
+        var answersOpenSince = clock.GetUtcNow().AddSeconds(-examOptions.Value.AnswerGraceSeconds);
+        var (allHidden, hidden) = await ActiveExamDocumentsAsync(db, userId, answersOpenSince, ct);
+        if (allHidden || (documentId is { } requested && hidden.Contains(requested)))
+            return TypedResults.Problem("Bu sənəd üzrə imtahanı bitirdikdən sonra suallara baxa bilərsiniz.", statusCode: 409);
+        if (hidden.Count > 0)
+        {
+            query = query.Where(q => !hidden.Contains(q.DocumentId));
+        }
 
         if (documentId is not null)
         {
@@ -105,6 +118,19 @@ public static class QuestionEndpoints
             .ToList();
 
         return TypedResults.Ok(new PagedResult<QuestionDto>(items, pageNumber, size, total));
+    }
+
+    /// <summary>
+    /// Source PDFs of the user's running exam (while it still accepts answers: deadline after <paramref name="deadlineAfter"/>).
+    /// allHidden: an old exam without a recorded source, which may have drawn from any PDF.
+    /// </summary>
+    private static async Task<(bool AllHidden, List<Guid> Hidden)> ActiveExamDocumentsAsync(
+        AppDbContext db, Guid userId, DateTimeOffset deadlineAfter, CancellationToken ct)
+    {
+        var sources = await db.Exams.AsNoTracking()
+            .Where(e => e.UserId == userId && e.Status == ExamStatus.InProgress && e.ExpiresAt >= deadlineAfter)
+            .Select(e => e.SourceDocumentIds).ToListAsync(ct);
+        return (sources.Any(ids => ids.Count == 0), sources.SelectMany(ids => ids).Distinct().ToList());
     }
 
     private static async Task<IResult> Stats(ClaimsPrincipal user, AppDbContext db, CancellationToken ct)

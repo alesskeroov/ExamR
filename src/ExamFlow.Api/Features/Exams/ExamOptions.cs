@@ -13,5 +13,8 @@ public sealed class ExamOptions
     /// <summary>Tolerance for answers that were sent just before the deadline.</summary>
     public int AnswerGraceSeconds { get; set; } = 5;
 
+    /// <summary>Upper bound of a time limit chosen by the user (minutes).</summary>
+    public const int MaxDurationMinutes = 600;
+
     public TimeSpan DurationFor(int questionCount) => TimeSpan.FromMinutes(questionCount * MinutesPerQuestion);
 }

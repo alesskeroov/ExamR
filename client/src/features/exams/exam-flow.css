@@ -49,14 +49,25 @@
 
 .exam-session .exam-question-enter { animation: exam-question-in 140ms ease-out; }
 @keyframes exam-question-in { from { opacity: .4; } }
+/* Next/previous question slides in slightly from the side it came from (buttons, keys and swipes alike). */
+.exam-session .exam-swipe[data-enter-from='next'] .exam-question-enter { animation: exam-question-in-next 180ms ease-out; }
+.exam-session .exam-swipe[data-enter-from='prev'] .exam-question-enter { animation: exam-question-in-prev 180ms ease-out; }
+@keyframes exam-question-in-next { from { opacity: .4; transform: translateX(16px); } }
+@keyframes exam-question-in-prev { from { opacity: .4; transform: translateX(-16px); } }
 
 @keyframes exam-pop { from { opacity: 0; transform: translateY(-4px) scale(.98); } }
 .exam-session .exam-dialog[open] { animation: exam-pop 170ms ease-out; }
 @media (prefers-reduced-motion: reduce) {
-  .exam-session .exam-question-enter, .exam-session .exam-dialog[open], .exam-session .exam-answer-sheet { animation: none; }
+  .exam-session .exam-question-enter, .exam-session .exam-swipe[data-enter-from] .exam-question-enter,
+  .exam-session .exam-dialog[open], .exam-session .exam-answer-sheet { animation: none; }
   .exam-session .exam-sheet, .exam-session .exam-sheet-backdrop { transition: none; }
 }
 @media (min-width: 900px) { .exam-session .exam-controls { background: transparent; padding-bottom: 0; } }
+/* Phone in landscape: a slimmer header and action bar leave more height for the question. */
+@media (max-width: 899.98px) and (max-height: 480px) {
+  .exam-session .exam-header-bar { min-height: 3rem; padding-top: .25rem; padding-bottom: .25rem; }
+  .exam-session .exam-controls { padding-top: .375rem; padding-bottom: max(.375rem, env(safe-area-inset-bottom)); }
+}
 
 /* Result page: short reveal of the summary, bar parts filling left to right, staggered question map. */
 .exam-flow .result-reveal { animation: result-fade 320ms ease-out both; }

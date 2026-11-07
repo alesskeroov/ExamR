@@ -8,7 +8,9 @@ import { PageHeader } from '../../components/common/PageHeader'
 import { formatNumber } from '../../lib/format'
 import { cn } from '../../lib/utils'
 import { useCompletedDocuments } from '../documents/api'
-import { useActiveExam, useCreateExam, useExamAvailability, type RevealMode } from './api'
+import { useActiveExam, useCreateExam, useExamAvailability, useExamResult, type RevealMode } from './api'
+
+const MAX_MINUTES = 600
 
 const PRESETS = [10, 20, 30, 50]
 const inputClass =
@@ -21,11 +23,41 @@ export function ExamSetupPage() {
   const create = useCreateExam()
 
   const [searchParams] = useSearchParams()
-  const [documentId, setDocumentId] = useState(() => searchParams.get('document') ?? '')
+  // "Retake": the setup opens with a finished exam's settings; every field stays editable.
+  const retakeId = searchParams.get('retake') ?? ''
+  const previous = useExamResult(retakeId)
+  const [documentId, setDocumentId] = useState(() => (retakeId ? '' : searchParams.get('document') ?? ''))
   // Typed range; null = use the PDF's full question-number span.
   const [rangeInput, setRangeInput] = useState<{ from: string; to: string } | null>(null)
   const [count, setCount] = useState(20)
   const [revealMode, setRevealMode] = useState<RevealMode>('AtEnd')
+  const [lockAfterCorrect, setLockAfterCorrect] = useState(false)
+  // Typed time limit in minutes; null = automatic (question count × minutes per question).
+  const [minutesInput, setMinutesInput] = useState<number | null>(null)
+
+  // Apply the previous exam's settings once both it and the readable PDFs are loaded. The PDF is only selected
+  // if it still exists and the user can still read it (the list holds only readable PDFs).
+  const [prefilled, setPrefilled] = useState(false)
+  const previousDocumentId = previous.data?.source.documentId ?? null
+  const previousReadable = !!previousDocumentId && !!documents.data?.items.some((d) => d.id === previousDocumentId)
+  if (!prefilled && previous.data && documents.data) {
+    const p = previous.data
+    setPrefilled(true)
+    if (previousReadable) {
+      setDocumentId(previousDocumentId!)
+      setRangeInput(p.source.rangeFrom !== null && p.source.rangeTo !== null ? { from: String(p.source.rangeFrom), to: String(p.source.rangeTo) } : null)
+    }
+    setCount(p.questionCount)
+    setRevealMode(p.revealMode)
+    setLockAfterCorrect(p.lockAfterCorrect)
+    setMinutesInput(p.timeLimitMinutes)
+  }
+  const retakeNotice = !retakeId ? null
+    : previous.isError ? { tone: 'danger' as const, title: 'Əvvəlki imtahan tapılmadı', text: 'Ayarları özünüz seçin.' }
+      : !prefilled ? null
+        : previousReadable ? { tone: 'info' as const, title: 'Əvvəlki imtahanın ayarları seçildi', text: 'PDF, aralıq, sual sayı, vaxt və cavab rejimi əvvəlki kimidir — istəsəniz dəyişin. Köhnə nəticə dəyişmir.' }
+          : !previous.data?.source.documentName ? { tone: 'danger' as const, title: 'Əvvəlki PDF artıq mövcud deyil', text: 'O PDF silinib. Digər ayarlar saxlanıldı — başqa PDF seçin.' }
+            : { tone: 'danger' as const, title: 'Bu PDF-ə artıq girişiniz yoxdur', text: `“${previous.data.source.documentName}” sizinlə artıq paylaşılmır, ona görə seçilə bilməz. Başqa PDF seçin.` }
 
   const span = useExamAvailability(documentId)
   const first = span.data?.firstNumber ?? null
@@ -47,11 +79,15 @@ export function ExamSetupPage() {
       : count > max
         ? `Bu aralıqda ən çox ${formatNumber(max)} sual seçmək olar.`
         : null
-  const minutes = Math.ceil(count * (availability.data?.minutesPerQuestion ?? 1))
+  const autoMinutes = Math.ceil((Number.isFinite(count) ? count : 0) * (availability.data?.minutesPerQuestion ?? 1))
+  const minutes = minutesInput ?? autoMinutes
+  const timeError = !Number.isInteger(minutes) || minutes < 1 || minutes > MAX_MINUTES
+    ? `Vaxt 1–${MAX_MINUTES} dəqiqə arasında olmalıdır.`
+    : null
   const selectedDocument = documents.data?.items.find((d) => d.id === documentId)
 
   const canStart =
-    !!range && !countError && !availability.isFetching && !create.isPending && !active.data
+    !!range && !countError && !timeError && !availability.isFetching && !create.isPending && !active.data
 
   function selectDocument(id: string) {
     setDocumentId(id)
@@ -65,7 +101,8 @@ export function ExamSetupPage() {
   function start() {
     if (!range) return
     create.mutate(
-      { questionCount: count, documentId, rangeFrom: range.from, rangeTo: range.to, revealMode },
+      { questionCount: count, documentId, rangeFrom: range.from, rangeTo: range.to, revealMode, lockAfterCorrect: revealMode === 'Immediate' && lockAfterCorrect,
+        durationMinutes: minutesInput ?? undefined },
       { onSuccess: (session) => navigate(`/exams/${session.id}`) },
     )
   }
@@ -87,6 +124,12 @@ export function ExamSetupPage() {
           >
             Yeni imtahan başlamaq üçün əvvəlcə onu bitirin.
           </Alert>
+        </div>
+      )}
+
+      {retakeNotice && (
+        <div className="mb-6">
+          <Alert tone={retakeNotice.tone} title={retakeNotice.title}>{retakeNotice.text}</Alert>
         </div>
       )}
 
@@ -171,11 +214,51 @@ export function ExamSetupPage() {
             </p>
           </Section>
 
-          <Section step={4} title="Düzgün cavablar nə vaxt göstərilsin?">
+          <Section step={4} title="Vaxt limiti">
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-2">
+                <span className="sr-only">Vaxt limiti (dəqiqə)</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={MAX_MINUTES}
+                  value={Number.isNaN(minutes) ? '' : minutes}
+                  onChange={(e) => setMinutesInput(e.target.valueAsNumber)}
+                  aria-invalid={!!timeError}
+                  aria-describedby="time-limit-hint"
+                  className={cn(inputClass, 'w-24')}
+                />
+                <span className="text-slate-600">dəqiqə</span>
+              </label>
+              {minutesInput !== null && (
+                <button type="button" onClick={() => setMinutesInput(null)}
+                  className="h-11 rounded-lg px-3 font-medium text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700">
+                  Avtomatik ({autoMinutes} dəq)
+                </button>
+              )}
+            </div>
+            <p id="time-limit-hint" className={cn('mt-2', timeError ? 'text-rose-600' : 'text-slate-500')}>
+              {timeError ?? (minutesInput === null ? 'Avtomatik: hər sual üçün 1 dəqiqə.' : 'Vaxt sizin seçiminizdir.')}
+            </p>
+          </Section>
+
+          <Section step={5} title="Düzgün cavablar nə vaxt göstərilsin?">
             <div className="grid gap-3 sm:grid-cols-2">
               <ChoiceCard name="reveal" checked={revealMode === 'AtEnd'} onChange={() => setRevealMode('AtEnd')} icon={<EyeOff className="size-5" />} title="İmtahan bitdikdə" description="Cavablar sona qədər dəyişdirilə bilər" />
-              <ChoiceCard name="reveal" checked={revealMode === 'Immediate'} onChange={() => setRevealMode('Immediate')} icon={<Eye className="size-5" />} title="Hər sualdan sonra" description="Cavab verildikdən sonra dəyişmir" />
+              <ChoiceCard name="reveal" checked={revealMode === 'Immediate'} onChange={() => setRevealMode('Immediate')} icon={<Eye className="size-5" />} title="Hər sualdan sonra" description="Cavab verdikdən sonra düzgün cavabı görə bilərsiniz" />
             </div>
+            {revealMode === 'Immediate' && (
+              <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm hover:bg-slate-50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-indigo-500">
+                <input type="checkbox" checked={lockAfterCorrect} onChange={(e) => setLockAfterCorrect(e.target.checked)}
+                  className="mt-0.5 size-4 shrink-0 accent-indigo-600" />
+                <span>
+                  <span className="block font-medium">Düzgün cavabdan sonra kilidlə</span>
+                  <span className="mt-1 block text-xs leading-5 text-slate-500">
+                    Düzgün cavab seçildikdə və ya “Doğru cavabı göstər” basıldıqda sualın cavabı daha dəyişdirilə bilməz.
+                  </span>
+                </span>
+              </label>
+            )}
           </Section>
         </div>
 
@@ -196,10 +279,10 @@ export function ExamSetupPage() {
               <SummaryRow label="Vaxt">
                 <span className="inline-flex items-center gap-1.5">
                   <Clock className="size-4 text-slate-400" aria-hidden />
-                  {range && !countError ? `${minutes} dəqiqə` : '—'}
+                  {range && !countError && !timeError ? `${minutes} dəqiqə` : '—'}
                 </span>
               </SummaryRow>
-              <SummaryRow label="Cavablar">{revealMode === 'AtEnd' ? 'Sonda' : 'Dərhal'}</SummaryRow>
+              <SummaryRow label="Cavablar">{revealMode === 'AtEnd' ? 'Sonda' : lockAfterCorrect ? 'Dərhal, kilidli' : 'Dərhal'}</SummaryRow>
             </dl>
             {range && !!availability.data?.ungraded && (
               <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-amber-800">

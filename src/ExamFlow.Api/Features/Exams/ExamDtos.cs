@@ -19,6 +19,13 @@ public sealed class CreateExamRequest
     public int RangeTo { get; init; }
 
     public RevealMode RevealMode { get; init; } = RevealMode.AtEnd;
+
+    /// <summary>Lock a question after a correct answer or a reveal; ignored unless <see cref="RevealMode"/> is Immediate.</summary>
+    public bool LockAfterCorrect { get; init; }
+
+    /// <summary>Time limit in minutes; null = <see cref="ExamOptions.MinutesPerQuestion"/> × question count.</summary>
+    [Range(1, ExamOptions.MaxDurationMinutes)]
+    public int? DurationMinutes { get; init; }
 }
 
 public sealed class AnswerRequest
@@ -38,19 +45,21 @@ public sealed record ExamSessionQuestionDto(
     IReadOnlyList<ExamOptionDto> Options,
     Guid? SelectedOptionId,
     AnswerRevealDto? Reveal,
-    IReadOnlyList<VisualDto> Visuals);
+    IReadOnlyList<VisualDto> Visuals,
+    bool Locked);
 
 public sealed record ExamSessionDto(
     Guid Id,
     ExamStatus Status,
     RevealMode RevealMode,
+    bool LockAfterCorrect,
     int QuestionCount,
     DateTimeOffset StartedAt,
     DateTimeOffset ExpiresAt,
     DateTimeOffset ServerNow,
     IReadOnlyList<ExamSessionQuestionDto> Questions);
 
-public sealed record AnswerResultDto(Guid ExamQuestionId, Guid? SelectedOptionId, AnswerRevealDto? Reveal);
+public sealed record AnswerResultDto(Guid ExamQuestionId, Guid? SelectedOptionId, AnswerRevealDto? Reveal, bool Locked);
 
 public sealed record ExamResultQuestionDto(
     int Position,
@@ -68,6 +77,8 @@ public sealed record ExamResultDto(
     Guid Id,
     int QuestionCount,
     RevealMode RevealMode,
+    bool LockAfterCorrect,
+    int TimeLimitMinutes,
     ExamSourceDto Source,
     CompletionReason CompletionReason,
     int Correct,

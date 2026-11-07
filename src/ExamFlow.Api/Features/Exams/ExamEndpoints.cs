@@ -23,6 +23,7 @@ public static class ExamEndpoints
         group.MapGet("/active", Active);
         group.MapGet("/{id:guid}", Session);
         group.MapPut("/{id:guid}/answers/{examQuestionId:guid}", Answer).Validate<AnswerRequest>();
+        group.MapPost("/{id:guid}/questions/{examQuestionId:guid}/reveal", Reveal);
         group.MapPost("/{id:guid}/finish", Finish);
         group.MapGet("/{id:guid}/result", Result);
         group.MapGet("/{id:guid}/visuals/{visualId:guid}", Visual);
@@ -154,12 +155,13 @@ public static class ExamEndpoints
             UserId = userId,
             QuestionCount = (short)request.QuestionCount,
             RevealMode = request.RevealMode,
+            LockAfterCorrect = request.RevealMode == RevealMode.Immediate && request.LockAfterCorrect,
             SourceDocumentIds = [documentId],
             RangeFrom = request.RangeFrom,
             RangeTo = request.RangeTo,
             Status = ExamStatus.InProgress,
             StartedAt = now,
-            ExpiresAt = now + settings.DurationFor(request.QuestionCount),
+            ExpiresAt = now + ExamEngine.Duration(request.QuestionCount, request.DurationMinutes, settings),
             Questions = pickedIds.Select((id, position) => Freeze(questions[id], position, visuals[id])).ToList(),
         };
 
@@ -248,6 +250,11 @@ public static class ExamEndpoints
             return Problem(StatusCodes.Status409Conflict, "İmtahan artıq bitib.");
         }
 
+        if (question.LockedAt is not null)
+        {
+            return Problem(StatusCodes.Status409Conflict, "Bu sualın cavabı kilidlənib.");
+        }
+
         if (request.SelectedOptionId is { } optionId && question.Snapshot.Options.All(o => o.OptionId != optionId))
         {
             return Problem(StatusCodes.Status400BadRequest, "Variant bu suala aid deyil.");
@@ -261,24 +268,80 @@ public static class ExamEndpoints
 
         question.SelectedOptionId = request.SelectedOptionId;
         question.AnsweredAt = request.SelectedOptionId is null ? null : now;
+        if (ExamEngine.LocksOnAnswer(exam, question)) question.LockedAt = now;
         // Saved under the exam row lock: an answer is either stored before a concurrent finish grades the exam,
-        // or rejected after it; it can never be stored but missing from the result.
+        // or rejected after it; it can never be stored but missing from the result. The same lock serialises it
+        // with a concurrent answer/reveal of this exam, so the question's lock is re-read from the database here.
         var saved = await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
         {
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
-            if (await LockInProgressAsync(db, exam.Id, ct) == 0) return false;
+            if (await LockInProgressAsync(db, exam.Id, ct) == 0) return SaveResult.Finished;
+            if (exam.LockAfterCorrect && await IsQuestionLockedAsync(db, question.Id, ct)) return SaveResult.Locked;
             await db.SaveChangesAsync(acceptAllChangesOnSuccess: false, ct);
             await transaction.CommitAsync(ct);
             db.ChangeTracker.AcceptAllChanges();
-            return true;
+            return SaveResult.Saved;
         });
-        if (!saved)
+        return saved switch
+        {
+            SaveResult.Finished => Problem(StatusCodes.Status409Conflict, "İmtahan artıq bitib."),
+            SaveResult.Locked => Problem(StatusCodes.Status409Conflict, "Bu sualın cavabı kilidlənib."),
+            _ => TypedResults.Ok(ToAnswerResult(exam, question)),
+        };
+    }
+
+    /// <summary>
+    /// "Show the correct answer" in a LockAfterCorrect exam: locks the question (whatever its answer) and returns
+    /// the correct answer. Idempotent. Other exams already get the answer with the saved pick (Immediate) or never.
+    /// </summary>
+    private static async Task<IResult> Reveal(
+        Guid id, Guid examQuestionId, ClaimsPrincipal user, AppDbContext db,
+        TimeProvider clock, IOptions<ExamOptions> options, CancellationToken ct)
+    {
+        var exam = await LoadAsync(db, id, user.GetUserId(), ct);
+        var question = exam?.Questions.FirstOrDefault(q => q.Id == examQuestionId);
+        if (exam is null || question is null)
+        {
+            return NotFound();
+        }
+
+        var now = clock.GetUtcNow();
+        if (exam.Status == ExamStatus.Completed || await FinalizeIfExpiredAsync(db, exam, now, options.Value, ct))
         {
             return Problem(StatusCodes.Status409Conflict, "İmtahan artıq bitib.");
         }
 
-        return TypedResults.Ok(new AnswerResultDto(question.Id, question.SelectedOptionId, RevealFor(exam, question)));
+        if (!exam.LockAfterCorrect || exam.RevealMode != RevealMode.Immediate)
+        {
+            return Problem(StatusCodes.Status400BadRequest, "Bu imtahanda cavab bu yolla açılmır.");
+        }
+
+        var saved = await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            if (await LockInProgressAsync(db, exam.Id, ct) == 0) return false;
+            await db.ExamQuestions.Where(q => q.Id == question.Id && q.LockedAt == null)
+                .ExecuteUpdateAsync(s => s.SetProperty(q => q.LockedAt, now), ct);
+            // Read back under the exam lock: a concurrent answer may have changed or locked the question meanwhile.
+            var stored = await db.ExamQuestions.AsNoTracking().Where(q => q.Id == question.Id)
+                .Select(q => new { q.SelectedOptionId, q.LockedAt }).FirstAsync(ct);
+            await transaction.CommitAsync(ct);
+            question.SelectedOptionId = stored.SelectedOptionId;
+            question.LockedAt = stored.LockedAt;
+            return true;
+        });
+        return saved
+            ? TypedResults.Ok(ToAnswerResult(exam, question))
+            : Problem(StatusCodes.Status409Conflict, "İmtahan artıq bitib.");
     }
+
+    private enum SaveResult { Saved, Finished, Locked }
+
+    private static Task<bool> IsQuestionLockedAsync(AppDbContext db, Guid examQuestionId, CancellationToken ct) =>
+        db.ExamQuestions.AsNoTracking().AnyAsync(q => q.Id == examQuestionId && q.LockedAt != null, ct);
+
+    private static AnswerResultDto ToAnswerResult(Exam exam, ExamQuestion question) =>
+        new(question.Id, question.SelectedOptionId, RevealFor(exam, question), question.LockedAt is not null);
 
     private static async Task<IResult> Finish(
         Guid id, ClaimsPrincipal user, AppDbContext db, TimeProvider clock, CancellationToken ct)
@@ -443,7 +506,7 @@ public static class ExamEndpoints
         });
 
     private static AnswerRevealDto? RevealFor(Exam exam, ExamQuestion question) =>
-        exam.RevealMode == RevealMode.Immediate && question.SelectedOptionId is not null
+        ExamEngine.MayReveal(exam, question)
             ? new AnswerRevealDto(question.CorrectOptionId, question.CorrectOptionId is not null)
             : null;
 
@@ -454,16 +517,17 @@ public static class ExamEndpoints
         question.Snapshot.Visuals?.Select(QuestionVisuals.ToDto).ToList() ?? [];
 
     private static ExamSessionDto ToSession(Exam exam, DateTimeOffset now) => new(
-        exam.Id, exam.Status, exam.RevealMode, exam.QuestionCount, exam.StartedAt, exam.ExpiresAt, now,
+        exam.Id, exam.Status, exam.RevealMode, exam.LockAfterCorrect, exam.QuestionCount, exam.StartedAt, exam.ExpiresAt, now,
         exam.Questions.OrderBy(q => q.Position)
-            .Select(q => new ExamSessionQuestionDto(q.Id, q.Position, q.Snapshot.Text, Options(q), q.SelectedOptionId, RevealFor(exam, q), Visuals(q)))
+            .Select(q => new ExamSessionQuestionDto(q.Id, q.Position, q.Snapshot.Text, Options(q), q.SelectedOptionId, RevealFor(exam, q), Visuals(q),
+                q.LockedAt is not null))
             .ToList());
 
     private static ExamResultDto ToResult(Exam exam, IReadOnlyDictionary<Guid, string> documentNames)
     {
         var completedAt = exam.CompletedAt ?? exam.ExpiresAt;
         return new ExamResultDto(
-            exam.Id, exam.QuestionCount, exam.RevealMode, Source(exam, documentNames), exam.CompletionReason ?? CompletionReason.Submitted,
+            exam.Id, exam.QuestionCount, exam.RevealMode, exam.LockAfterCorrect, ExamEngine.TimeLimitMinutes(exam), Source(exam, documentNames), exam.CompletionReason ?? CompletionReason.Submitted,
             exam.CorrectCount ?? 0, exam.IncorrectCount ?? 0, exam.UnansweredCount ?? 0, exam.UngradedCount ?? 0, exam.ScorePercent,
             exam.StartedAt, completedAt, (int)Math.Round((completedAt - exam.StartedAt).TotalSeconds),
             exam.Questions.OrderBy(q => q.Position)

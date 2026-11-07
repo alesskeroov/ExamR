@@ -29,12 +29,15 @@ export interface ExamSessionQuestion {
   reveal: AnswerReveal | null
   /** Missing in responses cached before images were supported. */
   visuals?: VisualDto[]
+  /** Answer locked by the server (lockAfterCorrect exams): it can no longer be changed. */
+  locked: boolean
 }
 
 export interface ExamSession {
   id: string
   status: ExamStatus
   revealMode: RevealMode
+  lockAfterCorrect: boolean
   questionCount: number
   startedAt: string
   expiresAt: string
@@ -64,6 +67,9 @@ export interface ExamResult {
   id: string
   questionCount: number
   revealMode: RevealMode
+  lockAfterCorrect: boolean
+  /** Time limit the exam had, in minutes (a retake starts from it). */
+  timeLimitMinutes: number
   source: ExamSource
   completionReason: CompletionReason
   correct: number
@@ -110,6 +116,9 @@ export interface CreateExamRequest {
   rangeFrom: number
   rangeTo: number
   revealMode: RevealMode
+  lockAfterCorrect: boolean
+  /** Omitted = question count × minutesPerQuestion. */
+  durationMinutes?: number
 }
 
 /** Question-number span of a PDF and how many questions a range of it holds (no range = whole PDF). */
@@ -170,6 +179,7 @@ interface AnswerResponse {
   examQuestionId: string
   selectedOptionId: string | null
   reveal: AnswerReveal | null
+  locked: boolean
 }
 
 export const answerMutationKey = (examId: string) => ['exams', 'answer', examId] as const
@@ -206,13 +216,34 @@ export function useAnswerQuestion(examId: string) {
     },
     onSuccess: (response, { examQuestionId }, context) => {
       if (latest.get(examQuestionId) !== context.sequence) return
-      patch(response.examQuestionId, { selectedOptionId: response.selectedOptionId, reveal: response.reveal })
+      patch(response.examQuestionId, { selectedOptionId: response.selectedOptionId, reveal: response.reveal, locked: response.locked })
     },
     onError: (_error, { examQuestionId }, context) => {
       if (!context || latest.get(examQuestionId) !== context.sequence) return
       // Show what the server really stored instead of guessing an earlier optimistic value.
       void queryClient.invalidateQueries({ queryKey: key })
     },
+  })
+}
+
+/** lockAfterCorrect exams: shows the correct answer and locks the question on the server. */
+export function useRevealAnswer(examId: string) {
+  const queryClient = useQueryClient()
+  const key = queryKeys.exams.session(examId)
+  return useMutation({
+    // Same scope as answers: a reveal waits for a pending answer of this exam, so the server sees them in order.
+    scope: { id: `exam-answer:${examId}` },
+    mutationFn: (examQuestionId: string) => api.post<AnswerResponse>(`/exams/${examId}/questions/${examQuestionId}/reveal`),
+    onSuccess: (response) =>
+      queryClient.setQueryData<ExamSession>(key, (session) =>
+        session && {
+          ...session,
+          questions: session.questions.map((q) => (q.examQuestionId === response.examQuestionId
+            ? { ...q, selectedOptionId: response.selectedOptionId, reveal: response.reveal, locked: response.locked }
+            : q)),
+        },
+      ),
+    onError: () => void queryClient.invalidateQueries({ queryKey: key }),
   })
 }
 
@@ -232,7 +263,9 @@ export function useExamResult(id: string) {
   return useQuery({
     queryKey: queryKeys.exams.result(id),
     queryFn: () => api.get<ExamResult>(`/exams/${id}/result`),
+    enabled: id !== '',
     staleTime: Infinity,
+    retry: false,
   })
 }
 

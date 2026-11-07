@@ -107,7 +107,7 @@ function LastResult({ exam }: { exam: ExamSummary }) {
     </div>
     <p className="mt-4 text-[15px] font-medium"><span className="ds-mark">{verdict}</span></p>
     <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-3">
-      <Link to={exam.source.documentId ? `/exams/new?document=${exam.source.documentId}` : '/exams/new'} className="btn-primary inline-flex h-11 items-center gap-2 rounded-[10px] px-4 text-sm font-semibold">Yenidən sına <ArrowRight className="size-4" aria-hidden /></Link>
+      <Link to={exam.source.documentId && exam.source.rangeFrom !== null ? `/exams/new?retake=${exam.id}` : '/exams/new'} className="btn-primary inline-flex h-11 items-center gap-2 rounded-[10px] px-4 text-sm font-semibold">Yenidən sına <ArrowRight className="size-4" aria-hidden /></Link>
       <Link to={`/exams/${exam.id}/result`} className="ds-link text-sm">Cavablara bax</Link>
     </div>
   </div>

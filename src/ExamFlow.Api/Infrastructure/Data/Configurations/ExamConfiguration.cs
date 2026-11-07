@@ -47,6 +47,7 @@ public class ExamQuestionConfiguration : IEntityTypeConfiguration<ExamQuestion>
 
         builder.Property(q => q.Outcome).HasConversion<string>().HasMaxLength(20).IsUnicode(false);
         builder.Property(q => q.AnsweredAt).HasPrecision(3);
+        builder.Property(q => q.LockedAt).HasPrecision(3);
 
         builder.OwnsOne(q => q.Snapshot, snapshot =>
         {
