@@ -280,6 +280,12 @@
 .lp[data-reveal-on] [data-reveal].is-visible { opacity: 1; transform: none; }
 @keyframes lp-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes lp-pulse { 50% { opacity: .35; } }
+/* Hero preview: each new sample question fades in, options slightly staggered. */
+.lp-swap { animation: lp-in 420ms cubic-bezier(.22, 1, .36, 1) both; }
+.lp-grid20 i { transition: background-color 300ms ease; }
+.lp-option b { transition: background-color 150ms, color 150ms; }
+/* FAQ: the answer eases in when a question opens. */
+.lp-faq details[open] p { animation: lp-in 280ms ease both; }
 @media (prefers-reduced-motion: reduce) {
   .lp *, .lp *::before { animation: none !important; transition: none !important; }
   .lp[data-reveal-on] [data-reveal] { opacity: 1; transform: none; }
