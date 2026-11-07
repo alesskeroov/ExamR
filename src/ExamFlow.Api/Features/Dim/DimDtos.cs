@@ -1,0 +1,134 @@
+using System.ComponentModel.DataAnnotations;
+using ExamFlow.Api.Features.Exams;
+using ExamFlow.Api.Features.Questions;
+
+namespace ExamFlow.Api.Features.Dim;
+
+// ---- Catalog ----
+
+public sealed record DimSubjectDto(string Code, string Name, int Closed, int Coded, int Written, bool WrongPenalty);
+
+public sealed record DimGroupSubjectDto(string Code, string Name, decimal Coefficient);
+
+public sealed record DimGroupDto(string Code, string Name, IReadOnlyList<DimGroupSubjectDto> Subjects);
+
+public sealed record DimCatalogDto(IReadOnlyList<DimSubjectDto> Buraxilis, IReadOnlyList<DimSubjectDto> Blok, IReadOnlyList<DimGroupDto> Groups);
+
+// ---- Admin: bank ----
+
+public sealed record DimOptionDto(Guid Id, string Label, string Text, bool IsCorrect);
+
+public sealed record DimBankInfoDto(DimTrack Track, string Subject, string? Topic);
+
+public sealed record DimSourceQuestionDto(
+    Guid Id, int SourceNumber, string Text, IReadOnlyList<DimOptionDto> Options, VerificationStatus VerificationStatus,
+    string? ParseWarning, DimBankInfoDto? Bank);
+
+public sealed class DimAnswerKeyRequest
+{
+    /// <summary>For example "1-A 2-C 3-B" or one pair per line.</summary>
+    [Required, StringLength(20_000, MinimumLength = 2)]
+    public string Text { get; init; } = string.Empty;
+}
+
+public sealed record DimAnswerKeyResultDto(int Applied, IReadOnlyList<int> NotFound, IReadOnlyList<int> Invalid, IReadOnlyList<int> Conflicts);
+
+public sealed class DimApproveRequest
+{
+    public DimTrack Track { get; init; }
+
+    [Required, StringLength(10)]
+    public string Subject { get; init; } = string.Empty;
+
+    [StringLength(200)]
+    public string? Topic { get; init; }
+
+    [Required, MinLength(1), MaxLength(500)]
+    public List<Guid> QuestionIds { get; init; } = [];
+}
+
+public sealed record DimRejectedDto(Guid QuestionId, string Reason);
+
+public sealed record DimApproveResultDto(int Approved, IReadOnlyList<DimRejectedDto> Rejected);
+
+public sealed record DimBankStatDto(DimTrack Track, string Subject, string Name, int Count, int Topics);
+
+// ---- Admin: tests ----
+
+public sealed class DimSectionRequest
+{
+    [Required, StringLength(10)]
+    public string Subject { get; init; } = string.Empty;
+
+    /// <summary>Fixed questions (a ready-made test). Leave empty to use <see cref="RandomCount"/>.</summary>
+    public List<Guid> QuestionIds { get; init; } = [];
+
+    [Range(0, ExamOptions.HardMaxQuestions)]
+    public int RandomCount { get; init; }
+
+    /// <summary>true = draw new random questions for every attempt; false = draw once now and keep them fixed.</summary>
+    public bool DrawPerAttempt { get; init; }
+}
+
+public sealed class DimTestRequest
+{
+    public DimTrack Track { get; init; }
+    public DimTestKind Kind { get; init; }
+
+    [StringLength(10)]
+    public string? GroupCode { get; init; }
+
+    [Required, StringLength(200, MinimumLength = 2)]
+    public string Title { get; init; } = string.Empty;
+
+    [Range(1, ExamOptions.MaxDurationMinutes)]
+    public int DurationMinutes { get; init; }
+
+    [Range(1, 100)]
+    public int? AttemptLimit { get; init; }
+
+    public DateTimeOffset? AvailableFrom { get; init; }
+    public DateTimeOffset? AvailableTo { get; init; }
+    public bool IsPublished { get; init; }
+
+    [Required, MinLength(1), MaxLength(10)]
+    public List<DimSectionRequest> Sections { get; init; } = [];
+}
+
+public sealed class DimTestSettingsRequest
+{
+    [Required, StringLength(200, MinimumLength = 2)]
+    public string Title { get; init; } = string.Empty;
+
+    [Range(1, ExamOptions.MaxDurationMinutes)]
+    public int DurationMinutes { get; init; }
+
+    [Range(1, 100)]
+    public int? AttemptLimit { get; init; }
+
+    public DateTimeOffset? AvailableFrom { get; init; }
+    public DateTimeOffset? AvailableTo { get; init; }
+    public bool IsPublished { get; init; }
+}
+
+public sealed record DimSectionDto(string Subject, string Name, int QuestionCount, bool Random);
+
+public sealed record DimAdminTestDto(
+    Guid Id, DimTrack Track, DimTestKind Kind, string? GroupCode, string Title, int DurationMinutes, int? AttemptLimit,
+    DateTimeOffset? AvailableFrom, DateTimeOffset? AvailableTo, bool IsPublished, DateTimeOffset CreatedAt,
+    IReadOnlyList<DimSectionDto> Sections, int Attempts);
+
+// ---- User ----
+
+public sealed record DimLastAttemptDto(Guid ExamId, ExamStatus Status, DateTimeOffset StartedAt, decimal? ScorePercent);
+
+public sealed record DimTestDto(
+    Guid Id, DimTrack Track, DimTestKind Kind, string? GroupCode, string? GroupName, string Title, int DurationMinutes,
+    int QuestionCount, IReadOnlyList<DimSectionDto> Sections, int? AttemptLimit, int AttemptsUsed,
+    DateTimeOffset? AvailableFrom, DateTimeOffset? AvailableTo, bool IsOpen, DimLastAttemptDto? LastAttempt);
+
+public sealed record DimStartedDto(Guid ExamId);
+
+public sealed record DimReportDto(
+    Guid ExamId, Guid TestId, string Title, DimTrack Track, DimTestKind Kind, string? GroupCode, string? GroupName,
+    int Correct, int Incorrect, int Unanswered, int Ungraded, decimal? ScorePercent, DimScore Score, string Notice);

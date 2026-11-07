@@ -12,6 +12,7 @@ import { cn } from '../../lib/utils'
 import { bodyVisuals, optionVisuals, visibleText, visualUrls } from '../../lib/visuals'
 import { useExamResult, type ExamOutcome, type ExamResult, type ExamResultQuestion } from './api'
 import { sourceName, sourceRange } from './examSource'
+import { DimReportCard } from '../dim/DimReportCard'
 
 type Filter = 'All' | 'Correct' | 'Incorrect' | 'Unanswered'
 
@@ -144,6 +145,8 @@ function ResultView({ result }: { result: ExamResult }) {
           </ol>
         </div>
       </section>
+
+      <DimReportCard examId={result.id} />
 
       <section aria-labelledby="review-heading" className="flex min-w-0 flex-col gap-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

@@ -11,6 +11,7 @@ import { BattleRoomPage } from '../features/battle/BattleRoomPage'
 import { MyRoomsPage } from '../features/battle/MyRoomsPage'
 import { DashboardPage } from '../features/dashboard/DashboardPage'
 import { UploadPage } from '../features/documents/UploadPage'
+import { DimTestsPage } from '../features/dim/DimTestsPage'
 import { ExamHistoryPage } from '../features/exams/ExamHistoryPage'
 import { ExamResultPage } from '../features/exams/ExamResultPage'
 import { ExamSessionPage } from '../features/exams/ExamSessionPage'
@@ -44,6 +45,8 @@ export const router = createBrowserRouter([
       { path: 'exams/new', element: <ExamSetupPage /> },
       { path: 'exams', element: <ExamHistoryPage /> },
       { path: 'exams/:id/result', element: <ExamResultPage /> },
+      { path: 'dim/buraxilis', element: <DimTestsPage key="Buraxilis" track="Buraxilis" /> },
+      { path: 'dim/blok', element: <DimTestsPage key="Blok" track="Blok" /> },
       { path: 'battle', element: <BattleHomePage /> },
       { path: 'battle/rooms', element: <MyRoomsPage /> },
       { path: 'friends', element: <FriendsPage /> },

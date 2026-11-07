@@ -401,19 +401,32 @@ public static class ExamEndpoints
             .Select(q => new ExamCandidate(q.Id, q.ContentHash, q.VerificationStatus != VerificationStatus.Unverified))
             .ToListAsync(ct);
 
-    /// <summary>File names of the exams' source PDFs (deleted PDFs are simply missing).</summary>
+    /// <summary>
+    /// File names of the exams' source PDFs (deleted PDFs are simply missing). DİM attempts have no source PDF:
+    /// their test title is added under the exam's own id.
+    /// </summary>
     private static async Task<Dictionary<Guid, string>> DocumentNames(AppDbContext db, IEnumerable<Exam> exams, CancellationToken ct)
     {
-        var ids = exams.SelectMany(e => e.SourceDocumentIds).Distinct().ToList();
-        return ids.Count == 0
+        var list = exams.ToList();
+        var ids = list.SelectMany(e => e.SourceDocumentIds).Distinct().ToList();
+        var names = ids.Count == 0
             ? []
             : await db.Documents.AsNoTracking().Where(d => ids.Contains(d.Id)).ToDictionaryAsync(d => d.Id, d => d.OriginalFileName, ct);
+        var withoutSource = list.Where(e => e.SourceDocumentIds.Count == 0).Select(e => e.Id).ToList();
+        if (withoutSource.Count > 0)
+        {
+            foreach (var attempt in await db.DimAttempts.AsNoTracking().Where(a => withoutSource.Contains(a.ExamId))
+                         .Select(a => new { a.ExamId, a.Test.Title }).ToListAsync(ct))
+                names[attempt.ExamId] = attempt.Title;
+        }
+
+        return names;
     }
 
     private static ExamSourceDto Source(Exam exam, IReadOnlyDictionary<Guid, string> names)
     {
         Guid? documentId = exam.SourceDocumentIds.Count == 1 ? exam.SourceDocumentIds[0] : null;
-        return new ExamSourceDto(documentId, documentId is { } id ? names.GetValueOrDefault(id) : null, exam.RangeFrom, exam.RangeTo);
+        return new ExamSourceDto(documentId, names.GetValueOrDefault(documentId ?? exam.Id), exam.RangeFrom, exam.RangeTo);
     }
 
     /// <summary>Copies the question into the exam with its options in a new random order.</summary>
@@ -449,11 +462,11 @@ public static class ExamEndpoints
             : exams.Include(e => e.Questions)).AsTracking().FirstOrDefaultAsync(ct);
     }
 
-    private static Task<Exam?> LoadActiveAsync(AppDbContext db, Guid userId, CancellationToken ct) =>
+    internal static Task<Exam?> LoadActiveAsync(AppDbContext db, Guid userId, CancellationToken ct) =>
         db.Exams.FirstOrDefaultAsync(e => e.UserId == userId && e.Status == ExamStatus.InProgress, ct);
 
     /// <summary>Completes an exam whose time is up (even if the browser was closed). Returns true if it is now completed.</summary>
-    private static async Task<bool> FinalizeIfExpiredAsync(AppDbContext db, Exam exam, DateTimeOffset now, ExamOptions options, CancellationToken ct)
+    internal static async Task<bool> FinalizeIfExpiredAsync(AppDbContext db, Exam exam, DateTimeOffset now, ExamOptions options, CancellationToken ct)
     {
         if (exam.Status == ExamStatus.Completed)
         {
