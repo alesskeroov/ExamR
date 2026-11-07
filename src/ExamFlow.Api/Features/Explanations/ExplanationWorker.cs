@@ -82,12 +82,16 @@ public sealed class ExplanationService(AppDbContext db, TimeProvider clock)
 /// keeps a second API instance from working (and paying) in parallel; it is released when the connection drops.
 /// </summary>
 public sealed class ExplanationWorker(IServiceScopeFactory scopes, ExplanationQueue queue, IOptionsMonitor<ExplanationAiOptions> options,
-    TimeProvider clock, ILogger<ExplanationWorker> logger) : BackgroundService
+    TimeProvider clock, DatabaseStartup startup, ILogger<ExplanationWorker> logger) : BackgroundService
 {
     private static readonly TimeSpan Poll = TimeSpan.FromSeconds(30);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Interrupted jobs are resumed once the app uses the database anyway, not on a cold start.
+        try { await startup.Ready.WaitAsync(stoppingToken); }
+        catch (OperationCanceledException) { return; }
+
         while (!stoppingToken.IsCancellationRequested)
         {
             var idle = false;

@@ -19,11 +19,12 @@ public sealed class LearningQueue
 /// them; a semaphore keeps heavy extraction to <see cref="LearningOptions.MaxConcurrentJobs"/> at a time.
 /// </summary>
 public sealed class LearningProcessingService(
-    LearningQueue queue, IServiceScopeFactory scopeFactory, IOptions<LearningOptions> options, ILogger<LearningProcessingService> logger) : BackgroundService
+    LearningQueue queue, IServiceScopeFactory scopeFactory, IOptions<LearningOptions> options, DatabaseStartup startup,
+    ILogger<LearningProcessingService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await RequeueUnfinishedAsync(stoppingToken);
+        _ = RequeueUnfinishedAsync(stoppingToken);
         using var slots = new SemaphoreSlim(Math.Max(1, options.Value.MaxConcurrentJobs));
         try
         {
@@ -44,9 +45,13 @@ public sealed class LearningProcessingService(
     {
         try
         {
+            // Only once the app uses the database anyway, so a cold start does not resume a paused database.
+            await startup.Ready.WaitAsync(ct);
             using var scope = scopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            // Jobs created after this process started were queued by their request already.
             var jobs = await db.Set<LearningProcessingJob>()
+                .Where(j => j.CreatedAt < startup.StartedAt)
                 .Where(j => j.Status == LearningStatus.Pending || j.Status == LearningStatus.Processing)
                 .OrderBy(j => j.CreatedAt).ToListAsync(ct);
             foreach (var job in jobs) job.Status = LearningStatus.Pending; // a job cut off mid-run starts over
@@ -54,7 +59,8 @@ public sealed class LearningProcessingService(
             jobs.ForEach(j => queue.Enqueue(j.Id));
             if (jobs.Count > 0) logger.LogInformation("Re-queued {Count} learning processing jobs", jobs.Count);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+        catch (Exception ex)
         {
             logger.LogError(ex, "Could not re-queue learning processing jobs");
         }

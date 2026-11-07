@@ -43,7 +43,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
       description="Bir az sonra yenidən cəhd edin." busy={isFetching} onRetry={() => refetch()} />
   }
 
-  if (user) return <><SocialConnection key={user.id} />{children}</>
+  if (user) return <SocialConnection key={user.id}>{children}</SocialConnection>
   // Signed-out visitors see the public landing page; ?auth=login|register (or a Google error) opens the form.
   const auth = searchParams.get('auth')
   return auth === 'login' || auth === 'register' || searchParams.has('authError')

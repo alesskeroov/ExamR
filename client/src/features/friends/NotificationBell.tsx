@@ -9,14 +9,15 @@ import './notifications.css'
 interface Props {
   /** Exam / live battle: the panel never offers actions that leave the current screen. */
   safe?: boolean
+  poll?: boolean
 }
 
 /**
  * Bell with an in-place panel (latest notifications, quick actions) instead of a separate page; the full history
  * stays at /notifications behind "Hamısına bax".
  */
-export function NotificationBell({ safe = false }: Props) {
-  const notifications = useNotifications()
+export function NotificationBell({ safe = false, poll = true }: Props) {
+  const notifications = useNotifications(poll)
   const read = useNotificationAction()
   const friend = useFriendAction()
   const remove = useDeleteNotifications()

@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using ExamFlow.Api.Common;
 using ExamFlow.Api.Features.Auth;
 using ExamFlow.Api.Features.Questions;
@@ -34,6 +35,9 @@ public enum DocumentStatus
 
 public class ProcessingReport
 {
+    [JsonIgnore]
+    public bool? LegacyDocxAnswersChecked { get; set; }
+
     public int QuestionsFound { get; set; }
     public int AutoDetected { get; set; }
     public int Unverified { get; set; }

@@ -23,11 +23,12 @@ public sealed class DocumentProcessingService(
     ProcessingQueue queue,
     IServiceScopeFactory scopeFactory,
     IOptions<DocumentOptions> options,
+    DatabaseStartup startup,
     ILogger<DocumentProcessingService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await RequeueUnfinishedAsync(stoppingToken);
+        _ = RequeueUnfinishedAsync(stoppingToken);
 
         var parallel = new ParallelOptions { MaxDegreeOfParallelism = options.Value.MaxConcurrentJobs, CancellationToken = stoppingToken };
         try
@@ -48,11 +49,16 @@ public sealed class DocumentProcessingService(
     {
         try
         {
+            // Only once the app uses the database anyway, so a cold start does not resume a paused database.
+            await startup.Ready.WaitAsync(ct);
             using var scope = scopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            // Documents uploaded after this process started were queued by their upload request already.
             var ids = await db.Documents
+                .Where(d => d.CreatedAt < startup.StartedAt)
                 .Where(d => d.Status == DocumentStatus.Pending || d.Status == DocumentStatus.Processing
                     || (d.Status == DocumentStatus.Completed && d.StoredFileName.EndsWith(".docx")
+                        && (d.ProcessingReport == null || d.ProcessingReport.LegacyDocxAnswersChecked != true)
                         // Only open questions can be repaired; multiple-choice ones never have an explanation, and
                         // matching them re-downloaded and re-parsed every such Word file on every restart.
                         && d.Questions.Any(q => !q.Options.Any() && (q.Explanation == null || q.Explanation == ""))))
@@ -66,7 +72,8 @@ public sealed class DocumentProcessingService(
                 logger.LogInformation("Re-queued {Count} unfinished documents", ids.Count);
             }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+        catch (Exception ex)
         {
             logger.LogError(ex, "Could not re-queue unfinished documents");
         }
@@ -94,7 +101,13 @@ public sealed class DocumentProcessor(
         }
 
         // Enrich legacy Word answers without replacing question IDs or deleting study history.
+        var isDocx = string.Equals(Path.GetExtension(document.StoredFileName), ".docx", StringComparison.OrdinalIgnoreCase);
         var repairAnswers = document.Status == DocumentStatus.Completed;
+        if (repairAnswers && (!isDocx || document.ProcessingReport?.LegacyDocxAnswersChecked == true))
+        {
+            return;
+        }
+
         if (!repairAnswers)
         {
             document.Status = DocumentStatus.Processing;
@@ -104,7 +117,6 @@ public sealed class DocumentProcessor(
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromSeconds(options.Value.ParseTimeoutSeconds));
 
-        var isDocx = string.Equals(Path.GetExtension(document.StoredFileName), ".docx", StringComparison.OrdinalIgnoreCase);
         ParseResult result;
         using var buffer = new MemoryStream();
         var length = 0;
@@ -138,7 +150,11 @@ public sealed class DocumentProcessor(
 
         if (!result.IsSuccess)
         {
-            if (repairAnswers) return;
+            if (repairAnswers)
+            {
+                await CompleteRepairAsync(document, ct);
+                return;
+            }
             document.PageCount = result.PageCount > 0 ? result.PageCount : document.PageCount;
             await FailAsync(document, isDocx
                 ? result.Failure == ParseFailure.NoQuestions
@@ -151,7 +167,7 @@ public sealed class DocumentProcessor(
         if (repairAnswers)
         {
             var legacy = await db.Questions.Where(q => q.DocumentId == documentId
-                && (q.Explanation == null || q.Explanation == "")).ToListAsync(ct);
+                && !q.Options.Any() && (q.Explanation == null || q.Explanation == "")).ToListAsync(ct);
             foreach (var question in legacy)
             {
                 var parsed = result.Questions.FirstOrDefault(q => q.Number == question.SourceNumber
@@ -161,7 +177,7 @@ public sealed class DocumentProcessor(
                 question.Explanation = parsed.Explanation;
                 question.ContentHash = parsed.ContentHash;
             }
-            await db.SaveChangesAsync(ct);
+            await CompleteRepairAsync(document, ct);
             return;
         }
 
@@ -193,6 +209,7 @@ public sealed class DocumentProcessor(
         document.ProcessedAt = clock.GetUtcNow();
         document.ProcessingReport = new ProcessingReport
         {
+            LegacyDocxAnswersChecked = isDocx ? true : null,
             QuestionsFound = result.Questions.Count,
             AutoDetected = result.Questions.Count(q => q.CorrectIndex is not null),
             Unverified = result.Questions.Count(q => q.CorrectIndex is null),
@@ -204,6 +221,25 @@ public sealed class DocumentProcessor(
 
         await db.SaveChangesAsync(ct);
         logger.LogInformation("Document {DocumentId} processed: {Count} questions", documentId, result.Questions.Count);
+    }
+
+    private async Task CompleteRepairAsync(UploadedDocument document, CancellationToken ct)
+    {
+        var report = document.ProcessingReport ?? new ProcessingReport();
+        // Write the whole report because older JSON rows do not have the property to patch.
+        document.ProcessingReport = new ProcessingReport
+        {
+            LegacyDocxAnswersChecked = true,
+            QuestionsFound = report.QuestionsFound,
+            AutoDetected = report.AutoDetected,
+            Unverified = report.Unverified,
+            DuplicatesSkipped = report.DuplicatesSkipped,
+            VisualsFound = report.VisualsFound,
+            VisualsNeedingReview = report.VisualsNeedingReview,
+            Warnings = [.. report.Warnings],
+        };
+        await db.SaveChangesAsync(ct);
+        logger.LogInformation("Legacy DOCX answer check completed for document {DocumentId}", document.Id);
     }
 
     private static Question ToEntity(Guid documentId, ParsedQuestion parsed) => new()

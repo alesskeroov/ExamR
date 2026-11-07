@@ -30,9 +30,11 @@ public static class DependencyInjection
 
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<AuditInterceptor>();
+        services.AddSingleton<DatabaseStartup>();
+        services.AddSingleton<DatabaseStartupInterceptor>();
         services.AddDbContext<AppDbContext>((sp, options) => options
             .UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure())
-            .AddInterceptors(sp.GetRequiredService<AuditInterceptor>()));
+            .AddInterceptors(sp.GetRequiredService<AuditInterceptor>(), sp.GetRequiredService<DatabaseStartupInterceptor>()));
 
         return services;
     }

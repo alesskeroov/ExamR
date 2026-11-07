@@ -237,7 +237,7 @@ public static class ExamEndpoints
         Guid id, Guid examQuestionId, AnswerRequest request, ClaimsPrincipal user, AppDbContext db,
         TimeProvider clock, IOptions<ExamOptions> options, CancellationToken ct)
     {
-        var exam = await LoadAsync(db, id, user.GetUserId(), ct);
+        var exam = await LoadAsync(db, id, user.GetUserId(), ct, onlyQuestionId: examQuestionId);
         var question = exam?.Questions.FirstOrDefault(q => q.Id == examQuestionId);
         if (exam is null || question is null)
         {
@@ -264,6 +264,11 @@ public static class ExamEndpoints
         if (exam.RevealMode == RevealMode.Immediate && request.SelectedOptionId is null)
         {
             return Problem(StatusCodes.Status400BadRequest, "Variant seçilməyib.");
+        }
+
+        if (question.SelectedOptionId == request.SelectedOptionId)
+        {
+            return TypedResults.Ok(ToAnswerResult(exam, question));
         }
 
         question.SelectedOptionId = request.SelectedOptionId;
@@ -298,7 +303,7 @@ public static class ExamEndpoints
         Guid id, Guid examQuestionId, ClaimsPrincipal user, AppDbContext db,
         TimeProvider clock, IOptions<ExamOptions> options, CancellationToken ct)
     {
-        var exam = await LoadAsync(db, id, user.GetUserId(), ct);
+        var exam = await LoadAsync(db, id, user.GetUserId(), ct, onlyQuestionId: examQuestionId);
         var question = exam?.Questions.FirstOrDefault(q => q.Id == examQuestionId);
         if (exam is null || question is null)
         {
@@ -433,19 +438,21 @@ public static class ExamEndpoints
         };
     }
 
-    private static async Task<Exam?> LoadAsync(AppDbContext db, Guid id, Guid userId, CancellationToken ct)
+    private static Task<Exam?> LoadAsync(AppDbContext db, Guid id, Guid userId, CancellationToken ct, Guid? onlyQuestionId = null)
     {
-        var exam = await db.Exams.Include(e => e.Questions).FirstOrDefaultAsync(e => e.Id == id && e.UserId == userId, ct);
-        if (exam is null) return null;
         var readable = DocumentAccess.Readable(db, userId);
         // Preserve historical personal exams while blocking snapshots whose shared access was revoked.
-        if (await db.Documents.AsNoTracking().AnyAsync(d => exam.SourceDocumentIds.Contains(d.Id)
-            && d.UploadedByUserId != userId && !readable.Any(allowed => allowed.Id == d.Id), ct)) return null;
-        return exam;
+        var exams = db.Exams.Where(e => e.Id == id && e.UserId == userId
+            && !db.Documents.Any(d => e.SourceDocumentIds.Contains(d.Id)
+                && d.UploadedByUserId != userId && !readable.Any(allowed => allowed.Id == d.Id)));
+        // The access subquery is no-tracking, but answer and grading handlers update the loaded exam.
+        return (onlyQuestionId is { } questionId
+            ? exams.Include(e => e.Questions.Where(q => q.Id == questionId))
+            : exams.Include(e => e.Questions)).AsTracking().FirstOrDefaultAsync(ct);
     }
 
     private static Task<Exam?> LoadActiveAsync(AppDbContext db, Guid userId, CancellationToken ct) =>
-        db.Exams.Include(e => e.Questions).FirstOrDefaultAsync(e => e.UserId == userId && e.Status == ExamStatus.InProgress, ct);
+        db.Exams.FirstOrDefaultAsync(e => e.UserId == userId && e.Status == ExamStatus.InProgress, ct);
 
     /// <summary>Completes an exam whose time is up (even if the browser was closed). Returns true if it is now completed.</summary>
     private static async Task<bool> FinalizeIfExpiredAsync(AppDbContext db, Exam exam, DateTimeOffset now, ExamOptions options, CancellationToken ct)
@@ -483,6 +490,14 @@ public static class ExamEndpoints
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
             var locked = await LockInProgressAsync(db, exam.Id, ct) == 1;
             if (!locked) await db.Entry(exam).ReloadAsync(ct);
+
+            if (exam.Questions.Count < exam.QuestionCount)
+            {
+                // A filtered Include marks the navigation as loaded, so query it explicitly.
+                await db.Entry(exam).Collection(e => e.Questions).Query().LoadAsync(ct);
+                if (exam.Questions.Count < exam.QuestionCount)
+                    throw new InvalidOperationException("Cannot grade an exam with missing questions.");
+            }
 
             var stored = await db.ExamQuestions.AsNoTracking().Where(q => q.ExamId == exam.Id)
                 .Select(q => new { q.Id, q.SelectedOptionId, q.AnsweredAt, q.Outcome })

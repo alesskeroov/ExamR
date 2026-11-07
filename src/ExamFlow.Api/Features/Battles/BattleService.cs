@@ -714,13 +714,11 @@ public sealed partial class BattleService(
     }
 }
 
-public sealed class BattleCleanupService(BattleService battles, ILogger<BattleCleanupService> logger) : BackgroundService
+public sealed class BattleCleanupService(BattleService battles, DatabaseStartup startup, ILogger<BattleCleanupService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // A failed restore (database unreachable at startup) must not stop the host; rooms are then simply not resumed.
-        try { await battles.RestoreActiveRoomsAsync(stoppingToken); }
-        catch (Exception ex) when (ex is not OperationCanceledException) { logger.LogError(ex, "Restoring active battle rooms failed"); }
+        _ = RestoreAsync(stoppingToken);
         using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
@@ -733,5 +731,20 @@ public sealed class BattleCleanupService(BattleService battles, ILogger<BattleCl
                 logger.LogError(ex, "Battle room cleanup failed");
             }
         }
+    }
+
+    /// <summary>
+    /// Resumes running games once the app uses the database anyway (rooms are also loaded on demand by code), so a
+    /// cold start does not resume a paused database. A failed restore must not stop the host.
+    /// </summary>
+    private async Task RestoreAsync(CancellationToken ct)
+    {
+        try
+        {
+            await startup.Ready.WaitAsync(ct);
+            await battles.RestoreActiveRoomsAsync(ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+        catch (Exception ex) { logger.LogError(ex, "Restoring active battle rooms failed"); }
     }
 }

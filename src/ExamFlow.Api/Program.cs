@@ -134,6 +134,13 @@ var maxUpload = builder.Configuration.GetValue<long?>($"{DocumentOptions.Section
 builder.WebHost.ConfigureKestrel(kestrel => kestrel.Limits.MaxRequestBodySize = maxUpload + 1024 * 1024);
 builder.Services.Configure<FormOptions>(form => form.MultipartBodyLengthLimit = maxUpload + 1024 * 1024);
 
+// The built-in Data Protection warm-up reads the key ring at process start; with keys in SQL that would resume a
+// paused serverless database on every cold start. Without it the keys load on first use (OAuth, email links).
+// Removed last, because AddAuthentication/AddIdentity re-register it.
+foreach (var warmUp in builder.Services.Where(s => s.ServiceType == typeof(IHostedService)
+    && s.ImplementationType?.Name == "DataProtectionHostedService").ToList())
+    builder.Services.Remove(warmUp);
+
 var app = builder.Build();
 
 app.UseForwardedHeaders();
@@ -241,6 +248,6 @@ api.MapGoogleAuthEndpoints();
 app.MapHub<BattleHub>(BattleHub.Path);
 app.MapHub<SocialHub>("/hubs/social", options => options.CloseOnAuthenticationExpiration = true);
 
-await app.SeedIdentityAsync();
+// Identity seed and other startup SQL run lazily on the first database use (DatabaseStartup).
 
 app.Run();

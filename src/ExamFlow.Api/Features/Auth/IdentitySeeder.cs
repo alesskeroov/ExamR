@@ -6,27 +6,31 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ExamFlow.Api.Features.Auth;
 
-/// <summary>Idempotent startup seed: roles, plus the first Admin when Seed:Admin:* is configured.</summary>
+/// <summary>
+/// Idempotent seed: roles, plus the first Admin when Seed:Admin:* is configured. Run by <see cref="DatabaseStartup"/>
+/// before the app's first database use, not at process start.
+/// </summary>
 public static class IdentitySeeder
 {
-    public static async Task SeedIdentityAsync(this WebApplication app)
+    /// <summary>False when the database could not be reached (the seed is then tried again later).</summary>
+    public static async Task<bool> SeedIdentityAsync(IServiceProvider services, IConfiguration configuration, ILogger logger)
     {
-        using var scope = app.Services.CreateScope();
-        var logger = scope.ServiceProvider.GetRequiredService<ILogger<AppDbContext>>();
+        using var scope = services.CreateScope();
         try
         {
-            await SeedAsync(app, scope, logger);
+            await SeedAsync(configuration, scope, logger);
+            return true;
         }
         catch (Exception ex) when (ex is DbException or Microsoft.EntityFrameworkCore.Storage.RetryLimitExceededException)
         {
             // An unreachable database (firewall, paused, wrong connection string) must not kill the process: the
             // liveness probe keeps answering, /api/health reports 503 and requests that need SQL still fail loudly.
-            // Roles and the configured admin are seeded on the next start once the database is reachable.
-            logger.LogCritical(ex, "Database is not reachable at startup; identity seed skipped");
+            logger.LogCritical(ex, "Database is not reachable; identity seed skipped");
+            return false;
         }
     }
 
-    private static async Task SeedAsync(WebApplication app, IServiceScope scope, ILogger logger)
+    private static async Task SeedAsync(IConfiguration configuration, IServiceScope scope, ILogger logger)
     {
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
@@ -46,12 +50,12 @@ public static class IdentitySeeder
         }
 
         var configuredUsers = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
-        foreach (var configuredEmail in ConfiguredAdmins.Emails(app.Configuration))
+        foreach (var configuredEmail in ConfiguredAdmins.Emails(configuration))
             if (await configuredUsers.FindByEmailAsync(configuredEmail) is { } configuredUser)
-                await ConfiguredAdmins.EnsureAsync(configuredUsers, app.Configuration, configuredUser);
+                await ConfiguredAdmins.EnsureAsync(configuredUsers, configuration, configuredUser);
 
-        var email = app.Configuration["Seed:Admin:Email"];
-        var password = app.Configuration["Seed:Admin:Password"];
+        var email = configuration["Seed:Admin:Email"];
+        var password = configuration["Seed:Admin:Password"];
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
         {
             return;

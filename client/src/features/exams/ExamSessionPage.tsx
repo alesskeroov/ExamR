@@ -202,7 +202,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
           </div>
           <ExamTimer expiresAt={session.expiresAt} serverNow={session.serverNow} onExpire={submit} />
           <FullscreenToggle />
-          <div className="hidden sm:block"><NotificationBell safe /></div>
+          <div className="hidden sm:block"><NotificationBell safe poll={false} /></div>
           <Button variant="secondary" onClick={() => setConfirmOpen(true)} loading={finish.isPending} className="h-10 shrink-0 px-3 text-sm sm:px-4">
             <Flag className="hidden size-4 sm:block" aria-hidden />
             Bitir

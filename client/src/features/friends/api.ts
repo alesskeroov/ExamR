@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useContext } from 'react'
 import { api } from '../../lib/api-client'
 import { queryKeys } from '../../lib/query-keys'
 import { useCurrentUser } from '../auth/api'
+import { SocialConnected } from './social-connection-state'
 
 export interface Friend { id: string; displayName: string; isOnline: boolean; avatarUrl: string | null }
 export interface SearchUser { id: string; displayName: string; relationship: 'Friend' | 'Incoming' | 'Outgoing' | 'None'; avatarUrl: string | null }
@@ -19,8 +21,9 @@ export type FriendAction = 'request' | 'accept' | 'reject' | 'remove' | 'block' 
 
 export function useFriends() {
   const { data: user } = useCurrentUser()
+  const connected = useContext(SocialConnected)
   return useQuery({ queryKey: queryKeys.social.friends(user?.id ?? ''), enabled: !!user,
-    queryFn: () => api.get<Friends>('/friends'), refetchInterval: 30_000 })
+    queryFn: () => api.get<Friends>('/friends'), refetchInterval: connected ? 120_000 : 30_000 })
 }
 
 export function useUserSearch(term: string) {
@@ -29,16 +32,19 @@ export function useUserSearch(term: string) {
     queryFn: () => api.get<SearchUser[]>(`/friends/search?q=${encodeURIComponent(term)}`) })
 }
 
-export function useNotifications() {
+export function useNotifications(poll = true) {
   const { data: user } = useCurrentUser()
+  const connected = useContext(SocialConnected)
   return useQuery({ queryKey: queryKeys.social.notifications(user?.id ?? ''), enabled: !!user,
-    queryFn: () => api.get<Notifications>('/notifications'), refetchInterval: 15_000 })
+    queryFn: () => api.get<Notifications>('/notifications'), refetchInterval: poll && (connected ? 60_000 : 15_000) })
 }
 
 export function useLobbies() {
   const { data: user } = useCurrentUser()
+  const connected = useContext(SocialConnected)
+  // Lobby membership can change without a SocialChanged event.
   return useQuery({ queryKey: queryKeys.social.lobbies(user?.id ?? ''), enabled: !!user,
-    queryFn: () => api.get<Lobby[]>('/friends/lobbies'), refetchInterval: 10_000 })
+    queryFn: () => api.get<Lobby[]>('/friends/lobbies'), refetchInterval: connected ? 30_000 : 10_000 })
 }
 
 export function useFriendAction() {
@@ -55,8 +61,9 @@ export function useInviteFriend(onlineOnly = false) {
 
 export function useRoomFriends(code: string, term: string) {
   const { data: user } = useCurrentUser()
+  const connected = useContext(SocialConnected)
   return useQuery({ queryKey: queryKeys.social.roomFriends(code, user?.id ?? '', term), enabled: !!user,
-    queryFn: () => api.get<RoomFriend[]>(`/friends/room/${code}?q=${encodeURIComponent(term)}`), refetchInterval: 10_000 })
+    queryFn: () => api.get<RoomFriend[]>(`/friends/room/${code}?q=${encodeURIComponent(term)}`), refetchInterval: connected ? 30_000 : 10_000 })
 }
 
 export function useNotificationAction() {
