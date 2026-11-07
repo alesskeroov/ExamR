@@ -234,7 +234,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
               <AnswerSheet reveal={question.reveal} options={question.options} selectedOptionId={question.selectedOptionId} onClose={() => setNoteClosed(true)} />
             )}
             <div className="relative mx-auto grid max-w-2xl grid-cols-[1fr_auto_1fr] items-center gap-2 min-[900px]:flex min-[900px]:max-w-none">
-              <SaveStatus saving={saving || revealAnswer.isPending}
+              <SaveStatus
               error={answer.isError ? answer.error.message : revealAnswer.isError ? revealAnswer.error.message : null} />
               <Button variant="secondary" disabled={index === 0} onClick={() => goTo(index - 1)} aria-label="Əvvəlki sual" className="exam-nav-button min-w-0 gap-1 px-2 whitespace-nowrap sm:gap-2 sm:px-3 min-[900px]:order-1">
                 <ChevronLeft className="size-4 shrink-0" aria-hidden />
@@ -392,10 +392,7 @@ function QuestionPanel({ question, visualSrc, number, immediate, revealed, canRe
       {reveal && <RevealNote reveal={reveal} className="hidden min-[900px]:flex" />}
 
       {!reveal && canReveal && (
-        <div className="mt-4 hidden items-center justify-between gap-2 min-[900px]:flex">
-          <p className="text-sm text-slate-500">
-            Cavab göstərildikdən sonra variantı dəyişmək olmur.
-          </p>
+        <div className="mt-4 hidden items-center justify-end min-[900px]:flex">
           <Button variant="secondary" onClick={onReveal} loading={revealing} className="h-11 shrink-0">
             <Eye className="size-4" aria-hidden />
             Cavabı göstər
@@ -455,23 +452,11 @@ function AnswerSheet({ reveal, options, selectedOptionId, onClose }: {
   )
 }
 
-/** Autosave state of the answers: saving → "saved" for two seconds → nothing; errors stay until the next save. */
-function SaveStatus({ saving, error }: { saving: boolean; error: string | null }) {
-  const [wasSaving, setWasSaving] = useState(saving)
-  const [justSaved, setJustSaved] = useState(false)
-  if (wasSaving !== saving) {
-    setWasSaving(saving)
-    setJustSaved(!saving)
-  }
-  useEffect(() => {
-    if (!justSaved) return
-    const timer = window.setTimeout(() => setJustSaved(false), 2000)
-    return () => window.clearTimeout(timer)
-  }, [justSaved])
-
+/** Answers save silently; only a failed save is reported. The element also spaces the desktop action bar. */
+function SaveStatus({ error }: { error: string | null }) {
   return (
-    <p aria-live="polite" className={cn('exam-save-status pointer-events-none absolute inset-x-0 bottom-full mb-2 text-center text-xs min-[900px]:static min-[900px]:order-2 min-[900px]:mb-0 min-[900px]:flex-1', error ? 'text-rose-600' : justSaved && !saving ? 'text-emerald-700' : 'text-slate-500')}>
-      {saving ? 'Saxlanılır…' : error ? `Saxlanmadı: ${error}` : justSaved ? 'Yadda saxlanıldı ✓' : ''}
+    <p aria-live="polite" className="exam-save-status pointer-events-none absolute inset-x-0 bottom-full mb-2 text-center text-xs text-rose-600 min-[900px]:static min-[900px]:order-2 min-[900px]:mb-0 min-[900px]:flex-1">
+      {error ? `Saxlanmadı: ${error}` : ''}
     </p>
   )
 }
