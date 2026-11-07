@@ -43,7 +43,7 @@ public sealed class LearningAiBudget(AppDbContext db, IOptions<LearningAiOptions
             foreach (var stale in db.ChangeTracker.Entries<LearningAiUsage>().Where(e => e.State == EntityState.Added).ToList())
                 stale.State = EntityState.Detached;
             await using var tx = await db.Database.BeginTransactionAsync(ct);
-            await db.Database.ExecuteSqlRawAsync("EXEC sp_getapplock @Resource = 'learning-ai-budget', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 10000", ct);
+            await db.Database.ExecuteSqlRawAsync("SET LOCAL lock_timeout = '10s'; SELECT pg_advisory_xact_lock(hashtextextended('learning-ai-budget', 0));", ct);
             var now = clock.GetUtcNow();
             var fresh = now - StaleReservation;
             var usage = db.Set<LearningAiUsage>();

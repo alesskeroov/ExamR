@@ -18,7 +18,13 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.21" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- SQL Server migration history (before the move to PostgreSQL); kept for reference, not compiled. -->
+    <Compile Remove="Infrastructure\Data\Migrations.SqlServer\**" />
+    <None Include="Infrastructure\Data\Migrations.SqlServer\**" />
   </ItemGroup>
 
   <ItemGroup>

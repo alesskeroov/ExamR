@@ -6,14 +6,15 @@ namespace ExamFlow.Api.Infrastructure.Data.Configurations;
 
 public class QuestionConfiguration : IEntityTypeConfiguration<Question>
 {
-    public const string SearchCollation = "Azeri_Latin_100_CI_AS";
+    // ICU Azerbaijani collation: ILIKE search folds I/ı and İ/i like the former SQL Server Azeri_Latin_100_CI_AS.
+    public const string SearchCollation = "az-x-icu";
 
     public void Configure(EntityTypeBuilder<Question> builder)
     {
         builder.ToTable("Questions");
 
         builder.Property(q => q.Text).HasMaxLength(4000).UseCollation(SearchCollation).IsRequired();
-        builder.Property(q => q.ContentHash).HasColumnType("binary(32)").IsRequired();
+        builder.Property(q => q.ContentHash).HasColumnType("bytea").IsRequired();
         builder.Property(q => q.VerificationStatus).HasConversion<string>().HasMaxLength(20).IsUnicode(false);
         builder.Property(q => q.ParseWarning).HasMaxLength(500);
         builder.Property(q => q.CreatedAt).HasPrecision(3);
@@ -40,7 +41,7 @@ public class AnswerOptionConfiguration : IEntityTypeConfiguration<AnswerOption>
     public void Configure(EntityTypeBuilder<AnswerOption> builder)
     {
         builder.ToTable("AnswerOptions", t =>
-            t.HasCheckConstraint("CK_AnswerOptions_Position", "[Position] BETWEEN 0 AND 5"));
+            t.HasCheckConstraint("CK_AnswerOptions_Position", "\"Position\" BETWEEN 0 AND 5"));
 
         builder.Property(o => o.Label).HasColumnType("char(1)").IsRequired();
         builder.Property(o => o.Text).HasMaxLength(1000).UseCollation(QuestionConfiguration.SearchCollation).IsRequired();
@@ -48,7 +49,7 @@ public class AnswerOptionConfiguration : IEntityTypeConfiguration<AnswerOption>
         builder.HasIndex(o => new { o.QuestionId, o.Position }).IsUnique().HasDatabaseName("UX_AnswerOptions_QuestionId_Position");
         builder.HasIndex(o => o.QuestionId)
             .IsUnique()
-            .HasFilter("[IsCorrect] = 1")
+            .HasFilter("\"IsCorrect\"")
             .HasDatabaseName("UX_AnswerOptions_SingleCorrect");
     }
 }

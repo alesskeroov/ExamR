@@ -9,7 +9,7 @@ public class ExamConfiguration : IEntityTypeConfiguration<Exam>
     public void Configure(EntityTypeBuilder<Exam> builder)
     {
         builder.ToTable("Exams", t =>
-            t.HasCheckConstraint("CK_Exams_QuestionCount", $"[QuestionCount] BETWEEN 1 AND {ExamOptions.HardMaxQuestions}"));
+            t.HasCheckConstraint("CK_Exams_QuestionCount", $"\"QuestionCount\" BETWEEN 1 AND {ExamOptions.HardMaxQuestions}"));
 
         builder.Property(e => e.RevealMode).HasConversion<string>().HasMaxLength(20).IsUnicode(false);
         builder.Property(e => e.Status).HasConversion<string>().HasMaxLength(20).IsUnicode(false);
@@ -34,7 +34,7 @@ public class ExamConfiguration : IEntityTypeConfiguration<Exam>
         // One active exam per user (EX-9); also guards against two parallel "start" requests.
         builder.HasIndex(e => e.UserId)
             .IsUnique()
-            .HasFilter("[Status] = 'InProgress'")
+            .HasFilter("\"Status\" = 'InProgress'")
             .HasDatabaseName("UX_Exams_UserActive");
     }
 }

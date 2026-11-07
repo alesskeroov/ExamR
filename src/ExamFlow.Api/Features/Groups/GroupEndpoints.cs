@@ -8,8 +8,8 @@ using ExamFlow.Api.Features.Documents;
 using ExamFlow.Api.Features.Friends;
 using ExamFlow.Api.Infrastructure.Data;
 using ExamFlow.Api.Infrastructure.Security;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace ExamFlow.Api.Features.Groups;
 
@@ -82,7 +82,7 @@ public static class GroupEndpoints
                 return result;
             });
         }
-        catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
         {
             return TypedResults.Problem("Bu ad və ya üzvlük artıq mövcuddur. Siyahını yeniləyin.", statusCode: 409);
         }

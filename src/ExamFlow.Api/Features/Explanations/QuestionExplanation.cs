@@ -84,7 +84,7 @@ public sealed class ExplanationConfiguration : IEntityTypeConfiguration<Question
     public void Configure(EntityTypeBuilder<QuestionExplanation> builder)
     {
         builder.ToTable("QuestionExplanations");
-        builder.Property(e => e.Fingerprint).HasColumnType("binary(32)").IsRequired();
+        builder.Property(e => e.Fingerprint).HasColumnType("bytea").IsRequired();
         builder.HasIndex(e => e.Fingerprint).IsUnique();
         builder.Property(e => e.Explanation).HasMaxLength(MaxExplanationLength);
         builder.Property(e => e.QuestionType).HasConversion<string>().HasMaxLength(16).IsUnicode(false);
@@ -108,7 +108,7 @@ public sealed class ExplanationConfiguration : IEntityTypeConfiguration<Question
         builder.Property(j => j.Provider).HasMaxLength(16).IsUnicode(false);
         builder.HasIndex(j => j.CreatedAt);
         // At most one unfinished run per PDF, also across API instances.
-        builder.HasIndex(j => j.DocumentId).IsUnique().HasFilter("[Status] IN ('Pending', 'Running')").HasDatabaseName("IX_ExplanationJobs_DocumentId_Active");
+        builder.HasIndex(j => j.DocumentId).IsUnique().HasFilter("\"Status\" IN ('Pending', 'Running')").HasDatabaseName("IX_ExplanationJobs_DocumentId_Active");
         builder.HasOne<UploadedDocument>().WithMany().HasForeignKey(j => j.DocumentId).OnDelete(DeleteBehavior.Cascade);
     }
 }

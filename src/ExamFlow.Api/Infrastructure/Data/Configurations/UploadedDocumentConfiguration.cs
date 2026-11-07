@@ -12,7 +12,7 @@ public class UploadedDocumentConfiguration : IEntityTypeConfiguration<UploadedDo
 
         builder.Property(d => d.OriginalFileName).HasMaxLength(255).IsRequired();
         builder.Property(d => d.StoredFileName).HasMaxLength(64).IsUnicode(false).IsRequired();
-        builder.Property(d => d.Sha256).HasColumnType("binary(32)").IsRequired();
+        builder.Property(d => d.Sha256).HasColumnType("bytea").IsRequired();
         builder.Property(d => d.Status).HasConversion<string>().HasMaxLength(20).IsUnicode(false);
         builder.Property(d => d.ErrorMessage).HasMaxLength(1000);
         builder.Property(d => d.CreatedAt).HasPrecision(3);

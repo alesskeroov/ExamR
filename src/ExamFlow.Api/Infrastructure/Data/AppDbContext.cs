@@ -10,6 +10,9 @@ using ExamFlow.Api.Features.Questions;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Microsoft.EntityFrameworkCore;
 
 namespace ExamFlow.Api.Infrastructure.Data;
@@ -53,5 +56,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         builder.Entity<BattleRating>().HasOne(r => r.User).WithOne().HasForeignKey<BattleRating>(r => r.UserId).OnDelete(DeleteBehavior.Cascade);
         builder.Entity<BattleRating>().HasIndex(r => new { r.CurrentRating, r.Wins }).IsDescending(true, true);
         builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+
+        // PostgreSQL has no rowversion type: every byte[] row version ([Timestamp] / IsRowVersion) maps to the xmin
+        // system column. The byte[] model type stays (4 bytes) so API tokens and existing version checks keep working.
+        foreach (var property in builder.Model.GetEntityTypes().SelectMany(e => e.GetProperties())
+                     .Where(p => p.ClrType == typeof(byte[]) && p.IsConcurrencyToken && p.ValueGenerated == ValueGenerated.OnAddOrUpdate))
+        {
+            property.SetColumnName("xmin");
+            property.SetColumnType("xid");
+            property.SetValueConverter(new ValueConverter<byte[], uint>(v => BitConverter.ToUInt32(v, 0), v => BitConverter.GetBytes(v)));
+            property.SetValueComparer(new ValueComparer<byte[]>((a, b) => a!.SequenceEqual(b!), v => v.Aggregate(0, (h, b) => HashCode.Combine(h, b)), v => v.ToArray()));
+        }
     }
 }

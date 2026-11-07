@@ -73,8 +73,9 @@ public static class QuestionEndpoints
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var term = search.Trim();
-            query = query.Where(q => q.Text.Contains(term));
+            // Case-insensitive like the former SQL Server collation; % _ \ in the input are matched literally.
+            var pattern = "%" + search.Trim().Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_") + "%";
+            query = query.Where(q => EF.Functions.ILike(q.Text, pattern));
         }
 
         if (type == "choice") query = query.Where(q => q.Options.Any());

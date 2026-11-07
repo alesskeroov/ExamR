@@ -19,9 +19,9 @@ public static class DependencyInjection
         // Startup line showing only where the API connects (server and database names, never credentials).
         try
         {
-            var target = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString);
-            Console.WriteLine($"Database target: server '{target.DataSource}', database '{target.InitialCatalog}', " +
-                $"encrypt {target.Encrypt}, connect timeout {target.ConnectTimeout}s");
+            var target = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
+            Console.WriteLine($"Database target: host '{target.Host}', database '{target.Database}', " +
+                $"ssl {target.SslMode}, connect timeout {target.Timeout}s");
         }
         catch (ArgumentException)
         {
@@ -33,7 +33,7 @@ public static class DependencyInjection
         services.AddSingleton<DatabaseStartup>();
         services.AddSingleton<DatabaseStartupInterceptor>();
         services.AddDbContext<AppDbContext>((sp, options) => options
-            .UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure())
+            .UseNpgsql(connectionString, sql => sql.EnableRetryOnFailure())
             .AddInterceptors(sp.GetRequiredService<AuditInterceptor>(), sp.GetRequiredService<DatabaseStartupInterceptor>()));
 
         return services;

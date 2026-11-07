@@ -29,7 +29,7 @@ public sealed class StudyGroupConfiguration : IEntityTypeConfiguration<StudyGrou
         builder.ToTable("StudyGroups");
         builder.HasKey(g => g.Id);
         builder.Property(g => g.Name).HasMaxLength(120);
-        builder.Property(g => g.NormalizedName).HasMaxLength(120).UseCollation("Latin1_General_100_BIN2");
+        builder.Property(g => g.NormalizedName).HasMaxLength(120).UseCollation("C");
         builder.Property(g => g.Description).HasMaxLength(500);
         builder.HasIndex(g => g.NormalizedName).IsUnique();
     }

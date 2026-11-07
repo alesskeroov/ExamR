@@ -30,7 +30,7 @@ public sealed partial class BattleService
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await using var transaction = results is null ? null : await db.Database.BeginTransactionAsync(ct);
         if (results is not null)
-            await db.Database.ExecuteSqlRawAsync("DECLARE @r int; EXEC @r = sp_getapplock @Resource = 'ExamR.BattleRankSettlement', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 15000; IF @r < 0 THROW 51000, 'Rank settlement lock failed.', 1;", ct);
+            await db.Database.ExecuteSqlRawAsync("SET LOCAL lock_timeout = '15s'; SELECT pg_advisory_xact_lock(hashtextextended('ExamR.BattleRankSettlement', 0));", ct);
         var stored = await db.StoredBattleRooms.Include(r => r.Members).SingleOrDefaultAsync(r => r.Id == room.BattleId, ct);
         if (stored is null)
         {

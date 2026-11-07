@@ -140,8 +140,10 @@ public sealed class ExplanationWorker(IServiceScopeFactory scopes, ExplanationQu
     private static async Task<bool> TryLockAsync(AppDbContext db, CancellationToken ct)
     {
         await using var command = db.Database.GetDbConnection().CreateCommand();
-        command.CommandText = "DECLARE @r int; EXEC @r = sp_getapplock @Resource = 'explanation-worker', @LockMode = 'Exclusive', @LockOwner = 'Session', @LockTimeout = 0; SELECT @r;";
-        return Convert.ToInt32(await command.ExecuteScalarAsync(ct)) >= 0;
+        // Session-level lock: released when the pooled connection is reset (DISCARD ALL). Needs a direct (non-PgBouncer)
+        // connection, which is why production uses the non-pooled Neon endpoint.
+        command.CommandText = "SELECT pg_try_advisory_lock(hashtextextended('explanation-worker', 0));";
+        return await command.ExecuteScalarAsync(ct) is true;
     }
 
     private async Task ProcessAsync(IServiceProvider services, Guid jobId, CancellationToken ct)
