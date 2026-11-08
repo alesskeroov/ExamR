@@ -42,7 +42,7 @@ Sınaqdakı qapalı sual sayı rəsmi saydan fərqlənərsə, nəticə rəsmi sa
    → bitirmə → `GET /api/dim/attempts/{examId}/report` (fənlər, DİM balı, zəif mövzular; yalnız bitmiş imtahan).
 
 Admin endpoint-ləri: `GET documents/{id}/questions`, `DELETE bank/{questionId}`, `GET bank/stats`,
-`GET|POST tests`, `PUT tests/{id}` (parametrlər/dərc), `DELETE tests/{id}` (cəhd varsa 409 → dərcdən çıxarın).
+`GET|POST tests`, `PUT tests/{id}` (parametrlər/dərc), `DELETE tests/{id}` (sınağı və bütün cəhdlərini — istifadəçi nəticələri daxil — bir tranzaksiyada silir).
 
 ## UI
 
@@ -51,5 +51,5 @@ Admin endpoint-ləri: `GET documents/{id}/questions`, `DELETE bank/{questionId}`
 - Admin: Admin Panel → "DİM sınaqları" (`?section=dim`):
   - *Sual bankı* — sənəd seç, cavab açarı, fənn/mövzu ilə toplu təsdiq (500-lük hissələrlə), bankdan çıxar;
   - *Sınaqlar* — yeni sınaq (fənlər kataloqdan, default sual sayı = rəsmi qapalı say, "hər cəhddə təsadüfi" və ya
-    "bir dəfə seç"), dərc/dərcdən çıxar, redaktə (ad, müddət, limit, vaxt), sil (cəhd yoxdursa).
+    "bir dəfə seç"), dərc/dərcdən çıxar, redaktə (ad, müddət, limit, vaxt), sil (cəhdlər də silinir; təsdiq pəncərəsi cəhd sayını göstərir).
 - Hələ yoxdur: admin UI-da sualları tək-tək seçərək sınaq (API dəstəkləyir), açıq suallar, rus bölməsi.

@@ -1,5 +1,6 @@
 import { Pencil, Plus, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
+import { cn } from '../../lib/utils'
 import { Alert } from '../../components/common/Alert'
 import { Button } from '../../components/common/Button'
 import { EmptyState } from '../../components/common/EmptyState'
@@ -54,29 +55,42 @@ export function DimTestsAdmin() {
   )
 }
 
-function SettingsFields({ value, onChange }: { value: SettingsForm; onChange: (next: SettingsForm) => void }) {
+/** Name, duration and publish are always shown; rarely used settings sit under "Əlavə parametrlər". */
+function SettingsFields({ value, onChange, advanced, openAdvanced = false }: {
+  value: SettingsForm; onChange: (next: SettingsForm) => void; advanced?: ReactNode; openAdvanced?: boolean
+}) {
   const set = (patch: Partial<SettingsForm>) => onChange({ ...value, ...patch })
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700 sm:col-span-2 lg:col-span-3">Ad
-        <input className={inputClass} value={value.title} maxLength={200} onChange={e => set({ title: e.target.value })} placeholder="məs. Buraxılış sınağı №1" />
-      </label>
-      <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Müddət (dəq)
-        <input className={inputClass} type="number" min={1} max={600} value={value.duration} onChange={e => set({ duration: e.target.value })} />
-      </label>
-      <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Cəhd limiti (boş = limitsiz)
-        <input className={inputClass} type="number" min={1} max={100} value={value.limit} onChange={e => set({ limit: e.target.value })} />
-      </label>
-      <label className="flex items-center gap-2 self-end pb-2 text-sm font-medium text-slate-700">
+    <div className="flex flex-col gap-3">
+      <div className="grid gap-3 sm:grid-cols-[1fr_8rem]">
+        <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Ad
+          <input className={inputClass} value={value.title} maxLength={200} onChange={e => set({ title: e.target.value })} placeholder="məs. Buraxılış sınağı №1" />
+        </label>
+        <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Müddət (dəq)
+          <input className={inputClass} type="number" min={1} max={600} value={value.duration} onChange={e => set({ duration: e.target.value })} />
+        </label>
+      </div>
+      <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
         <input type="checkbox" className="size-4 accent-indigo-600" checked={value.publish} onChange={e => set({ publish: e.target.checked })} />
-        Dərc edilsin
+        Dərhal dərc et (istifadəçilər görsün)
       </label>
-      <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Başlama vaxtı (boş = istənilən vaxt)
-        <input className={inputClass} type="datetime-local" value={value.from} onChange={e => set({ from: e.target.value })} />
-      </label>
-      <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Bitmə vaxtı
-        <input className={inputClass} type="datetime-local" value={value.to} onChange={e => set({ to: e.target.value })} />
-      </label>
+      <details className="rounded-lg border border-slate-200 p-3 text-sm" open={openAdvanced || undefined}>
+        <summary className="cursor-pointer font-medium text-slate-600">Əlavə parametrlər</summary>
+        <div className="mt-3 flex flex-col gap-4">
+          {advanced}
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="flex flex-col gap-1.5 font-medium text-slate-700">Cəhd limiti (boş = limitsiz)
+              <input className={inputClass} type="number" min={1} max={100} value={value.limit} onChange={e => set({ limit: e.target.value })} />
+            </label>
+            <label className="flex flex-col gap-1.5 font-medium text-slate-700">Başlama vaxtı (boş = istənilən vaxt)
+              <input className={inputClass} type="datetime-local" value={value.from} onChange={e => set({ from: e.target.value })} />
+            </label>
+            <label className="flex flex-col gap-1.5 font-medium text-slate-700">Bitmə vaxtı
+              <input className={inputClass} type="datetime-local" value={value.to} onChange={e => set({ to: e.target.value })} />
+            </label>
+          </div>
+        </div>
+      </details>
     </div>
   )
 }
@@ -99,6 +113,7 @@ function CreateTest({ onDone }: { onDone: () => void }) {
   const inBank = (code: string) => stats.data?.find(s => s.track === track && s.subject === code)?.count ?? 0
   const countOf = (code: string, closed: number) => counts[`${track}-${code}`] ?? String(closed)
   const reset = (patch: () => void) => { patch(); create.reset() }
+  const shortSubjects = sections.filter(s => Number(countOf(s.code, s.closed)) > inBank(s.code))
 
   const submit = () => create.mutate({
     ...toSettings(settings), track, kind, groupCode: track === 'Blok' && kind === 'Full' ? group : null,
@@ -143,30 +158,35 @@ function CreateTest({ onDone }: { onDone: () => void }) {
       </div>
 
       {sections.length > 0 && (
-        <fieldset className="mt-4 rounded-lg border border-slate-200 p-3">
-          <legend className="px-1 text-sm font-medium text-slate-700">Fənlər və sual sayı (default: rəsmi qapalı sual sayı)</legend>
+        <p className={cn('mt-3 text-sm', shortSubjects.length > 0 ? 'text-rose-700' : 'text-slate-600')}>
+          {sections.map(s => `${s.name} ${countOf(s.code, s.closed)}`).join(' · ')}
+          {shortSubjects.length > 0 && ` — bankda kifayət qədər sual yoxdur: ${shortSubjects.map(s => s.name).join(', ')}`}
+        </p>
+      )}
+
+      <div className="mt-4"><SettingsFields value={settings} onChange={setSettings} openAdvanced={shortSubjects.length > 0} advanced={sections.length > 0 && (
+        <fieldset>
+          <legend className="mb-2 font-medium text-slate-700">Fənlər üzrə sual sayı (default: rəsmi qapalı sual sayı)</legend>
           <ul className="flex flex-col gap-2">
             {sections.map(s => {
               const value = countOf(s.code, s.closed)
               const short = Number(value) > inBank(s.code)
               return (
                 <li key={s.code} className="flex flex-wrap items-center gap-3">
-                  <span className="min-w-36 text-sm font-medium">{s.name}</span>
+                  <span className="min-w-36 font-medium">{s.name}</span>
                   <input className={`${inputClass} w-24`} type="number" min={1} max={200} aria-label={`${s.name} sual sayı`} value={value}
                     onChange={e => setCounts(c => ({ ...c, [`${track}-${s.code}`]: e.target.value }))} />
-                  <span className={short ? 'text-sm text-rose-700' : 'text-sm text-slate-500'}>bankda {inBank(s.code)} sual</span>
+                  <span className={short ? 'text-rose-700' : 'text-slate-500'}>bankda {inBank(s.code)} sual</span>
                 </li>
               )
             })}
           </ul>
-          <div className="mt-3 flex flex-col gap-1.5 text-sm text-slate-700 sm:flex-row sm:gap-5">
+          <div className="mt-3 flex flex-col gap-1.5 text-slate-700 sm:flex-row sm:gap-5">
             <label className="flex items-center gap-2"><input type="radio" name="dim-mode" className="accent-indigo-600" checked={perAttempt} onChange={() => setPerAttempt(true)} />Hər cəhddə yeni təsadüfi suallar</label>
-            <label className="flex items-center gap-2"><input type="radio" name="dim-mode" className="accent-indigo-600" checked={!perAttempt} onChange={() => setPerAttempt(false)} />Bir dəfə seç, hamı eyni sualları alsın (hazır sınaq)</label>
+            <label className="flex items-center gap-2"><input type="radio" name="dim-mode" className="accent-indigo-600" checked={!perAttempt} onChange={() => setPerAttempt(false)} />Hamı eyni sualları alsın</label>
           </div>
         </fieldset>
-      )}
-
-      <div className="mt-4"><SettingsFields value={settings} onChange={setSettings} /></div>
+      )} /></div>
       {create.isError && <div className="mt-3"><Alert title="Sınaq yaradılmadı">{create.error.message}</Alert></div>}
       <div className="mt-4 flex gap-2">
         <Button loading={create.isPending} disabled={sections.length === 0 || settings.title.trim().length < 2 || !settings.duration} onClick={submit}>Yarat</Button>
@@ -186,7 +206,9 @@ function TestRow({ test }: { test: DimAdminTest }) {
 
   const save = (form: SettingsForm) => update.mutate({ id: test.id, settings: toSettings(form) }, { onSuccess: () => setEditing(null) })
   const destroy = async () => {
-    if (await confirm({ title: 'Sınaq silinsin?', description: `"${test.title}" silinəcək. Cəhdlər varsa silmək mümkün deyil, dərcdən çıxarın.`, confirmLabel: 'Sil', danger: true }))
+    if (await confirm({ title: 'Sınaq silinsin?', description: test.attempts > 0
+      ? `"${test.title}" və ona edilmiş ${test.attempts} cəhd (istifadəçilərin nəticələri) birdəfəlik silinəcək. Bu geri qaytarıla bilməz.`
+      : `"${test.title}" silinəcək.`, confirmLabel: 'Sil', danger: true }))
       remove.mutate(test.id)
   }
 

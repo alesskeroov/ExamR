@@ -218,4 +218,14 @@ export const useCreateDimTest = () => useDimAdminMutation((request: DimTestCreat
 export const useUpdateDimTest = () => useDimAdminMutation(({ id, settings }: { id: string; settings: DimTestSettings }) =>
   api.put<DimAdminTest>(`/admin/dim/tests/${id}`, settings))
 
-export const useDeleteDimTest = () => useDimAdminMutation((id: string) => api.delete(`/admin/dim/tests/${id}`))
+export function useDeleteDimTest() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/admin/dim/tests/${id}`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.dim.all })
+      // Deleting a test also deletes its attempts, which are ordinary exams in the history.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.exams.all })
+    },
+  })
+}

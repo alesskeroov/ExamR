@@ -1,11 +1,13 @@
 import { CheckCircle2, KeyRound, Trash2 } from 'lucide-react'
 import { useState } from 'react'
-import { Link } from 'react-router'
 import { Alert } from '../../components/common/Alert'
+import { FileDropzone } from '../../components/common/FileDropzone'
 import { Button } from '../../components/common/Button'
 import { EmptyState } from '../../components/common/EmptyState'
 import { StatusBadge } from '../../components/common/StatusBadge'
+import { api, ApiError } from '../../lib/api-client'
 import { cn } from '../../lib/utils'
+import { MAX_FILE_SIZE_BYTES, useUploadDocument, type DocumentDto } from '../documents/api'
 import {
   useApplyAnswerKey, useApproveToBank, useDimBankStats, useDimCatalog, useDimSourceDocuments, useDimSourceQuestions,
   useRemoveFromBank, type DimSourceQuestion, type DimTrack,
@@ -44,18 +46,18 @@ export function DimBankAdmin() {
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
-        <h2 className="font-semibold">Sənəddən sual əlavə et</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          PDF/DOCX faylını <Link to="/admin?section=documents" className="font-medium text-indigo-700 underline">Sənədlər</Link> bölməsində
-          yükləyin. Sistem sualları çıxarır; cavab açarını burada daxil edib sualları fənn və mövzu ilə banka təsdiqləyin.
-        </p>
-        <label className="mt-4 flex flex-col gap-1.5 text-sm font-medium text-slate-700">
-          Sənəd
-          <select className={inputClass} value={documentId} onChange={e => setDocumentId(e.target.value)}>
-            <option value="">{documents.isPending ? 'Yüklənir…' : 'Sənəd seçin'}</option>
-            {documents.data?.map(d => <option key={d.id} value={d.id}>{d.originalFileName} ({d.questionCount} sual)</option>)}
-          </select>
-        </label>
+        <h2 className="font-semibold">1. PDF yüklə</h2>
+        <p className="mt-1 text-sm text-slate-600">Sınaq PDF-ini seçin — suallar avtomatik çıxarılır. Sonra fənni seçib sualları banka əlavə edin.</p>
+        <DimUpload onReady={id => { void documents.refetch(); setDocumentId(id) }} />
+        {(documents.data?.length ?? 0) > 0 && (
+          <label className="mt-4 flex flex-col gap-1.5 text-sm font-medium text-slate-700">
+            və ya əvvəl yüklənmiş sənədi seçin
+            <select className={inputClass} value={documentId} onChange={e => setDocumentId(e.target.value)}>
+              <option value="">Sənəd seçin</option>
+              {documents.data?.map(d => <option key={d.id} value={d.id}>{d.originalFileName} ({d.questionCount} sual)</option>)}
+            </select>
+          </label>
+        )}
       </section>
 
       {documentId && <DocumentQuestions key={documentId} documentId={documentId} />}
@@ -81,6 +83,7 @@ function DocumentQuestions({ documentId }: { documentId: string }) {
   const visible = all.filter(q => filter === 'all' || (filter === 'outside' ? q.bank === null : !eligible(q)))
   const selectable = visible.filter(eligible)
   const allSelected = selectable.length > 0 && selectable.every(q => selected.has(q.id))
+  const missingAnswers = all.filter(q => q.options.length >= 2 && q.options.length <= 5 && !eligible(q)).length
 
   const toggle = (id: string) => setSelected(current => {
     const next = new Set(current)
@@ -97,28 +100,11 @@ function DocumentQuestions({ documentId }: { documentId: string }) {
   return (
     <>
       <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
-        <h2 className="flex items-center gap-2 font-semibold"><KeyRound className="size-4 text-indigo-600" aria-hidden />Cavab açarı</h2>
-        <p className="mt-1 text-sm text-slate-600">Sual nömrəsi və variant: <code>1-A 2-C 3-B</code> və ya hər sətirdə bir cüt. Nömrələr sənəddəki orijinal nömrələrdir.</p>
-        <textarea value={keyText} onChange={e => setKeyText(e.target.value)} rows={3} aria-label="Cavab açarı"
-          className="mt-3 w-full rounded-lg border border-slate-300 bg-white p-3 font-mono text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none" />
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <Button variant="secondary" loading={applyKey.isPending} disabled={keyText.trim().length < 2}
-            onClick={() => applyKey.mutate({ documentId, text: keyText })}>Açarı tətbiq et</Button>
-          {applyKey.data && (
-            <p className="text-sm text-slate-600" role="status">
-              {applyKey.data.applied} suala tətbiq edildi.
-              {applyKey.data.notFound.length > 0 && ` Tapılmayan nömrələr: ${applyKey.data.notFound.join(', ')}.`}
-              {applyKey.data.invalid.length > 0 && ` Variant sayı uyğun deyil: ${applyKey.data.invalid.join(', ')}.`}
-              {applyKey.data.conflicts.length > 0 && ` Təkrarlanan (sonuncu götürüldü): ${applyKey.data.conflicts.join(', ')}.`}
-            </p>
-          )}
-        </div>
-        {applyKey.isError && <div className="mt-2"><Alert title="Açar tətbiq edilmədi">{applyKey.error.message}</Alert></div>}
-      </section>
-
-      <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
-        <h2 className="font-semibold">Banka təsdiqlə</h2>
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+        <h2 className="font-semibold">2. Fənni seç və banka əlavə et</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          {all.length} sual tapıldı, {all.filter(eligible).length} yararlıdır. Aşağıda sualları seçin (və ya “hamısını seç”) və təsdiqləyin.
+        </p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">İmtahan
             <select className={inputClass} value={track} onChange={e => { setTrack(e.target.value as DimTrack); setSubject('') }}>
               <option value="Buraxilis">Buraxılış (XI sinif)</option>
@@ -131,14 +117,17 @@ function DocumentQuestions({ documentId }: { documentId: string }) {
               {subjects.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
             </select>
           </label>
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Mövzu (zəif mövzular üçün)
+        </div>
+        <details className="mt-3 text-sm">
+          <summary className="cursor-pointer font-medium text-slate-600">Mövzu əlavə et (istəyə bağlı)</summary>
+          <label className="mt-2 flex flex-col gap-1.5 text-slate-700">Mövzu — nəticədə zəif mövzuları göstərmək üçün
             <input className={inputClass} value={topic} maxLength={200} onChange={e => setTopic(e.target.value)} placeholder="məs. Kvadrat tənliklər" />
           </label>
-        </div>
-        <div className="mt-3 flex flex-wrap items-center gap-3">
+        </details>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
           <Button loading={approve.isPending} disabled={!subject || selected.size === 0}
             onClick={() => approve.mutate({ track, subject, topic: topic.trim() || null, questionIds: [...selected] }, { onSuccess: () => setSelected(new Set()) })}>
-            <CheckCircle2 className="size-4" aria-hidden />Seçilmiş {selected.size} sualı təsdiqlə
+            <CheckCircle2 className="size-4" aria-hidden />Seçilmiş {selected.size} sualı banka əlavə et
           </Button>
           {approve.data && (
             <p className="text-sm text-slate-600" role="status">
@@ -146,7 +135,30 @@ function DocumentQuestions({ documentId }: { documentId: string }) {
             </p>
           )}
         </div>
-        {approve.isError && <div className="mt-2"><Alert title="Təsdiq alınmadı">{approve.error.message}</Alert></div>}
+        {approve.isError && <div className="mt-2"><Alert title="Əlavə alınmadı">{approve.error.message}</Alert></div>}
+
+        <details className="mt-4 border-t border-slate-100 pt-3 text-sm" open={missingAnswers > 0}>
+          <summary className="flex cursor-pointer items-center gap-2 font-medium text-slate-700">
+            <KeyRound className="size-4 text-indigo-600" aria-hidden />Cavab açarı
+            {missingAnswers > 0 && <span className="font-normal text-amber-700">— {missingAnswers} sualın cavabı tapılmadı</span>}
+          </summary>
+          <p className="mt-2 text-slate-600">PDF-in cavab açarını yapışdırın: <code>1-A 2-C 3-B</code> və ya hər sətirdə bir cüt.</p>
+          <textarea value={keyText} onChange={e => setKeyText(e.target.value)} rows={3} aria-label="Cavab açarı"
+            className="mt-2 w-full rounded-lg border border-slate-300 bg-white p-3 font-mono text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none" />
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <Button variant="secondary" loading={applyKey.isPending} disabled={keyText.trim().length < 2}
+              onClick={() => applyKey.mutate({ documentId, text: keyText })}>Açarı tətbiq et</Button>
+            {applyKey.data && (
+              <p className="text-slate-600" role="status">
+                {applyKey.data.applied} suala tətbiq edildi.
+                {applyKey.data.notFound.length > 0 && ` Tapılmayan nömrələr: ${applyKey.data.notFound.join(', ')}.`}
+                {applyKey.data.invalid.length > 0 && ` Variant sayı uyğun deyil: ${applyKey.data.invalid.join(', ')}.`}
+                {applyKey.data.conflicts.length > 0 && ` Təkrarlanan (sonuncu götürüldü): ${applyKey.data.conflicts.join(', ')}.`}
+              </p>
+            )}
+          </div>
+          {applyKey.isError && <div className="mt-2"><Alert title="Açar tətbiq edilmədi">{applyKey.error.message}</Alert></div>}
+        </details>
       </section>
 
       <section aria-label="Sənədin sualları" className="flex flex-col gap-3">
@@ -206,5 +218,72 @@ function DocumentQuestions({ documentId }: { documentId: string }) {
         )}
       </section>
     </>
+  )
+}
+
+/** Uploads a PDF/DOCX and waits until the parser has finished, then hands the document id back. */
+function DimUpload({ onReady }: { onReady: (documentId: string) => void }) {
+  const [progress, setProgress] = useState(0)
+  const [clientError, setClientError] = useState<string | null>(null)
+  const [processing, setProcessing] = useState(false)
+  const [failure, setFailure] = useState<string | null>(null)
+  const upload = useUploadDocument(setProgress)
+
+  /** Parsing runs in the background on the server; poll until it finishes. */
+  async function waitForParsing(document: DocumentDto) {
+    setProcessing(true)
+    try {
+      let current = document
+      while (current.status === 'Pending' || current.status === 'Processing') {
+        await new Promise(resolve => setTimeout(resolve, 1500))
+        current = await api.get<DocumentDto>(`/documents/${current.id}`)
+      }
+      if (current.status === 'Completed') onReady(current.id)
+      else setFailure(current.errorMessage ?? 'Faylı yoxlayıb yenidən yükləyin.')
+    } catch (error) {
+      setFailure(error instanceof Error ? error.message : 'Faylı yoxlayıb yenidən yükləyin.')
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  function handleFile(file: File) {
+    setClientError(null)
+    setFailure(null)
+    upload.reset()
+    if (!/\.(pdf|docx)$/i.test(file.name)) return setClientError('Yalnız PDF və DOCX faylları qəbul edilir.')
+    if (file.size > MAX_FILE_SIZE_BYTES) return setClientError('Fayl 20 MB-dan böyük ola bilməz.')
+    setProgress(0)
+    upload.mutate(file, {
+      onSuccess: d => void waitForParsing(d),
+      onError: error => {
+        // Same file uploaded before: open the existing document instead of failing.
+        const existing = error instanceof ApiError && error.status === 409 ? error.problem?.documentId as string | undefined : undefined
+        if (existing) onReady(existing)
+      },
+    })
+  }
+
+  const duplicate = upload.error instanceof ApiError && upload.error.status === 409
+
+  return (
+    <div className="mt-4 flex flex-col gap-3">
+      <FileDropzone accept="application/pdf,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx"
+        disabled={upload.isPending || processing} hint="Maksimum 20 MB · mətn əsaslı PDF və DOCX" onFile={handleFile} />
+      {(upload.isPending || processing) && (
+        <div role="status" className="rounded-lg border border-slate-200 p-3 text-sm">
+          <div className="mb-2 flex justify-between font-medium">
+            <span>{upload.isPending ? 'Yüklənir…' : 'Suallar çıxarılır…'}</span>
+            {upload.isPending && <span className="tabular-nums">{progress}%</span>}
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+            <div className={cn('h-full rounded-full bg-indigo-600', !upload.isPending && 'animate-pulse')} style={{ width: upload.isPending ? `${progress}%` : '100%' }} />
+          </div>
+        </div>
+      )}
+      {failure && <Alert title="Sənəd emal olunmadı">{failure}</Alert>}
+      {(clientError || (upload.isError && !duplicate)) && <Alert title="Yükləmə alınmadı">{clientError ?? upload.error?.message}</Alert>}
+      {duplicate && <p role="status" className="text-sm text-slate-600">Bu fayl artıq yüklənib — mövcud sənəd açıldı.</p>}
+    </div>
   )
 }

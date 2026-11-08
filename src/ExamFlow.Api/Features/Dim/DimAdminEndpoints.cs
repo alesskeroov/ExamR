@@ -243,9 +243,13 @@ public static class DimAdminEndpoints
 
     private static async Task<IResult> DeleteTest(Guid id, AppDbContext db, CancellationToken ct)
     {
-        if (await db.DimAttempts.AnyAsync(a => a.TestId == id, ct))
-            return Problem(StatusCodes.Status409Conflict, "Bu sınaqda cəhdlər var; silmək əvəzinə dərcdən çıxarın.");
-        return await db.DimTests.Where(t => t.Id == id).ExecuteDeleteAsync(ct) == 0 ? NotFound() : TypedResults.NoContent();
+        // Attempts are ordinary exams; deleting them cascades to their DimAttempt rows, then the test can go.
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        var attemptExamIds = db.DimAttempts.Where(a => a.TestId == id).Select(a => a.ExamId);
+        await db.Exams.Where(e => attemptExamIds.Contains(e.Id)).ExecuteDeleteAsync(ct);
+        if (await db.DimTests.Where(t => t.Id == id).ExecuteDeleteAsync(ct) == 0) return NotFound();
+        await tx.CommitAsync(ct);
+        return TypedResults.NoContent();
     }
 
     /// <summary>Approved bank questions of one subject, as exam candidates (all are gradable).</summary>
