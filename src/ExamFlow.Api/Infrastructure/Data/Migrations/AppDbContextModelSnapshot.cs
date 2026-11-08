@@ -1129,13 +1129,7 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<int>("Box")
-                        .HasColumnType("integer");
-
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset>("DueAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("Lapses")
@@ -1152,12 +1146,18 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.Property<Guid>("LearningDocumentId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("Mastered")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("QuestionHash")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
                     b.Property<int>("Reviews")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Streak")
                         .HasColumnType("integer");
 
                     b.Property<Guid>("UserId")

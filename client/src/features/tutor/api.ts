@@ -267,31 +267,33 @@ export function useDeleteMaterial(chatId: string) {
   })
 }
 
-// ---------- Kartlar (no AI) ----------
+// ---------- Öyrənmə bələdçisi (no AI) ----------
 
 export type CardGrade = 'Again' | 'Hard' | 'Good'
-/** One of the document's own questions with its answer. box: 0 = new or forgotten, higher = known longer. */
+/** One of the document's own questions with its answer and the student's state. weak: last answered "Bilmirdim" or "Qismən". */
 export interface StudyCard {
-  number: number; question: string; answer: string; page: number | null; sharedAnswer: boolean; box: number; isNew: boolean; dueAt: string | null
+  number: number; question: string; answer: string; page: number | null; chunkOrdinal: number; sharedAnswer: boolean; topicKey: string
+  seen: boolean; streak: number; mastered: boolean; weak: boolean
 }
-/** Counts over the whole document; `cards` = the next batch (due first, then new). */
-export interface CardDeck {
-  total: number; new: number; due: number; learning: number; learned: number; nextDueAt: string | null; warning: string | null; cards: StudyCard[]
+export interface CardTopic { key: string; title: string; numbers: number[] }
+/** The student's private deck: topics in document order and all cards. required = "Bilirdim" in a row to master a card. */
+export interface CardDeck { warning: string | null; required: number; topics: CardTopic[]; cards: StudyCard[] }
+/** What Öyrən studies: every card, weak cards, all mixed, or one topic. */
+export type LearnScope = { kind: 'all' } | { kind: 'weak' } | { kind: 'mixed' } | { kind: 'topic'; key: string }
+export interface CardState { number: number; streak: number; mastered: boolean; weak: boolean }
+
+export function useDeck(chatId: string) {
+  return useQuery({ queryKey: queryKeys.tutor.deck(chatId), queryFn: () => api.get<CardDeck>(`/learning/chats/${chatId}/deck`), retry: false })
 }
 
-/** `ahead`: practise cards that are not due yet (when today's cards are done). */
-export function useCards(chatId: string, ahead: boolean) {
-  return useQuery({
-    queryKey: queryKeys.tutor.cards(chatId, ahead),
-    queryFn: () => api.get<CardDeck>(`/learning/chats/${chatId}/cards${ahead ? '?ahead=true' : ''}`),
-    staleTime: 0, retry: false,
-  })
-}
-
-/** Saves the student's own grade; the deck is refreshed when the round ends, not after every card. */
+/** Saves the student's own grade and patches the cached deck, so Mövzular and Kartlarım stay current during a session. */
 export function useReviewCard(chatId: string) {
+  const client = useQueryClient()
   return useMutation({
     mutationFn: ({ number, grade }: { number: number; grade: CardGrade }) =>
-      api.post<{ number: number; box: number; dueAt: string }>(`/learning/chats/${chatId}/cards/${number}/review`, { grade }),
+      api.post<CardState>(`/learning/chats/${chatId}/cards/${number}/review`, { grade }),
+    onSuccess: state => client.setQueryData<CardDeck>(queryKeys.tutor.deck(chatId), deck => deck && {
+      ...deck, cards: deck.cards.map(c => c.number === state.number ? { ...c, ...state, seen: true } : c),
+    }),
   })
 }

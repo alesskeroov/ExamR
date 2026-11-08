@@ -38,7 +38,7 @@ export function TutorDocumentPicker({ onStart, starting, startError, resumable =
     const name = file.name.toLowerCase()
     const error = name.endsWith('.pdf') || name.endsWith('.docx') ? null
       : name.endsWith('.doc') ? 'Köhnə .doc formatı dəstəklənmir. Faylı Word-də .docx kimi saxlayıb yenidən yükləyin.'
-      : 'AI Tutor yalnız PDF və Word (.docx) faylları qəbul edir.'
+      : 'Öyrənmə bələdçisi yalnız PDF və Word (.docx) faylları qəbul edir.'
     setTypeError(error)
     if (error) return
     setProgress(0)
@@ -48,7 +48,7 @@ export function TutorDocumentPicker({ onStart, starting, startError, resumable =
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:py-12">
       <h1 className="text-2xl font-bold tracking-tight sm:text-[28px]">Hansı sənəd üzərində işləyək?</h1>
-      <p className="mt-2 text-slate-600">Söhbət yalnız seçdiyiniz sənədə əsaslanır. Başqa sənəd üçün yeni söhbət açın.</p>
+      <p className="mt-2 text-slate-600">Kartlar seçdiyiniz sənədin öz suallarından və cavablarından hazırlanır.</p>
 
       <UsageMeter kind="Upload" />
       <div className="mt-6 flex flex-col gap-2 sm:flex-row">
@@ -70,7 +70,7 @@ export function TutorDocumentPicker({ onStart, starting, startError, resumable =
 
       {typeError && <div className="mt-4"><Alert title="Fayl növü dəstəklənmir">{typeError}</Alert></div>}
       {index.isError && <div className="mt-4"><Alert title="Sənəd hazırlana bilmədi">{index.error.message}</Alert></div>}
-      {startError && <div className="mt-4"><Alert title="Bu sənədlə söhbət açılmadı">{startError}</Alert></div>}
+      {startError && <div className="mt-4"><Alert title="Bu sənəddən kart hazırlanmadı">{startError}</Alert></div>}
 
       <div className="mt-6">
         {isLoading ? (
@@ -108,7 +108,7 @@ function DocumentRow({ doc, resumable, busy, onStart, onIndex }: { doc: TutorDoc
           {ready && <><CheckCircle2 className="size-3.5 text-emerald-600" aria-hidden />Hazırdır{doc.pageCount ? ` · ${doc.pageCount} səhifə` : ''}</>}
           {working && <><Loader2 className="size-3.5 animate-spin" aria-hidden />Hazırlanır…</>}
           {doc.status === 'Failed' && <><TriangleAlert className="size-3.5 text-rose-600" aria-hidden />Emal alınmadı</>}
-          {doc.status === null && 'Söhbət üçün hələ hazırlanmayıb'}
+          {doc.status === null && 'Hələ hazırlanmayıb'}
         </p>
       </div>
       {ready ? (

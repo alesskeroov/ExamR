@@ -11,3 +11,8 @@ export function Skeleton({ label }: { label: string }) {
     </div>
   )
 }
+
+/** Centered column used by the study tabs. */
+export function Frame({ children }: { children: import('react').ReactNode }) {
+  return <div className="mx-auto flex w-full max-w-2xl min-w-0 flex-col gap-4 px-4 py-5 sm:py-8" style={{ overflowWrap: 'anywhere' }}>{children}</div>
+}

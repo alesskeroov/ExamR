@@ -1,6 +1,6 @@
 import { AdminPage } from '../features/admin/AdminPage'
 import { GroupDetailPage, GroupsAdminPage, GroupsPage } from '../features/groups/GroupsPage'
-import { TutorPage } from '../features/tutor/TutorPage'
+import { GuidePage } from '../features/tutor/GuidePage'
 import { TutorUnavailablePage } from '../features/tutor/TutorUnavailablePage'
 import { tutorEnabled } from '../lib/features'
 import { createBrowserRouter, Navigate } from 'react-router'
@@ -39,7 +39,7 @@ export const router = createBrowserRouter([
       { path: 'upload', element: <UploadPage /> },
       // Retired features (Learning Assistant, Focus Mode): old links land on the dashboard.
       { path: 'study', element: <Navigate to="/" replace /> },
-      { path: 'tutor', element: tutorEnabled ? <TutorPage /> : <TutorUnavailablePage /> },
+      { path: 'tutor', element: tutorEnabled ? <GuidePage /> : <TutorUnavailablePage /> },
       { path: 'focus', element: <Navigate to="/" replace /> },
       { path: 'questions', element: <QuestionBankPage /> },
       { path: 'exams/new', element: <ExamSetupPage /> },

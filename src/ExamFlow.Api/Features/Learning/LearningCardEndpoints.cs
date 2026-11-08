@@ -3,7 +3,6 @@ using System.Security.Claims;
 using ExamFlow.Api.Common;
 using ExamFlow.Api.Infrastructure.Data;
 using ExamFlow.Api.Infrastructure.Security;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace ExamFlow.Api.Features.Learning;
@@ -13,52 +12,46 @@ public sealed class CardReviewRequest
     [Required] public CardGrade? Grade { get; init; }
 }
 
-/// <summary>One flashcard: the document's own question and answer. IsNew: never reviewed by this student.</summary>
-public sealed record CardDto(int Number, string Question, string Answer, int? Page, bool SharedAnswer, int Box, bool IsNew, DateTimeOffset? DueAt);
-/// <summary>Counts over the whole document; Cards = the next study batch (due first, then new ones). NextDueAt: when the next card becomes due.</summary>
-public sealed record CardDeckDto(int Total, int New, int Due, int Learning, int Learned, DateTimeOffset? NextDueAt, string? Warning, IReadOnlyList<CardDto> Cards);
-public sealed record CardStateDto(int Number, int Box, DateTimeOffset DueAt);
+/// <summary>One flashcard: the document's own question and answer with the student's state. Weak: last answered "Bilmirdim" or "Qismən".</summary>
+public sealed record CardDto(int Number, string Question, string Answer, int? Page, int ChunkOrdinal, bool SharedAnswer, string TopicKey,
+    bool Seen, int Streak, bool Mastered, bool Weak);
+public sealed record CardTopicDto(string Key, string Title, IReadOnlyList<int> Numbers);
+/// <summary>The whole private deck of one document: topics in document order and every card. Required = "Bilirdim" in a row to master a card.</summary>
+public sealed record CardDeckDto(string? Warning, int Required, IReadOnlyList<CardTopicDto> Topics, IReadOnlyList<CardDto> Cards);
+public sealed record CardStateDto(int Number, int Streak, bool Mastered, bool Weak);
 
-/// <summary>"Kartlar": spaced repetition over the document's own open questions. No AI call and no AI quota.</summary>
+/// <summary>Öyrənmə bələdçisi: cards from the document's own open questions. No AI call, no AI quota; each student sees only their own progress.</summary>
 public static partial class LearningStudyEndpoints
 {
     private static void MapCards(RouteGroupBuilder group)
     {
-        group.MapGet("/chats/{sessionId:guid}/cards", Cards);
+        group.MapGet("/chats/{sessionId:guid}/deck", Deck);
         group.MapPost("/chats/{sessionId:guid}/cards/{number:int}/review", ReviewCard).Validate<CardReviewRequest>();
     }
 
-    /// <param name="ahead">"Yenə də məşq et": cards that are not due yet, soonest first (when nothing is due today).</param>
-    private static async Task<IResult> Cards(Guid sessionId, ClaimsPrincipal user, AppDbContext db, OpenQuestionIndexer indexer, TimeProvider clock,
-        [FromQuery] bool? ahead, CancellationToken ct)
+    private static async Task<IResult> Deck(Guid sessionId, ClaimsPrincipal user, AppDbContext db, OpenQuestionIndexer indexer, CancellationToken ct)
     {
         var userId = user.GetUserId();
         var (doc, index, error) = await OpenDocAsync(db, indexer, userId, sessionId, ct);
         if (error is not null) return error;
 
+        var sections = await db.Set<LearningDocumentChunk>().AsNoTracking().Where(c => c.LearningDocumentId == doc!.LearningId && c.Section != null)
+            .Select(c => new { c.Ordinal, c.Section }).ToDictionaryAsync(c => c.Ordinal, c => c.Section, ct);
+        var topics = CardTopics.Build(index!.Questions, q => sections.GetValueOrDefault(q.ChunkOrdinal));
+        var topicOf = topics.SelectMany(t => t.Numbers.Select(n => (n, t.Key))).ToDictionary(x => x.n, x => x.Key);
+
         var states = await db.Set<LearningCardState>().AsNoTracking().Where(c => c.UserId == userId && c.LearningDocumentId == doc!.LearningId)
-            .Select(c => new { c.QuestionHash, c.Box, c.DueAt }).ToListAsync(ct);
+            .Select(c => new { c.QuestionHash, c.Streak, c.Mastered, c.LastGrade }).ToListAsync(ct);
         var byHash = states.GroupBy(s => s.QuestionHash).ToDictionary(g => g.Key, g => g.First());
-        var now = clock.GetUtcNow();
 
-        var cards = index!.Questions.Select(q =>
+        var cards = index.Questions.Select(q =>
         {
-            var state = byHash.GetValueOrDefault(CardScheduler.Hash(q.Text));
-            return new CardDto(q.Number, q.Text, q.Answer, q.Page, q.SharedAnswer, state?.Box ?? 0, state is null, state?.DueAt);
+            var s = byHash.GetValueOrDefault(CardMastery.Hash(q.Text));
+            return new CardDto(q.Number, q.Text, q.Answer, q.Page, q.ChunkOrdinal, q.SharedAnswer, topicOf[q.Number],
+                s is not null, s?.Streak ?? 0, s?.Mastered ?? false, s is not null && s.LastGrade != CardGrade.Good);
         }).ToList();
-        var seen = cards.Where(c => !c.IsNew).ToList();
-        var due = seen.Where(c => c.DueAt <= now).OrderBy(c => c.DueAt).ToList();
-        var fresh = cards.Where(c => c.IsNew).ToList();
-
-        var batch = ahead == true
-            ? seen.Where(c => c.DueAt > now).OrderBy(c => c.DueAt).Take(CardScheduler.BatchSize).ToList()
-            : due.Take(CardScheduler.BatchSize).ToList();
-        if (ahead != true)
-            batch.AddRange(fresh.Take(Math.Min(CardScheduler.NewPerBatch, CardScheduler.BatchSize - batch.Count)));
-
-        return TypedResults.Ok(new CardDeckDto(cards.Count, fresh.Count, due.Count,
-            seen.Count(c => c.Box < CardScheduler.LearnedBox), seen.Count(c => c.Box >= CardScheduler.LearnedBox),
-            seen.Where(c => c.DueAt > now).Min(c => c.DueAt), index.Warning, batch));
+        return TypedResults.Ok(new CardDeckDto(index.Warning, CardMastery.Required,
+            topics.Select(t => new CardTopicDto(t.Key, t.Title, t.Numbers)).ToList(), cards));
     }
 
     private static async Task<IResult> ReviewCard(Guid sessionId, int number, CardReviewRequest request, ClaimsPrincipal user, AppDbContext db,
@@ -70,7 +63,7 @@ public static partial class LearningStudyEndpoints
         if (index!.Questions.FirstOrDefault(q => q.Number == number) is not { } question)
             return TypedResults.Problem("Bu sual sənəddə tapılmadı.", statusCode: StatusCodes.Status404NotFound);
 
-        var hash = CardScheduler.Hash(question.Text);
+        var hash = CardMastery.Hash(question.Text);
         var now = clock.GetUtcNow();
         var grade = request.Grade!.Value;
         for (var attempt = 0; ; attempt++)
@@ -82,15 +75,15 @@ public static partial class LearningStudyEndpoints
                 state = new LearningCardState { Id = Guid.NewGuid(), UserId = userId, LearningDocumentId = doc!.LearningId, QuestionHash = hash, CreatedAt = now };
                 db.Add(state);
             }
-            (state.Box, state.DueAt) = CardScheduler.Next(state.Box, grade, now);
+            (state.Streak, state.Mastered) = CardMastery.Next(state.Streak, grade);
             state.Reviews++;
-            if (grade == CardGrade.Again && state.Reviews > 1) state.Lapses++;
+            if (grade == CardGrade.Again) state.Lapses++;
             state.LastGrade = grade;
             state.LastReviewedAt = now;
             try
             {
                 await db.SaveChangesAsync(ct);
-                return TypedResults.Ok(new CardStateDto(number, state.Box, state.DueAt));
+                return TypedResults.Ok(new CardStateDto(number, state.Streak, state.Mastered, grade != CardGrade.Good));
             }
             catch (DbUpdateException) when (attempt == 0)
             {

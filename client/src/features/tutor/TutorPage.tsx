@@ -1,7 +1,7 @@
 import { UsageMeter } from '../../components/common/UsageMeter'
 import { useUsageLimit } from '../usage/api'
 import { useQueryClient } from '@tanstack/react-query'
-import { ArrowUp, BookOpenText, CircleHelp, FileText, GraduationCap, Layers, MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRight, Plus, Square, Timer, Trash2, X, type LucideIcon } from 'lucide-react'
+import { ArrowUp, BookOpenText, CircleHelp, FileText, GraduationCap, MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRight, Plus, Square, Timer, Trash2, X, type LucideIcon } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { useSearchParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
@@ -15,7 +15,6 @@ import { TutorMessage, type ViewMessage } from './TutorMessage'
 import { TutorPreview } from './TutorPreview'
 import { TutorPrepare } from './TutorPrepare'
 import { TutorRevision } from './TutorRevision'
-import { TutorCards } from './TutorCards'
 import { TutorQuiz } from './TutorQuiz'
 import './tutor.css'
 
@@ -37,17 +36,14 @@ export function TutorPage() {
 interface LiveTurn { user: ViewMessage; answer: ViewMessage; question: string; stored: boolean }
 
 // Hazırlaş = the former Öyrən + Ortaq cavab. The chat ('learn') stays reachable from a Hazırlaş topic and counts as part of it.
-// Kartlar (no AI) is the default tab, so a chat without a tab in the URL opens it.
-type Tab = 'cards' | 'prepare' | 'learn' | 'quiz' | 'last'
+type Tab = 'prepare' | 'learn' | 'quiz' | 'last'
 const tabs: { id: Exclude<Tab, 'learn'>; label: string; icon: LucideIcon }[] = [
-  { id: 'cards', label: 'Kartlar', icon: Layers },
   { id: 'prepare', label: 'Hazırlaş', icon: GraduationCap },
   { id: 'quiz', label: 'Məni yoxla', icon: CircleHelp },
   { id: 'last', label: 'Son təkrar', icon: Timer },
 ]
-/** No tab → Kartlar; the old ?tab=shared opens Hazırlaş. */
-const tabFrom = (value: string | null): Tab =>
-  value === 'prepare' || value === 'learn' || value === 'quiz' || value === 'last' ? value : value === 'shared' ? 'prepare' : 'cards'
+/** Old links (?tab=shared, no tab) open Hazırlaş. */
+const tabFrom = (value: string | null): Tab => value === 'learn' || value === 'quiz' || value === 'last' ? value : 'prepare'
 // Follow-ups for the last answer; retrieval falls back to the previous question, so they stay on the same topic.
 const followUps = [
   { label: 'Daha sadə izah et', prompt: 'Son cavabı daha sadə sözlərlə izah et.' },
@@ -64,12 +60,12 @@ function TutorWorkspace() {
   const prepareView = params.get('view') === 'answer' || tabParam === 'shared' ? 'answer' : 'explain'
   const setTab = (next: Tab, extra: Record<string, string> = {}) => {
     if (chatId) store(tabKey(chatId), next)
-    setParams({ chat: chatId ?? '', ...(next === 'cards' ? {} : { tab: next }), ...extra }, { replace: true })
+    setParams({ chat: chatId ?? '', ...(next === 'prepare' ? {} : { tab: next }), ...extra }, { replace: true })
   }
   /** Opens a chat on the tab it was left on ("Qaldığın yerdən davam et"). */
   const openChat = (id: string) => {
     const last = tabFrom(readStored(tabKey(id)))
-    setParams({ chat: id, ...(last === 'cards' ? {} : { tab: last }) })
+    setParams({ chat: id, ...(last === 'prepare' ? {} : { tab: last }) })
   }
   const explainQuestion = (number: number) => setTab('prepare', { explain: String(number) })
   const explainNumber = Number(params.get('explain')) || undefined
@@ -282,7 +278,7 @@ function TutorWorkspace() {
         </header>
 
         {usage.data && !usage.data.enabled && (
-          <div className="px-3 pt-3"><Alert tone="info" title="AI köməkçisi hazırda söndürülüb">Kartlar işləyir. AI bölmələrində tarixçəyə baxmaq olar, yeni sorğular isə qəbul edilmir.</Alert></div>
+          <div className="px-3 pt-3"><Alert tone="info" title="AI köməkçisi hazırda söndürülüb">Tarixçəyə baxmaq olar, yeni suallar isə qəbul edilmir.</Alert></div>
         )}
 
         {session && (
@@ -308,8 +304,7 @@ function TutorWorkspace() {
         ) : session && tab !== 'learn' ? (
           // Keyed by tab: each tab starts at its top instead of inheriting the previous tab's scroll position.
           <div key={tab} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-            {usage.data?.enabled && tab !== 'cards' && <UsageMeter kind="AiRequest" />}
-            {tab === 'cards' && <TutorCards key={chatId} chatId={chatId} />}
+            {usage.data?.enabled && <UsageMeter kind="AiRequest" />}
             {tab === 'prepare' && <TutorPrepare key={chatId} chatId={chatId} disabled={monthly.blocked || usage.data?.enabled === false} view={prepareView}
               onView={view => setTab('prepare', view === 'answer' ? { view } : {})}
               onAsk={text => { setTab('learn'); void send(text) }} onQuiz={quizTopic} focusNumber={explainNumber} />}
