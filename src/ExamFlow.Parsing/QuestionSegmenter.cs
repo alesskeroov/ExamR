@@ -31,18 +31,29 @@ public static partial class QuestionSegmenter
 
     public static bool IsMarker(char c) => OptionMarkers.Contains(c) || CorrectMarkers.Contains(c);
 
-    [GeneratedRegex(@"^(?:(?<prefix>sual|№)\s*(?<n>\d{1,4})\s*[.):\-]?|(?<n>\d{1,4})\s*[.):\-])\s*", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    // "-" counts as a delimiter only when no letter is glued to it: "11-ci sinif" or "1990-cı il" is not question 11 / 1990.
+    [GeneratedRegex(@"^(?:(?<prefix>sual|№)\s*(?<n>\d{1,4})\s*[.):\-]?|(?<n>\d{1,4})\s*(?:[.):]|-(?!\p{L})))\s*", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex QuestionStart();
 
     [GeneratedRegex(@"^(?<l>[A-Fa-f])(?<d>[).])(?<rest>.*)$")]
     private static partial Regex LabelToken();
+
+    [GeneratedRegex(@"^\d{1,3}\s*\.\s+(?<title>.+)$")]
+    private static partial Regex NumberedLine();
+
+    // Table-of-contents entry: "3. Faiz və nisbət — 15 sual" or "3. Faiz və nisbət ........ 12".
+    [GeneratedRegex(@"(?:\s[—–-]\s*\d+\s*(?:sual|səhifə|səh\.?)|\.{4,}\s*\d+)\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex ContentsEntry();
+
+    [GeneratedRegex(@"^[A-Fa-f]\s*[).]")]
+    private static partial Regex OptionStart();
 
     public static IReadOnlyList<RawQuestion> Segment(IEnumerable<TextLine> lines)
     {
         var questions = new List<RawQuestion>();
         RawQuestion? current = null;
 
-        foreach (var line in AttachCenteredAnchors(lines.ToList()))
+        foreach (var line in AttachCenteredAnchors(DropSectionLines(lines.ToList())))
         {
             var match = QuestionStart().Match(line.Text);
             if (match.Success
@@ -89,6 +100,36 @@ public static partial class QuestionSegmenter
         }
 
         return questions;
+    }
+
+    /// <summary>
+    /// Removes numbered lines that are not questions: table-of-contents entries and upper-case section headings
+    /// ("3. FAİZ VƏ NİSBƏT"). Kept as questions they shift the numbering, so the real "001." is rejected, and a
+    /// heading glued to the previous question's last option hides its answer. A heading followed by options is a question.
+    /// </summary>
+    private static List<TextLine> DropSectionLines(List<TextLine> lines) =>
+        lines.Where((line, i) => !IsSectionLine(line, i + 1 < lines.Count ? lines[i + 1] : null)).ToList();
+
+    private static bool IsSectionLine(TextLine line, TextLine? next)
+    {
+        var match = NumberedLine().Match(line.Text);
+        if (!match.Success)
+        {
+            return false;
+        }
+
+        var title = match.Groups["title"].Value.Trim();
+        if (ContentsEntry().IsMatch(title))
+        {
+            return true;
+        }
+
+        var letters = title.Where(char.IsLetter).ToList();
+        return letters.Count >= 4
+            && !letters.Any(char.IsLower)
+            && !title.Any(char.IsDigit)
+            && !title.EndsWith('?')
+            && (next is null || !(OptionStart().IsMatch(next.Text) || IsMarker(next.Text[0])));
     }
 
     /// <summary>

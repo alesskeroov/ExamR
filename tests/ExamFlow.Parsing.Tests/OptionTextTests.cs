@@ -20,7 +20,27 @@ public class OptionTextTests
         Assert.All(question.Options, o => Assert.DoesNotContain("✓", o.Text));
     }
 
+    [Fact]
+    public void Check_mark_at_the_end_of_an_option_marks_the_answer_and_is_removed_from_the_text()
+    {
+        var result = new PdfQuestionParser().ParseLines([
+            L("001. 48 və 42 ədədlərinin ƏBOB-u neçədir?"),
+            L("A) 11"),
+            L("B) 6 ✓ DOĞRU"),
+            L("C) 10"),
+            L("D) 8"),
+        ], 1);
+
+        var question = Assert.Single(result.Questions);
+        Assert.Equal(1, question.CorrectIndex);
+        Assert.Equal("6", question.Options[1].Text);
+        Assert.All(question.Options, o => Assert.DoesNotContain("✓", o.Text));
+    }
+
     [Theory]
+    [InlineData("6 ✓ DOĞRU", "6")]
+    [InlineData("24 ✓", "24")]
+    [InlineData("HTTPS ✔ düzgün", "HTTPS")]
     [InlineData("✓ HTTPS", "HTTPS")]
     [InlineData("√HTTPS", "HTTPS")]
     [InlineData("HTTPS Mənbə istinadı: s. 4", "HTTPS")]
