@@ -302,3 +302,18 @@ export function useReviewCard(chatId: string) {
     }),
   })
 }
+
+export interface TopicStats { total: number; mastered: number; weak: number; seen: number }
+/** Card counts per topic key, for progress bars and the topic picker. */
+export function topicStats(deck: CardDeck) {
+  const stats = new Map<string, TopicStats>(deck.topics.map(t => [t.key, { total: 0, mastered: 0, weak: 0, seen: 0 }]))
+  for (const card of deck.cards) {
+    const s = stats.get(card.topicKey)
+    if (!s) continue
+    s.total += 1
+    if (card.mastered) s.mastered += 1
+    if (card.weak) s.weak += 1
+    if (card.seen) s.seen += 1
+  }
+  return stats
+}

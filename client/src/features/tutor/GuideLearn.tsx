@@ -2,8 +2,9 @@ import { Check, Eye, Layers, Play, RotateCcw } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Alert } from '../../components/common/Alert'
 import { cn } from '../../lib/utils'
-import { useReviewCard, type CardDeck, type CardGrade, type LearnScope, type StudyCard } from './api'
+import { topicStats, useReviewCard, type CardDeck, type CardGrade, type LearnScope, type StudyCard } from './api'
 import { FlipCard } from './FlipCard'
+import { TopicPicker } from './TopicPicker'
 import { Frame } from './TutorShared'
 
 interface Props {
@@ -65,6 +66,7 @@ export function GuideLearn({ chatId, deck, scope, onScope, onSource }: Props) {
   }
 
   const topicTitle = scope.kind === 'topic' ? deck.topics.find(t => t.key === scope.key)?.title : undefined
+  const stats = topicStats(deck)
   return (
     <Frame>
       <header className="flex items-start gap-3">
@@ -75,16 +77,15 @@ export function GuideLearn({ chatId, deck, scope, onScope, onSource }: Props) {
         </div>
       </header>
 
-      <div role="radiogroup" aria-label="Nəyi öyrənək?" className="flex flex-wrap gap-2">
-        <ScopeChip active={scope.kind === 'all'} onClick={() => onScope({ kind: 'all' })}>Hamısı</ScopeChip>
-        <ScopeChip active={scope.kind === 'weak'} onClick={() => onScope({ kind: 'weak' })}>Zəif kartlar ({deck.cards.filter(c => c.weak).length})</ScopeChip>
-        <ScopeChip active={scope.kind === 'mixed'} onClick={() => onScope({ kind: 'mixed' })}>Qarışıq</ScopeChip>
-        <label className="sr-only" htmlFor="learn-topic">Mövzu</label>
-        <select id="learn-topic" value={scope.kind === 'topic' ? scope.key : ''} onChange={e => e.target.value && onScope({ kind: 'topic', key: e.target.value })}
-          className={cn('tutor-border h-9 max-w-full min-w-0 rounded-full border bg-transparent px-3 text-sm', scope.kind === 'topic' ? 'border-indigo-400 font-semibold text-indigo-700' : 'text-slate-700')}>
-          <option value="">Mövzu seç…</option>
-          {deck.topics.map(t => <option key={t.key} value={t.key}>{t.title}</option>)}
-        </select>
+      <div className="flex flex-col gap-2">
+        <div role="radiogroup" aria-label="Nəyi öyrənək?" className="grid grid-cols-3 gap-2">
+          <ScopeChip active={scope.kind === 'all'} onClick={() => onScope({ kind: 'all' })}>Hamısı</ScopeChip>
+          <ScopeChip active={scope.kind === 'weak'} onClick={() => onScope({ kind: 'weak' })}>Zəif · {deck.cards.filter(c => c.weak).length}</ScopeChip>
+          <ScopeChip active={scope.kind === 'mixed'} onClick={() => onScope({ kind: 'mixed' })}>Qarışıq</ScopeChip>
+        </div>
+        <TopicPicker topics={deck.topics} stats={stats} value={scope.kind === 'topic' ? scope.key : ''} allLabel="Mövzu seç…"
+          onChange={key => onScope(key ? { kind: 'topic', key } : { kind: 'all' })}
+          className={cn('h-11', scope.kind === 'topic' && 'border-indigo-400')} />
       </div>
 
       {result && result.total > 0 && (
@@ -120,7 +121,7 @@ export function GuideLearn({ chatId, deck, scope, onScope, onSource }: Props) {
 function ScopeChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
   return (
     <button type="button" role="radio" aria-checked={active} onClick={onClick}
-      className={cn('tutor-border h-9 rounded-full border px-3 text-sm', active ? 'border-indigo-400 bg-indigo-50 font-semibold text-indigo-700' : 'text-slate-700 hover:bg-slate-50')}>
+      className={cn('tutor-border h-11 min-w-0 truncate rounded-xl border px-2 text-sm', active ? 'border-indigo-400 bg-indigo-50 font-semibold text-indigo-700' : 'bg-white text-slate-700 hover:bg-slate-50')}>
       {children}
     </button>
   )
@@ -191,17 +192,19 @@ function Session({ chatId, cards, required, topics, onSource, onFinish }: Sessio
       </div>
 
       <div key={`${card.id}-${queue.length}`} className="tutor-enter">
-        <FlipCard card={card} topic={topics.get(card.topicKey) ?? ''} flipped={flipped} onFlip={() => setFlipped(f => !f)}
+        <FlipCard card={card} topic={topics.get(card.topicKey) ?? ''} flipped={flipped} onFlip={() => setFlipped(f => !f)} autoFocus
           onSource={onSource} required={required} />
       </div>
 
+      {/* Stays at the bottom of the screen on phones, so a long answer never pushes the grades out of reach. */}
+      <div className="tutor-surface sticky bottom-0 z-10 -mx-4 px-4 pt-2 pb-[max(.75rem,env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:p-0">
       {flipped ? (
         <div>
           <p className="text-center text-sm font-medium text-slate-700">Nə qədər bildin?</p>
           <div className="mt-2 grid grid-cols-3 gap-2">
             {grades.map(g => (
               <button key={g.grade} type="button" onClick={() => grade(g.grade)} disabled={review.isPending}
-                className={cn('min-h-12 rounded-xl border px-2 py-1.5 text-sm font-semibold disabled:opacity-60', g.tone)}>
+                className={cn('min-h-12 rounded-xl border px-2 py-1.5 text-[15px] font-semibold disabled:opacity-60', g.tone)}>
                 {g.label}<span className="ml-1 hidden text-[11px] font-normal opacity-70 sm:inline">({g.key})</span>
               </button>
             ))}
@@ -209,10 +212,11 @@ function Session({ chatId, cards, required, topics, onSource, onFinish }: Sessio
         </div>
       ) : (
         <button type="button" onClick={() => setFlipped(true)}
-          className="btn-primary inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold">
+          className="btn-primary inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[15px] font-semibold">
           <Eye className="size-4" aria-hidden />Cavabı göstər
         </button>
       )}
+      </div>
       <p className="hidden text-center text-[11px] text-slate-400 sm:block">Boşluq — kartı çevir · 1 / 2 / 3 — qiymət</p>
       {review.isError && <Alert title="Qiymət saxlanmadı">{review.error.message}</Alert>}
     </>
