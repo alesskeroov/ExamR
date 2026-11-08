@@ -1,7 +1,7 @@
 import { UsageMeter } from '../../components/common/UsageMeter'
 import { useUsageLimit } from '../usage/api'
 import { useQueryClient } from '@tanstack/react-query'
-import { ArrowUp, BookOpenText, CircleHelp, FileText, Layers, MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRight, Plus, Square, Timer, Trash2, X, type LucideIcon } from 'lucide-react'
+import { ArrowUp, BookOpenText, CircleHelp, FileText, GraduationCap, MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRight, Plus, Square, Timer, Trash2, X, type LucideIcon } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { useSearchParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
@@ -9,16 +9,18 @@ import { ApiError, postEventStream } from '../../lib/api-client'
 import { queryKeys } from '../../lib/query-keys'
 import { useConfirm } from '../../lib/use-confirm'
 import { cn } from '../../lib/utils'
-import { useAiUsage, useChat, useChats, useCreateChat, useDeleteChat, useTutorDocuments, type ChatSession, type ChatSource } from './api'
+import { useAiUsage, useChat, useChats, useCreateChat, useDeleteChat, useTutorDocuments, type ChatSession, type ChatSource, type PrepareTopic } from './api'
 import { TutorDocumentPicker } from './TutorDocumentPicker'
 import { TutorMessage, type ViewMessage } from './TutorMessage'
 import { TutorPreview } from './TutorPreview'
-import { TutorLastMinute } from './TutorLastMinute'
+import { TutorPrepare } from './TutorPrepare'
+import { TutorRevision } from './TutorRevision'
 import { TutorQuiz } from './TutorQuiz'
-import { TutorShared } from './TutorShared'
 import './tutor.css'
 
 const sidebarKey = 'examr-tutor-sidebar'
+/** Last open tab per chat, so reopening a chat continues where the student left off. */
+const tabKey = (chatId: string) => `examr-tutor-tab-${chatId}`
 
 function readStored(key: string) {
   try { return localStorage.getItem(key) } catch { return null }
@@ -33,13 +35,15 @@ export function TutorPage() {
 
 interface LiveTurn { user: ViewMessage; answer: ViewMessage; question: string; stored: boolean }
 
-type Tab = 'learn' | 'quiz' | 'shared' | 'last'
-const tabs: { id: Tab; label: string; icon: LucideIcon }[] = [
-  { id: 'learn', label: 'Öyrən', icon: BookOpenText },
+// Hazırlaş = the former Öyrən + Ortaq cavab. The chat ('learn') stays reachable from a Hazırlaş topic and counts as part of it.
+type Tab = 'prepare' | 'learn' | 'quiz' | 'last'
+const tabs: { id: Exclude<Tab, 'learn'>; label: string; icon: LucideIcon }[] = [
+  { id: 'prepare', label: 'Hazırlaş', icon: GraduationCap },
   { id: 'quiz', label: 'Məni yoxla', icon: CircleHelp },
-  { id: 'shared', label: 'Ortaq cavab', icon: Layers },
-  { id: 'last', label: 'Son dəqiqə', icon: Timer },
+  { id: 'last', label: 'Son təkrar', icon: Timer },
 ]
+/** Old links (?tab=shared, no tab) open Hazırlaş. */
+const tabFrom = (value: string | null): Tab => value === 'learn' || value === 'quiz' || value === 'last' ? value : 'prepare'
 // Follow-ups for the last answer; retrieval falls back to the previous question, so they stay on the same topic.
 const followUps = [
   { label: 'Daha sadə izah et', prompt: 'Son cavabı daha sadə sözlərlə izah et.' },
@@ -52,8 +56,24 @@ function TutorWorkspace() {
   const [params, setParams] = useSearchParams()
   const chatId = params.get('chat')
   const tabParam = params.get('tab')
-  const tab: Tab = tabs.some(t => t.id === tabParam) ? tabParam as Tab : 'learn'
-  const setTab = (next: Tab) => setParams(next === 'learn' ? { chat: chatId ?? '' } : { chat: chatId ?? '', tab: next }, { replace: true })
+  const tab = tabFrom(tabParam)
+  const prepareView = params.get('view') === 'answer' || tabParam === 'shared' ? 'answer' : 'explain'
+  const setTab = (next: Tab, extra: Record<string, string> = {}) => {
+    if (chatId) store(tabKey(chatId), next)
+    setParams({ chat: chatId ?? '', ...(next === 'prepare' ? {} : { tab: next }), ...extra }, { replace: true })
+  }
+  /** Opens a chat on the tab it was left on ("Qaldığın yerdən davam et"). */
+  const openChat = (id: string) => {
+    const last = tabFrom(readStored(tabKey(id)))
+    setParams({ chat: id, ...(last === 'prepare' ? {} : { tab: last }) })
+  }
+  const explainQuestion = (number: number) => setTab('prepare', { explain: String(number) })
+  const explainNumber = Number(params.get('explain')) || undefined
+  // "Bu mövzudan məni yoxla": the quiz asks only this topic's questions until the student clears the filter.
+  const quizNumbers = (params.get('q') ?? '').split(',').map(Number).filter(n => Number.isInteger(n) && n > 0)
+  const quizFocus = tab === 'quiz' && quizNumbers.length > 0 ? { title: params.get('topic') ?? '', numbers: quizNumbers } : undefined
+  const quizOn = (title: string, numbers: number[]) => setTab('quiz', { topic: title, q: numbers.join(',') })
+  const quizTopic = (topic: PrepareTopic) => quizOn(topic.title, topic.questions.map(q => q.number))
   const client = useQueryClient()
   const confirm = useConfirm()
   const chats = useChats()
@@ -178,8 +198,12 @@ function TutorWorkspace() {
 
   const stop = () => abort.current?.abort()
 
-  const startChat = (documentId: string) =>
-    createChat.mutate(documentId, { onSuccess: created => setParams({ chat: created.id }) })
+  // One chat per document: an existing one is reopened (with its history and quiz results) instead of starting over.
+  const startChat = (documentId: string) => {
+    const existing = chats.data?.items.find(c => c.documentId === documentId)
+    if (existing) openChat(existing.id)
+    else createChat.mutate(documentId, { onSuccess: created => setParams({ chat: created.id }) })
+  }
 
   const removeChat = async (target: ChatSession) => {
     const ok = await confirm({ title: 'Söhbət silinsin?', description: `"${target.title}" və bütün mesajları silinəcək. Bu əməliyyat geri qaytarılmır.`, confirmLabel: 'Sil', danger: true })
@@ -199,7 +223,7 @@ function TutorWorkspace() {
 
   const history = (
     <ChatHistory chats={chats.data?.items ?? []} loading={chats.isLoading} activeId={chatId}
-      onSelect={id => setParams({ chat: id })} onNew={newChat} onDelete={removeChat}
+      onSelect={openChat} onNew={newChat} onDelete={removeChat}
       usage={usage.data?.remainingUsd != null ? `${usage.data.remainingUsd.toFixed(2)} $ qalıb · bu gün ${usage.data.requestsToday}/${usage.data.dailyRequestsPerUser}` : null} />
   )
 
@@ -261,10 +285,10 @@ function TutorWorkspace() {
           <nav aria-label="AI Tutor bölmələri" className="tutor-border shrink-0 border-b px-2 sm:px-3">
             <div role="tablist" className="tutor-tabs mx-auto flex max-w-3xl gap-1 overflow-x-auto py-1.5">
               {tabs.map(({ id, label, icon: Icon }) => (
-                <button key={id} type="button" role="tab" aria-selected={tab === id}
+                <button key={id} type="button" role="tab" aria-selected={(tab === 'learn' ? 'prepare' : tab) === id}
                   onClick={event => { setTab(id); event.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' }) }}
                   className={cn('inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors duration-150 sm:px-3 sm:text-sm',
-                    tab === id ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800')}>
+                    (tab === 'learn' ? 'prepare' : tab) === id ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800')}>
                   <Icon className="hidden size-4 sm:block" aria-hidden />{label}
                 </button>
               ))}
@@ -273,15 +297,20 @@ function TutorWorkspace() {
         )}
 
         {!chatId ? (
-          <div className="min-h-0 flex-1 overflow-y-auto"><TutorDocumentPicker onStart={startChat} starting={createChat.isPending} /></div>
+          <div className="min-h-0 flex-1 overflow-y-auto"><TutorDocumentPicker onStart={startChat} starting={createChat.isPending} startError={createChat.error?.message}
+            resumable={chats.data?.items.map(c => c.documentId) ?? []} /></div>
         ) : chat.isError ? (
           <div className="p-6"><Alert title="Söhbət tapılmadı" action={<button type="button" onClick={newChat} className="text-sm font-semibold underline">Yeni söhbət</button>}>Silinmiş ola bilər və ya sizə aid deyil.</Alert></div>
         ) : session && tab !== 'learn' ? (
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          // Keyed by tab: each tab starts at its top instead of inheriting the previous tab's scroll position.
+          <div key={tab} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
             {usage.data?.enabled && <UsageMeter kind="AiRequest" />}
-            {tab === 'quiz' && <TutorQuiz key={chatId} chatId={chatId} disabled={monthly.blocked || usage.data?.enabled === false} />}
-            {tab === 'shared' && <TutorShared key={chatId} chatId={chatId} disabled={monthly.blocked || usage.data?.enabled === false} />}
-            {tab === 'last' && <TutorLastMinute key={chatId} chatId={chatId} disabled={monthly.blocked || usage.data?.enabled === false} />}
+            {tab === 'prepare' && <TutorPrepare key={chatId} chatId={chatId} disabled={monthly.blocked || usage.data?.enabled === false} view={prepareView}
+              onView={view => setTab('prepare', view === 'answer' ? { view } : {})}
+              onAsk={text => { setTab('learn'); void send(text) }} onQuiz={quizTopic} focusNumber={explainNumber} />}
+            {tab === 'quiz' && <TutorQuiz key={`${chatId}-${quizNumbers.join(',')}`} chatId={chatId} disabled={monthly.blocked || usage.data?.enabled === false}
+              focus={quizFocus} onExplain={explainQuestion} />}
+            {tab === 'last' && <TutorRevision key={chatId} chatId={chatId} disabled={monthly.blocked || usage.data?.enabled === false} onQuiz={quizOn} />}
           </div>
         ) : (
           <>

@@ -9,17 +9,23 @@ import { useIndexDocument, useTutorDocuments, type TutorDocument } from './api'
 interface Props {
   onStart: (documentId: string) => void
   starting: boolean
+  /** Why the server refused the chosen document (not a PDF, a test, no open questions). */
+  startError?: string | null
+  /** Documents that already have a chat: "Davam et" reopens it instead of starting a new one. */
+  resumable?: string[]
 }
 
-const accept = '.pdf,.docx,.txt'
+// AI Tutor works only with open-question PDF and Word (.docx) files; the server checks the type and the content again.
+const accept = '.pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
 /** Start of a new chat: pick (or upload) the one document this conversation will be about. */
-export function TutorDocumentPicker({ onStart, starting }: Props) {
+export function TutorDocumentPicker({ onStart, starting, startError, resumable = [] }: Props) {
   const { data, isLoading, isError, refetch } = useTutorDocuments()
   const monthly = useUsageLimit('Upload')
   const index = useIndexDocument()
   const [term, setTerm] = useState('')
   const [progress, setProgress] = useState<number | null>(null)
+  const [typeError, setTypeError] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
 
   const documents = useMemo(() => {
@@ -29,6 +35,12 @@ export function TutorDocumentPicker({ onStart, starting }: Props) {
 
   const upload = (file: File | undefined) => {
     if (!file || monthly.blocked) return
+    const name = file.name.toLowerCase()
+    const error = name.endsWith('.pdf') || name.endsWith('.docx') ? null
+      : name.endsWith('.doc') ? 'Köhnə .doc formatı dəstəklənmir. Faylı Word-də .docx kimi saxlayıb yenidən yükləyin.'
+      : 'AI Tutor yalnız PDF və Word (.docx) faylları qəbul edir.'
+    setTypeError(error)
+    if (error) return
     setProgress(0)
     index.mutate({ file, onProgress: setProgress }, { onSettled: () => setProgress(null) })
   }
@@ -54,9 +66,11 @@ export function TutorDocumentPicker({ onStart, starting }: Props) {
           {progress !== null ? `Yüklənir ${progress}%` : 'Yeni sənəd yüklə'}
         </button>
       </div>
-      <p className="mt-2 text-xs text-slate-500">PDF, DOCX və ya TXT · ən çox 50 MB. Skan edilmiş PDF-lər hələ dəstəklənmir.</p>
+      <p className="mt-2 text-xs text-slate-500">Açıq suallı PDF və ya Word (.docx) — suallar nömrəli, cavab sualın altında · ən çox 50 MB. Variantlı testlər və skan edilmiş PDF-lər dəstəklənmir.</p>
 
+      {typeError && <div className="mt-4"><Alert title="Fayl növü dəstəklənmir">{typeError}</Alert></div>}
       {index.isError && <div className="mt-4"><Alert title="Sənəd hazırlana bilmədi">{index.error.message}</Alert></div>}
+      {startError && <div className="mt-4"><Alert title="Bu sənədlə söhbət açılmadı">{startError}</Alert></div>}
 
       <div className="mt-6">
         {isLoading ? (
@@ -70,7 +84,7 @@ export function TutorDocumentPicker({ onStart, starting }: Props) {
         ) : (
           <ul className="space-y-2">
             {documents.map(doc => (
-              <DocumentRow key={doc.documentId} doc={doc} busy={starting || (index.isPending && index.variables && 'documentId' in index.variables && index.variables.documentId === doc.documentId) === true}
+              <DocumentRow key={doc.documentId} doc={doc} resumable={resumable.includes(doc.documentId)} busy={starting || (index.isPending && index.variables && 'documentId' in index.variables && index.variables.documentId === doc.documentId) === true}
                 onStart={() => onStart(doc.documentId)} onIndex={() => index.mutate({ documentId: doc.documentId })} />
             ))}
           </ul>
@@ -80,7 +94,7 @@ export function TutorDocumentPicker({ onStart, starting }: Props) {
   )
 }
 
-function DocumentRow({ doc, busy, onStart, onIndex }: { doc: TutorDocument; busy: boolean; onStart: () => void; onIndex: () => void }) {
+function DocumentRow({ doc, resumable, busy, onStart, onIndex }: { doc: TutorDocument; resumable: boolean; busy: boolean; onStart: () => void; onIndex: () => void }) {
   const ready = doc.status === 'Completed'
   const working = doc.status === 'Pending' || doc.status === 'Processing'
   return (
@@ -100,7 +114,7 @@ function DocumentRow({ doc, busy, onStart, onIndex }: { doc: TutorDocument; busy
       {ready ? (
         <button type="button" onClick={onStart} disabled={busy}
           className="btn-primary inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold disabled:opacity-70">
-          {busy && <Loader2 className="size-4 animate-spin" aria-hidden />}Söhbətə başla
+          {busy && <Loader2 className="size-4 animate-spin" aria-hidden />}{resumable ? 'Davam et' : 'Başla'}
         </button>
       ) : !working && (
         <button type="button" onClick={onIndex} disabled={busy}

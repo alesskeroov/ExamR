@@ -58,7 +58,7 @@ public static class LearningChatEndpoints
         user.IsInRole(Roles.Admin) ? TypedResults.Ok(await budget.StatusAsync(user.GetUserId(), ct)) : (IResult)TypedResults.Ok(new { enabled = options.Value.Enabled });
 
     private static async Task<IResult> Create(CreateChatRequest request, ClaimsPrincipal user, AppDbContext db, IOptions<LearningAiOptions> options,
-        TimeProvider clock, CancellationToken ct)
+        OpenQuestionIndexer indexer, TimeProvider clock, CancellationToken ct)
     {
         if (!options.Value.Enabled) return Disabled();
         var userId = user.GetUserId();
@@ -67,6 +67,9 @@ public static class LearningChatEndpoints
             .Select(l => new { l.Id, l.Status, l.Document.OriginalFileName }).FirstOrDefaultAsync(ct);
         if (learning is not { Status: LearningStatus.Completed })
             return TypedResults.Problem("Sənəd hələ söhbət üçün hazır deyil. Əvvəlcə emal olunmalıdır.", statusCode: StatusCodes.Status409Conflict);
+        // Only open-question PDFs (or the open part of a mixed PDF) are tutored.
+        if (await indexer.GetAsync(learning.Id, ct) is { Supported: false } rejected)
+            return TypedResults.Problem(rejected.Rejection, statusCode: StatusCodes.Status422UnprocessableEntity);
 
         var now = clock.GetUtcNow();
         var session = new LearningChatSession { Id = Guid.NewGuid(), UserId = userId, LearningDocumentId = learning.Id, Title = Shorten(learning.OriginalFileName, 120), CreatedAt = now, UpdatedAt = now };
@@ -104,7 +107,7 @@ public static class LearningChatEndpoints
 
     private static async Task<IResult> Send(Guid sessionId, SendMessageRequest request, ClaimsPrincipal user, HttpContext http, AppDbContext db,
         IChunkRetriever retriever, IChatModel model, LearningAiBudget budget, IOptions<LearningAiOptions> options, IConfiguration configuration,
-        TimeProvider clock, ILogger<LearningChatSession> logger, CancellationToken ct)
+        OpenQuestionIndexer indexer, TimeProvider clock, ILogger<LearningChatSession> logger, CancellationToken ct)
     {
         var o = options.Value;
         if (!o.Enabled || OpenAiChatClient.ApiKey(configuration) is null) return Disabled();
@@ -120,6 +123,9 @@ public static class LearningChatEndpoints
         var documentId = await db.Set<LearningDocument>().Where(l => l.Id == session.LearningDocumentId && l.Status == LearningStatus.Completed)
             .Select(l => (Guid?)l.DocumentId).FirstOrDefaultAsync(ct);
         if (documentId is null || !await DocumentAccess.Readable(db, userId).AnyAsync(d => d.Id == documentId, ct)) return NotFound("Sənəd tapılmadı.");
+        // Sessions created before the open-question rule (DOCX/TXT, tests) stay readable but get no new answers.
+        if (await indexer.GetAsync(session.LearningDocumentId, ct) is not { } index) return NotFound("Sənəd tapılmadı.");
+        if (!index.Supported) return TypedResults.Problem(index.Rejection, statusCode: StatusCodes.Status422UnprocessableEntity);
 
         // Context selection: a few recent completed turns, never the whole history.
         var recent = await db.Set<LearningChatMessage>().AsNoTracking()
@@ -149,6 +155,14 @@ public static class LearningChatEndpoints
                 if (sample.Count > 0)
                     retrieval = new RetrievalResult(true, sample.Select(c => new RetrievedChunk(c.Ordinal, 0, 0, c.PageFrom, c.PageTo, c.Section,
                         c.ParagraphFrom, c.ParagraphTo, c.Text)).ToList(), "overview");
+            }
+            // A message about one of the document's questions gets that question's own answer as the first source, so the
+            // reply is built from the matching answer instead of whatever chunk shares the most words.
+            if (index.Match(question) is { } asked)
+            {
+                var own = new RetrievedChunk(asked.ChunkOrdinal, 1, 1, asked.Page, asked.Page, null, 0, 0, $"Sual {asked.Number}: {asked.Text}\nCavab: {asked.Answer}");
+                var rest = retrieval.Found ? retrieval.Chunks.Where(c => c.Ordinal != asked.ChunkOrdinal) : [];
+                retrieval = new RetrievalResult(true, [own, .. rest.Take(Math.Max(0, o.ContextChunks - 1))], "question");
             }
         }
         // Button lines are Azerbaijani; the student's own words (or their last typed turn) decide the reply language.

@@ -95,13 +95,20 @@ export function useAiUsage() {
   return useQuery({ queryKey: queryKeys.tutor.usage, queryFn: () => api.get<AiUsage>('/learning/ai/usage'), staleTime: 30_000 })
 }
 
-export type QuizStatus = 'Correct' | 'Partial' | 'Incorrect'
-export interface QuizQuestion { id: string; question: string; pageFrom: number | null; pageTo: number | null }
+/** Unchecked = "Yoxlanılmadı": no reliable verdict (or a technical problem; then canRetry). */
+export type QuizStatus = 'Correct' | 'Incorrect' | 'Unchecked'
+export interface QuizQuestion { id: string; question: string; pageFrom: number | null; pageTo: number | null; number: number }
 export interface QuizResult {
   id: string; question: string; status: QuizStatus; feedback: string; correctAnswer: string; missingPoints: string[]
-  pageFrom: number | null; pageTo: number | null; aiChecked: boolean
+  pageFrom: number | null; pageTo: number | null; aiChecked: boolean; canRetry: boolean
 }
-export interface QuizReview { correct: number; partial: number; incorrect: number; items: QuizResult[] }
+export interface QuizReviewItem { number: number; question: string; correctAnswer: string; page: number | null; answeredAt: string }
+export interface WeakTopic { title: string; numbers: number[]; wrong: number; answered: number }
+/** By each question's latest answer. `review` = questions last answered wrong (stored per user and document). */
+/** pending: the newest question was asked but never answered ("Qaldığın yerdən davam et"). */
+export interface QuizReview {
+  correct: number; incorrect: number; unchecked: number; questions: number; review: QuizReviewItem[]; weakTopics: WeakTopic[]; pending: QuizQuestion | null
+}
 export interface OpenQuestion { number: number; text: string; chunkOrdinal: number; page: number | null; hasAnswer: boolean }
 export interface OpenQuestions { supported: boolean; warning: string | null; questions: OpenQuestion[] }
 export type AnswerLength = 'Short' | 'Long'
@@ -118,10 +125,16 @@ export interface MaterialSummary { id: string; kind: 'SharedAnswer' | 'LastMinut
 export function useQuizReview(chatId: string) {
   return useQuery({ queryKey: queryKeys.tutor.review(chatId), queryFn: () => api.get<QuizReview>(`/learning/chats/${chatId}/quiz/review`) })
 }
+/** `numbers`: only these questions (a Hazırlaş topic or the review list). `asked`: already asked in this session, never repeated. */
 export function useNextQuestion(chatId: string) {
   const client = useQueryClient()
   return useMutation({
-    onSettled: () => client.invalidateQueries({ queryKey: queryKeys.usage.mine }), mutationFn: () => api.post<QuizQuestion>(`/learning/chats/${chatId}/quiz`) })
+    onSettled: () => client.invalidateQueries({ queryKey: queryKeys.usage.mine }),
+    mutationFn: ({ numbers = [], asked = [] }: { numbers?: number[]; asked?: number[] }) => {
+      const query = [...numbers.map(n => `numbers=${n}`), ...asked.map(n => `asked=${n}`)].join('&')
+      return api.post<QuizQuestion>(`/learning/chats/${chatId}/quiz${query ? `?${query}` : ''}`)
+    },
+  })
 }
 export function useAnswerQuestion(chatId: string) {
   const client = useQueryClient()
@@ -130,6 +143,7 @@ export function useAnswerQuestion(chatId: string) {
     mutationFn: ({ id, answer, giveUp }: { id: string; answer?: string; giveUp?: boolean }) => api.post<QuizResult>(`/learning/quiz/${id}/answer`, { answer, giveUp }),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: queryKeys.tutor.review(chatId) })
+      void client.invalidateQueries({ queryKey: queryKeys.tutor.revision(chatId) }) // weak topics move to the top of Son təkrar
       void client.invalidateQueries({ queryKey: queryKeys.tutor.usage })
     },
   })
@@ -169,6 +183,81 @@ export function useSaveMaterial(chatId: string) {
     },
   })
 }
+// ---------- Son təkrar ----------
+
+export interface RevisionCard {
+  facts: string[]; concepts: { term: string; meaning: string }[]; comparisons: { first: string; second: string; difference: string }[]
+  tips: string[]; sourcePages: number[]
+}
+export interface RevisionTopic {
+  key: string; title: string; questions: number; wrong: number; answered: number; numbers: number[]; wrongNumbers: number[]; card: RevisionCard | null
+}
+/** hasHistory: ordered by the student's Məni yoxla results (weak topics first); otherwise a neutral order. */
+export interface Revision { hasHistory: boolean; warning: string | null; topics: RevisionTopic[]; error: string | null }
+
+/** Topics in revision order with their stored cards; the server prepares cards only for the first topics that still lack one. */
+export function useRevision(chatId: string) {
+  return useQuery({
+    queryKey: queryKeys.tutor.revision(chatId),
+    queryFn: () => api.post<Revision>(`/learning/chats/${chatId}/revision`, {}),
+    staleTime: 60_000, retry: false,
+  })
+}
+
+/** "Daha çox": prepares the cards of the given topics (one AI call for the batch) and replaces the cached list. */
+export function useMoreRevision(chatId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    onSettled: () => client.invalidateQueries({ queryKey: queryKeys.usage.mine }),
+    mutationFn: (keys: string[]) => api.post<Revision>(`/learning/chats/${chatId}/revision`, { keys }),
+    onSuccess: data => {
+      client.setQueryData(queryKeys.tutor.revision(chatId), data)
+      void client.invalidateQueries({ queryKey: queryKeys.tutor.usage })
+    },
+  })
+}
+
+// ---------- Hazırlaş ----------
+
+export type PrepareView = 'explain' | 'answer'
+export interface PrepareQuestion { number: number; text: string; page: number | null }
+/** section: the broad main topic ("" when unknown). */
+export interface PrepareTopic { key: string; title: string; questions: PrepareQuestion[]; explained: boolean; answered: boolean; section: string }
+/** found = every numbered question in the document; usable = with the document's own answer. */
+export interface PrepareStats { found: number; usable: number; sharedAnswers: number; noAnswer: number; multipleChoice: number; unclear: number }
+export interface ExcludedQuestion { number: number; text: string; page: number | null; reason: string }
+export interface PrepareTopics { warning: string | null; topics: PrepareTopic[]; stats: PrepareStats | null; excluded: ExcludedQuestion[] | null }
+export interface TopicExplanation {
+  title: string; explanation: string[]; concepts: { term: string; meaning: string }[]; example: string | null; facts: string[]
+  questionNumbers: number[]; sourcePages: number[]
+}
+export interface CoveredQuestion { number: number; text: string; page: number | null; covered: boolean; addition: string; documentAnswer: string | null }
+export interface GroupAnswer { title: string; sufficient: boolean; answer: string; questions: CoveredQuestion[]; sourcePages: number[] }
+export interface PrepareMaterial<T> { key: string; fromCache: boolean; createdAt: string; payload: T }
+
+/** Topics of the document's open questions. A POST because the first call may group the questions with AI (then cached). */
+export function usePrepareTopics(chatId: string) {
+  return useQuery({
+    queryKey: queryKeys.tutor.prepareTopics(chatId),
+    queryFn: () => api.post<PrepareTopics>(`/learning/chats/${chatId}/prepare/topics`),
+    staleTime: Infinity, retry: false,
+  })
+}
+
+/** Explanation or exam answer of one topic; generated once per document version on the server, then served from its cache. */
+export function usePrepareMaterial<T>(chatId: string, view: PrepareView, key: string) {
+  const client = useQueryClient()
+  return useQuery({
+    queryKey: queryKeys.tutor.prepare(chatId, view, key),
+    queryFn: async () => {
+      const material = await api.post<PrepareMaterial<T>>(`/learning/chats/${chatId}/prepare/topics/${key}/${view === 'explain' ? 'explanation' : 'answer'}`, {})
+      if (!material.fromCache) void client.invalidateQueries({ queryKey: queryKeys.tutor.usage })
+      return material
+    },
+    staleTime: Infinity, retry: false,
+  })
+}
+
 export function useDeleteMaterial(chatId: string) {
   const client = useQueryClient()
   return useMutation({

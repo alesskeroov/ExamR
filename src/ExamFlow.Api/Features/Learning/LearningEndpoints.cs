@@ -20,7 +20,9 @@ public sealed record LearningChunkDto(int Ordinal, string Text, int TokenEstimat
 /// <summary>Document intake for the AI tutor (extraction and chunking only, no AI calls). Open to every signed-in user; document access rules apply.</summary>
 public static class LearningEndpoints
 {
-    private static readonly HashSet<string> Formats = [".pdf", ".docx", ".txt"];
+    // AI Tutor works only with open-question PDF and Word (DOCX) files. TXT support stays in the text extractor; it is only
+    // switched off here, and already indexed TXT rows are kept untouched.
+    private static readonly HashSet<string> Formats = [".pdf", ".docx"];
 
     public static void MapLearningEndpoints(this RouteGroupBuilder api)
     {
@@ -56,10 +58,10 @@ public static class LearningEndpoints
         IOptions<LearningOptions> options, TimeProvider clock, UsageLimiter usage, CancellationToken ct)
     {
         var limit = Math.Min(options.Value.MaxFileSizeBytes, LearningOptionsLimit);
-        if (file is null || file.Length == 0) return Invalid("PDF, DOCX və ya TXT faylı seçilməyib.");
+        if (file is null || file.Length == 0) return Invalid("PDF və ya Word (.docx) faylı seçilməyib.");
         if (file.Length > limit) return TypedResults.Problem($"Fayl {limit / 1024 / 1024} MB-dan böyük ola bilməz.", statusCode: StatusCodes.Status413PayloadTooLarge);
         var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-        if (!Formats.Contains(extension)) return Invalid("Yalnız PDF, DOCX və TXT faylları qəbul edilir.");
+        if (!Formats.Contains(extension)) return Invalid(extension == ".doc" ? "Köhnə .doc formatı dəstəklənmir. Faylı Word-də .docx kimi saxlayıb yenidən yükləyin." : "AI Tutor yalnız açıq suallı PDF və Word (.docx) faylları qəbul edir.");
 
         // Stream to a temp file (not memory): hash and signature are checked there before anything is stored.
         var tempPath = Path.GetTempFileName();
@@ -121,11 +123,11 @@ public static class LearningEndpoints
 
     public sealed record LearningDocumentListItem(Guid DocumentId, string FileName, string Format, string? Status, int? PageCount, int ChunkCount, DateTimeOffset UploadedAt);
 
-    /// <summary>Readable PDF/DOCX/TXT documents with their index state (null status = not indexed yet), for the tutor's document picker.</summary>
+    /// <summary>Readable PDF and Word documents with their index state (null status = not indexed yet), for the tutor's document picker.</summary>
     private static async Task<IResult> List(ClaimsPrincipal user, AppDbContext db, CancellationToken ct)
     {
         var items = await DocumentAccess.Readable(db, user.GetUserId())
-            .Where(d => d.StoredFileName.EndsWith(".pdf") || d.StoredFileName.EndsWith(".docx") || d.StoredFileName.EndsWith(".txt"))
+            .Where(d => d.StoredFileName.EndsWith(".pdf") || d.StoredFileName.EndsWith(".docx"))
             .OrderByDescending(d => d.CreatedAt).Take(200)
             .Select(d => new
             {
@@ -147,7 +149,7 @@ public static class LearningEndpoints
             .Select(d => new { d.Id, d.StoredFileName }).FirstOrDefaultAsync(ct);
         if (document is null) return NotFound();
         var extension = Path.GetExtension(document.StoredFileName).ToLowerInvariant();
-        if (!Formats.Contains(extension)) return Invalid("Bu sənəd növü dəstəklənmir.");
+        if (!Formats.Contains(extension)) return Invalid("AI Tutor yalnız açıq suallı PDF və Word (.docx) sənədləri ilə işləyir.");
 
         var learning = await db.Set<LearningDocument>().FirstOrDefaultAsync(l => l.DocumentId == documentId, ct);
         if (learning is { Status: LearningStatus.Completed }) return TypedResults.Ok(await Dto(db, documentId, ct));
@@ -204,7 +206,7 @@ public static class LearningEndpoints
                 l.CharacterCount, l.ChunkCount, l.LooksScanned, l.Error, l.CreatedAt, l.ProcessedAt))
             .FirstOrDefaultAsync(ct);
 
-    /// <summary>Magic bytes, not the client's content type: %PDF-, a ZIP header for DOCX, valid UTF-8 without NUL for TXT.</summary>
+    /// <summary>Magic bytes, not the client's content type: %PDF- for PDF, a ZIP header for DOCX (its structure is checked when parsed).</summary>
     private static async Task<bool> HasValidSignature(Stream file, string extension, CancellationToken ct)
     {
         var head = new byte[8192];

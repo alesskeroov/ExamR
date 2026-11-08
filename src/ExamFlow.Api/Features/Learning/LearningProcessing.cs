@@ -83,7 +83,8 @@ public sealed class LearningProcessingService(
 }
 
 /// <summary>Turns one stored file into paragraphs and chunks; never touches the exam question data.</summary>
-public sealed class LearningProcessor(AppDbContext db, UsageLimiter usage, IFileStorage storage, IOptions<LearningOptions> options, TimeProvider clock, ILogger<LearningProcessor> logger)
+public sealed class LearningProcessor(AppDbContext db, UsageLimiter usage, IFileStorage storage, IOptions<LearningOptions> options, TimeProvider clock, OpenQuestionIndexer indexer,
+    ILogger<LearningProcessor> logger)
 {
     public async Task ProcessAsync(Guid jobId, CancellationToken stoppingToken)
     {
@@ -179,6 +180,17 @@ public sealed class LearningProcessor(AppDbContext db, UsageLimiter usage, IFile
             await tx.CommitAsync(CancellationToken.None);
         });
         logger.LogInformation("Learning document {DocumentId} indexed: {Chunks} chunks", learning.DocumentId, chunks.Count);
+
+        // Classify the questions now, in the background, so opening a chat does not wait for the PDF parse.
+        // Failure is not fatal: the tutor builds the index on first use instead.
+        if (OpenQuestionIndexer.IsSupportedFormat(learning.Format))
+        {
+            try { await indexer.GetAsync(learning.Id, stoppingToken); }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning(ex, "Question index for learning document {DocumentId} could not be built", learning.DocumentId);
+            }
+        }
     }
 
     private void Fail(LearningProcessingJob job, LearningDocument learning, string reason)

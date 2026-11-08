@@ -6,6 +6,7 @@ using ExamFlow.Api.Common;
 using ExamFlow.Api.Features.Documents;
 using ExamFlow.Api.Infrastructure.Data;
 using ExamFlow.Api.Infrastructure.Security;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace ExamFlow.Api.Features.Learning;
@@ -32,16 +33,22 @@ public sealed class LastMinuteRequest
 
 public sealed class SaveMaterialRequest { public bool Saved { get; init; } }
 
-public sealed record QuizQuestionDto(Guid Id, string Question, int? PageFrom, int? PageTo);
+/// <summary>Number is the question's number in the PDF; the client sends it back as "asked" so a session never repeats it.</summary>
+public sealed record QuizQuestionDto(Guid Id, string Question, int? PageFrom, int? PageTo, int Number);
+/// <summary>Status: Correct, Incorrect or Unchecked. CanRetry: not graded because of a technical problem, so "Yenidən yoxla" may try again.</summary>
 public sealed record QuizResultDto(Guid Id, string Question, string Status, string Feedback, string CorrectAnswer, IReadOnlyList<string> MissingPoints,
-    int? PageFrom, int? PageTo, bool AiChecked);
-public sealed record QuizReviewDto(int Correct, int Partial, int Incorrect, IReadOnlyList<QuizResultDto> Items);
+    int? PageFrom, int? PageTo, bool AiChecked, bool CanRetry);
+public sealed record QuizReviewItemDto(int Number, string Question, string CorrectAnswer, int? Page, DateTimeOffset AnsweredAt);
+public sealed record WeakTopicDto(string Title, IReadOnlyList<int> Numbers, int Wrong, int Answered);
+/// <summary>Per question, by the latest answer: Correct / Incorrect counts, Unchecked = questions never graded. Review = questions last answered wrong.</summary>
+public sealed record QuizReviewDto(int Correct, int Incorrect, int Unchecked, int Questions, IReadOnlyList<QuizReviewItemDto> Review, IReadOnlyList<WeakTopicDto> WeakTopics,
+    QuizQuestionDto? Pending = null);
 public sealed record OpenQuestionsDto(bool Supported, string? Warning, IReadOnlyList<OpenQuestion> Questions);
 public sealed record MaterialSummaryDto(Guid Id, string Kind, string? Length, int? Minutes, bool Saved, string Title, int Items, DateTimeOffset CreatedAt, string? GeneratorVersion = null);
 public sealed record MaterialDto(Guid Id, string Kind, string? Length, int? Minutes, bool Saved, bool FromCache, DateTimeOffset CreatedAt, JsonElement Payload);
 
 /// <summary>AI Tutor 2.0 study tools: "Məni yoxla" quiz, shared answers for open questions, last-minute revision sheet.</summary>
-public static class LearningStudyEndpoints
+public static partial class LearningStudyEndpoints
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -58,9 +65,10 @@ public static class LearningStudyEndpoints
         group.MapGet("/materials/{id:guid}", Material);
         group.MapPost("/materials/{id:guid}/save", SaveMaterial).Validate<SaveMaterialRequest>();
         group.MapDelete("/materials/{id:guid}", DeleteMaterial);
+        MapPrepare(group);
     }
 
-    private sealed record StudyDoc(Guid LearningId, Guid DocumentId, byte[] Sha256);
+    private sealed record StudyDoc(Guid LearningId, Guid DocumentId, byte[] Sha256, string Format);
 
     /// <summary>The session's document, only while the user still owns the session and may read the document.</summary>
     private static async Task<StudyDoc?> FromSession(AppDbContext db, Guid userId, Guid sessionId, CancellationToken ct)
@@ -73,108 +81,106 @@ public static class LearningStudyEndpoints
     private static async Task<StudyDoc?> FromLearning(AppDbContext db, Guid userId, Guid learningId, CancellationToken ct)
     {
         var doc = await db.Set<LearningDocument>().AsNoTracking().Where(l => l.Id == learningId && l.Status == LearningStatus.Completed)
-            .Select(l => new { l.DocumentId, l.Document.Sha256 }).FirstOrDefaultAsync(ct);
+            .Select(l => new { l.DocumentId, l.Document.Sha256, l.Format }).FirstOrDefaultAsync(ct);
         if (doc is null || !await DocumentAccess.Readable(db, userId).AnyAsync(d => d.Id == doc.DocumentId, ct)) return null;
-        return new StudyDoc(learningId, doc.DocumentId, doc.Sha256);
+        return new StudyDoc(learningId, doc.DocumentId, doc.Sha256, doc.Format);
     }
+
+    /// <summary>The session's document and its open questions, or the reason the tutor does not work with it.</summary>
+    private static async Task<(StudyDoc? Doc, OpenQuestionIndex? Index, IResult? Error)> OpenDocAsync(AppDbContext db, OpenQuestionIndexer indexer, Guid userId,
+        Guid sessionId, CancellationToken ct)
+    {
+        if (await FromSession(db, userId, sessionId, ct) is not { } doc) return (null, null, NotFound());
+        if (await indexer.GetAsync(doc.LearningId, ct) is not { } index) return (null, null, NotFound());
+        return index.Supported ? (doc, index, null) : (null, null, Unsupported(index));
+    }
+
+    private static IResult Unsupported(OpenQuestionIndex index) =>
+        TypedResults.Problem(index.Rejection, statusCode: StatusCodes.Status422UnprocessableEntity);
 
     // ---------- Məni yoxla ----------
 
-    private static async Task<IResult> NextQuestion(Guid sessionId, ClaimsPrincipal user, AppDbContext db, StudyAi ai, TimeProvider clock, CancellationToken ct)
+    /// <summary>Asks one of the document's own open questions (no AI call); its document answer is the reference for grading.</summary>
+    /// <param name="numbers">Optional filter: one Hazırlaş topic, or the review list ("Səhv etdiklərimi təkrar et").</param>
+    /// <param name="asked">Question numbers already asked in this session; they are never asked again in it.</param>
+    private static async Task<IResult> NextQuestion(Guid sessionId, ClaimsPrincipal user, AppDbContext db, OpenQuestionIndexer indexer, TimeProvider clock,
+        [FromQuery] int[]? numbers, [FromQuery] int[]? asked, CancellationToken ct)
     {
+        if (numbers?.Length > QuizLogic.MaxNumbers || asked?.Length > QuizLogic.MaxNumbers)
+            return Bad($"Bir sessiyada ən çox {QuizLogic.MaxNumbers} sual ola bilər.");
         var userId = user.GetUserId();
-        if (await FromSession(db, userId, sessionId, ct) is not { } doc) return NotFound();
-        var chunks = await TeachingStep.ChunksAsync(db, doc.LearningId, ct);
-        if (chunks.Count == 0) return TypedResults.Problem("Sənəddə sual hazırlamaq üçün mətn tapılmadı.", statusCode: 409);
+        var (doc, index, error) = await OpenDocAsync(db, indexer, userId, sessionId, ct);
+        if (error is not null) return error;
 
-        // Prefer parts the student has not been asked about recently; sometimes return to a weak part.
-        var recent = await db.Set<LearningQuizItem>().AsNoTracking().Where(q => q.UserId == userId && q.LearningDocumentId == doc.LearningId)
-            .OrderByDescending(q => q.CreatedAt).Take(40).Select(q => new { q.ChunkOrdinal, q.Status }).ToListAsync(ct);
-        var weak = recent.Where(r => r.Status is QuizStatus.Incorrect or QuizStatus.Partial).Select(r => r.ChunkOrdinal).Distinct().ToList();
-        var lastAsked = recent.Take(8).Select(r => r.ChunkOrdinal).ToHashSet();
-        var candidates = chunks.Where(c => c.Text.Length >= 300 && !lastAsked.Contains(c.Ordinal)).ToList();
-        if (candidates.Count == 0) candidates = chunks;
-        var chunk = weak.Count > 0 && Random.Shared.NextDouble() < 0.35
-            ? chunks.FirstOrDefault(c => c.Ordinal == weak[Random.Shared.Next(weak.Count)]) ?? candidates[Random.Shared.Next(candidates.Count)]
-            : candidates[Random.Shared.Next(candidates.Count)];
+        var recent = await db.Set<LearningQuizItem>().AsNoTracking().Where(q => q.UserId == userId && q.LearningDocumentId == doc!.LearningId)
+            .OrderByDescending(q => q.CreatedAt).Take(60).Select(q => new QuizAttempt(q.Question, q.Status, q.AnsweredAt ?? q.CreatedAt)).ToListAsync(ct);
+        if (QuizLogic.Pick(index!.Questions, numbers, asked, recent, Random.Shared) is not { } picked)
+            return TypedResults.Problem(asked is { Length: > 0 } ? "Bu sessiyada bütün suallar soruşuldu." : "Seçilmiş suallar sənəddə tapılmadı.",
+                statusCode: StatusCodes.Status409Conflict);
 
-        var language = TutorPrompt.DetectLanguage(chunk.Text);
-        var result = await ai.RunAsync(userId, user.IsInRole(Roles.Admin),
-            [new("system", StudyPrompts.System(language)), new("user", StudyPrompts.Sources([chunk]) + StudyPrompts.QuizTask)],
-            "quiz_question", StudyPrompts.QuizSchema(), 400, light: false, ct);
-        if (!result.Ok) return TypedResults.Problem(result.Error, statusCode: result.Status);
-
-        try
+        var item = new LearningQuizItem
         {
-            var json = result.Json!.Value;
-            var item = new LearningQuizItem
-            {
-                Id = Guid.NewGuid(), UserId = userId, LearningDocumentId = doc.LearningId, Status = QuizStatus.Pending, CreatedAt = clock.GetUtcNow(),
-                Question = StudyJson.Text(json, "question", 1000), ReferenceAnswer = StudyJson.Text(json, "answer", 2000),
-                KeyPointsJson = JsonSerializer.Serialize(StudyJson.Texts(json, "keyPoints", 4, 300), Json),
-                ChunkOrdinal = chunk.Ordinal, PageFrom = chunk.PageFrom, PageTo = chunk.PageTo,
-            };
-            db.Add(item);
-            await db.SaveChangesAsync(ct);
-            return TypedResults.Ok(new QuizQuestionDto(item.Id, item.Question, item.PageFrom, item.PageTo));
-        }
-        catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException)
-        {
-            return InvalidOutput();
-        }
+            Id = Guid.NewGuid(), UserId = userId, LearningDocumentId = doc!.LearningId, Status = QuizStatus.Pending, CreatedAt = clock.GetUtcNow(),
+            Question = QuizLogic.Key(picked.Text), ReferenceAnswer = Shorten(picked.Answer, 2000), KeyPointsJson = "[]",
+            ChunkOrdinal = picked.ChunkOrdinal, PageFrom = picked.Page, PageTo = picked.Page,
+        };
+        db.Add(item);
+        await db.SaveChangesAsync(ct);
+        return TypedResults.Ok(new QuizQuestionDto(item.Id, item.Question, item.PageFrom, item.PageTo, picked.Number));
     }
 
+    /// <summary>Grades by meaning against the document's answer: Correct, Incorrect, or Unchecked when no reliable verdict is possible.</summary>
     private static async Task<IResult> Answer(Guid itemId, QuizAnswerRequest request, ClaimsPrincipal user, AppDbContext db, StudyAi ai, TimeProvider clock, CancellationToken ct)
     {
         var userId = user.GetUserId();
         var item = await db.Set<LearningQuizItem>().FirstOrDefaultAsync(q => q.Id == itemId && q.UserId == userId, ct);
-        if (item is null || await FromLearning(db, userId, item.LearningDocumentId, ct) is null) return NotFound();
-        if (item.Status != QuizStatus.Pending) return TypedResults.Ok(ToResult(item)); // already graded: never re-grade or re-bill
+        if (item is null || await FromLearning(db, userId, item.LearningDocumentId, ct) is not { } doc) return NotFound();
+        // Graded answers are final (never re-graded or re-billed). Only "Yoxlanılmadı" after a technical problem may be retried.
+        if (item.Status != QuizStatus.Pending && !CanRetry(item)) return TypedResults.Ok(ToResult(item));
+        if (!OpenQuestionIndexer.IsSupportedFormat(doc.Format))
+            return Unsupported(new OpenQuestionIndex(OpenQuestionClassifier.Version, OpenDocumentKind.NotPdf, 0, 0, 0, []));
 
-        item.UserAnswer = request.Answer?.Trim();
-        if (request.GiveUp || RefusalDetector.IsRefusal(request.Answer))
+        if (item.Status == QuizStatus.Pending) item.UserAnswer = request.Answer?.Trim(); // a retry grades the answer already given
+        if (item.Status == QuizStatus.Pending && (request.GiveUp || RefusalDetector.IsRefusal(request.Answer)))
         {
-            // No model call: "I don't know" is always INCORRECT; the stored document-based answer is shown.
+            // No model call: "I don't know" is always wrong; the document's answer is shown and the question goes to review.
             item.Status = QuizStatus.Incorrect;
-            item.Feedback = request.GiveUp ? "Bu sualı sonra təkrar edin." : "Cavab verilmədi.";
-            item.MissingPointsJson = item.KeyPointsJson;
+            item.Feedback = request.GiveUp
+                ? "Düzgün cavab aşağıdadır. Sual təkrar siyahısına əlavə olundu."
+                : "Cavab verilmədi. Düzgün cavab aşağıdadır; sual təkrar siyahısına əlavə olundu.";
+            item.MissingPointsJson = "[]";
             item.AiChecked = false;
         }
         else
         {
-            var chunk = await db.Set<LearningDocumentChunk>().AsNoTracking()
-                .FirstOrDefaultAsync(c => c.LearningDocumentId == item.LearningDocumentId && c.Ordinal == item.ChunkOrdinal, ct);
+            // Only the stored reference (the document's answer) is sent: no chunk lookup, no re-sending of document parts.
             var keyPoints = JsonSerializer.Deserialize<string[]>(item.KeyPointsJson, Json) ?? [];
             var input = new StringBuilder()
-                .Append(chunk is null ? "" : StudyPrompts.Sources([chunk]))
+                .Append("<source pages=\"").Append(StudyPrompts.PageText(item.PageFrom, item.PageTo)).Append("\">\n")
+                .Append(TutorPrompt.Neutralise(item.ReferenceAnswer))
+                .Append(keyPoints.Length > 0 ? "\nKey points: " + TutorPrompt.Neutralise(string.Join("; ", keyPoints)) : "").Append("\n</source>\n")
                 .Append("<question>\n").Append(TutorPrompt.Neutralise(item.Question)).Append("\n</question>\n")
-                .Append("<reference>\n").Append(TutorPrompt.Neutralise(item.ReferenceAnswer))
-                .Append(keyPoints.Length > 0 ? "\nKey points: " + TutorPrompt.Neutralise(string.Join("; ", keyPoints)) : "").Append("\n</reference>\n")
                 .Append("<answer>\n").Append(TutorPrompt.Neutralise(item.UserAnswer ?? "")).Append("\n</answer>\n")
                 .Append(StudyPrompts.GradeTask).ToString();
             var result = await ai.RunAsync(userId, user.IsInRole(Roles.Admin),
                 [new("system", StudyPrompts.System(TutorPrompt.DetectLanguage(item.Question))), new("user", input)],
                 "grade_answer", StudyPrompts.GradeSchema(), 350, light: false, ct);
-            // Grading failed: say so and keep the question open; never show an invented grade.
-            if (!result.Ok) return TypedResults.Problem(result.Error, statusCode: result.Status);
-            try
+            var grade = result.Ok ? TryParseGrade(result.Json!.Value) : null;
+            if (grade is { } g)
             {
-                var json = result.Json!.Value;
-                item.Status = json.GetProperty("status").GetString() switch
-                {
-                    "CORRECT" => QuizStatus.Correct,
-                    "PARTIAL" => QuizStatus.Partial,
-                    "INCORRECT" => QuizStatus.Incorrect,
-                    _ => throw new JsonException("status"),
-                };
-                item.Feedback = StudyJson.Text(json, "feedback", 300);
-                item.MissingPointsJson = JsonSerializer.Serialize(item.Status == QuizStatus.Correct ? [] : StudyJson.Texts(json, "missingPoints", 5, 200), Json);
-                item.ReferenceAnswer = StudyJson.Text(json, "correctAnswer", 2000);
-                item.AiChecked = true;
+                item.Status = g.Status;
+                item.Feedback = g.Feedback;
+                item.MissingPointsJson = JsonSerializer.Serialize(g.Missing, Json);
+                item.AiChecked = true; // ReferenceAnswer stays the document's own text
             }
-            catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException)
+            else
             {
-                return InvalidOutput();
+                // Technical problem (AI off, limit, timeout, invalid output): never an invented grade. The answer is kept as
+                // "Yoxlanılmadı" with the document's answer, and the student may retry the check.
+                item.Status = QuizStatus.Unchecked;
+                item.Feedback = result.Ok ? "AI cavabı yoxlana bilmədi." : result.Error ?? "Cavab yoxlana bilmədi.";
+                item.MissingPointsJson = "[]";
+                item.AiChecked = false;
             }
         }
         item.AnsweredAt = clock.GetUtcNow();
@@ -182,79 +188,113 @@ public static class LearningStudyEndpoints
         return TypedResults.Ok(ToResult(item));
     }
 
-    private static async Task<IResult> Review(Guid sessionId, ClaimsPrincipal user, AppDbContext db, CancellationToken ct)
+    /// <summary>
+    /// The student's standing on this document, by each question's latest answer: counts, the review list (last answered wrong,
+    /// stored per user and document) and weak topics. Weak topics use the document's question groups (made once, then cached).
+    /// </summary>
+    private static async Task<IResult> Review(Guid sessionId, ClaimsPrincipal user, AppDbContext db, StudyAi ai, OpenQuestionIndexer indexer,
+        TimeProvider clock, CancellationToken ct)
     {
         var userId = user.GetUserId();
-        if (await FromSession(db, userId, sessionId, ct) is not { } doc) return NotFound();
-        var answered = db.Set<LearningQuizItem>().AsNoTracking().Where(q => q.UserId == userId && q.LearningDocumentId == doc.LearningId && q.Status != QuizStatus.Pending);
-        var counts = await answered.GroupBy(q => q.Status).Select(g => new { g.Key, Count = g.Count() }).ToListAsync(ct);
-        var items = await answered.Where(q => q.Status == QuizStatus.Incorrect || q.Status == QuizStatus.Partial)
-            .OrderByDescending(q => q.AnsweredAt).Take(30).ToListAsync(ct);
-        int Count(QuizStatus s) => counts.FirstOrDefault(c => c.Key == s)?.Count ?? 0;
-        return TypedResults.Ok(new QuizReviewDto(Count(QuizStatus.Correct), Count(QuizStatus.Partial), Count(QuizStatus.Incorrect), items.Select(ToResult).ToList()));
+        var (doc, index, error) = await OpenDocAsync(db, indexer, userId, sessionId, ct);
+        if (error is not null) return error;
+        var attempts = await db.Set<LearningQuizItem>().AsNoTracking()
+            .Where(q => q.UserId == userId && q.LearningDocumentId == doc!.LearningId && q.Status != QuizStatus.Pending)
+            .OrderByDescending(q => q.AnsweredAt).Take(2000)
+            .Select(q => new { Attempt = new QuizAttempt(q.Question, q.Status, q.AnsweredAt ?? q.CreatedAt), q.ReferenceAnswer, q.PageFrom }).ToListAsync(ct);
+
+        var latest = QuizLogic.Latest(attempts.Select(a => a.Attempt));
+        var byKey = index!.Questions.GroupBy(q => QuizLogic.Key(q.Text)).ToDictionary(g => g.Key, g => g.First());
+        var notGraded = attempts.Select(a => a.Attempt.Question).Distinct().Count(q => !latest.ContainsKey(q));
+        var review = latest.Values.Where(a => QuizLogic.IsWrong(a.Status) && byKey.ContainsKey(a.Question)).OrderByDescending(a => a.At).Take(QuizLogic.MaxNumbers)
+            .Select(a => (Attempt: a, Question: byKey[a.Question]))
+            .Select(x => new QuizReviewItemDto(x.Question.Number, x.Attempt.Question, Shorten(x.Question.Answer, 2000), x.Question.Page, x.Attempt.At)).ToList();
+
+        IReadOnlyList<WeakTopicDto> weak = [];
+        if (review.Count > 0)
+        {
+            // Grouping is the cheap, cached step Hazırlaş and Son təkrar use too; if it cannot run now, the list just stays empty.
+            var (groups, _) = await GroupsAsync(db, ai, userId, user.IsInRole(Roles.Admin), doc!, index.ToScan(), index.Fingerprint(), clock, ct);
+            if (groups is not null)
+                weak = QuizLogic.WeakTopics(latest, index.Questions, groups.Select(g => (g.Title, (IReadOnlyList<int>)g.Numbers)))
+                    .Select(t => new WeakTopicDto(t.Title, t.Numbers, t.Wrong, t.Answered)).ToList();
+        }
+        // "Qaldığın yerdən davam et": the newest question was asked but not answered (left mid-session), recently.
+        var newest = await db.Set<LearningQuizItem>().AsNoTracking().Where(q => q.UserId == userId && q.LearningDocumentId == doc!.LearningId)
+            .OrderByDescending(q => q.CreatedAt).Select(q => new { q.Id, q.Question, q.Status, q.PageFrom, q.PageTo, q.CreatedAt }).FirstOrDefaultAsync(ct);
+        var pending = newest is { Status: QuizStatus.Pending } && newest.CreatedAt > clock.GetUtcNow().AddDays(-7) && byKey.TryGetValue(newest.Question, out var open)
+            ? new QuizQuestionDto(newest.Id, newest.Question, newest.PageFrom, newest.PageTo, open.Number) : null;
+
+        return TypedResults.Ok(new QuizReviewDto(latest.Values.Count(a => a.Status == QuizStatus.Correct), latest.Values.Count(a => QuizLogic.IsWrong(a.Status)),
+            notGraded, index.Questions.Count, review, weak, pending));
     }
 
-    private static QuizResultDto ToResult(LearningQuizItem q) => new(q.Id, q.Question, q.Status.ToString(), q.Feedback ?? "", q.ReferenceAnswer,
-        q.MissingPointsJson is null ? [] : JsonSerializer.Deserialize<string[]>(q.MissingPointsJson, Json) ?? [], q.PageFrom, q.PageTo, q.AiChecked);
+    private static bool CanRetry(LearningQuizItem q) => q.Status == QuizStatus.Unchecked && !q.AiChecked;
+
+    private static (QuizStatus Status, string Feedback, IReadOnlyList<string> Missing)? TryParseGrade(JsonElement json)
+    {
+        try { return QuizLogic.ParseGrade(json); }
+        catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException) { return null; }
+    }
+
+    private static QuizResultDto ToResult(LearningQuizItem q) => new(q.Id, q.Question,
+        (QuizLogic.IsWrong(q.Status) ? QuizStatus.Incorrect : q.Status).ToString(), q.Feedback ?? "", q.ReferenceAnswer,
+        q.MissingPointsJson is null ? [] : JsonSerializer.Deserialize<string[]>(q.MissingPointsJson, Json) ?? [], q.PageFrom, q.PageTo, q.AiChecked, CanRetry(q));
 
     // ---------- Ortaq cavab ----------
 
-    private static async Task<(OpenQuestionScan Scan, bool MultipleChoice)> ScanAsync(AppDbContext db, StudyDoc doc, CancellationToken ct)
-    {
-        var scan = OpenQuestionExtractor.Scan(await TeachingStep.ChunksAsync(db, doc.LearningId, ct));
-        // A document that the exam parser read as a multiple-choice test is never an open-question document.
-        var parsedAsTest = await db.Set<Questions.Question>().AnyAsync(q => q.DocumentId == doc.DocumentId && q.Options.Count > 1, ct);
-        return (scan, scan.LooksMultipleChoice || parsedAsTest);
-    }
-
-    private static async Task<IResult> OpenQuestions(Guid sessionId, ClaimsPrincipal user, AppDbContext db, CancellationToken ct)
+    private static async Task<IResult> OpenQuestions(Guid sessionId, ClaimsPrincipal user, AppDbContext db, OpenQuestionIndexer indexer, CancellationToken ct)
     {
         if (await FromSession(db, user.GetUserId(), sessionId, ct) is not { } doc) return NotFound();
-        var (scan, multipleChoice) = await ScanAsync(db, doc, ct);
-        if (multipleChoice)
-            return TypedResults.Ok(new OpenQuestionsDto(false, "Bu sənəd variantlı testə oxşayır. Ortaq cavab yalnız açıq suallı sənədlər üçündür.", []));
-        if (scan.Questions.Count == 0)
-            return TypedResults.Ok(new OpenQuestionsDto(false, "Sənəddə açıq sual tapılmadı. Suallar nömrələnmiş və ya “?” ilə bitən olmalıdır.", []));
-        var warning = scan.Questions.Count >= OpenQuestionExtractor.MaxQuestions ? $"İlk {OpenQuestionExtractor.MaxQuestions} sual götürülür." : null;
-        if (!scan.HasAnswers)
-            warning = "Sənəddə sualların altında cavab mətni tapılmadı. Ortaq cavablar yalnız sənədin digər hissələrində olan məlumatdan hazırlanacaq; məlumat olmayan suallar ayrıca göstəriləcək.";
-        return TypedResults.Ok(new OpenQuestionsDto(true, warning, scan.Questions));
+        if (await indexer.GetAsync(doc.LearningId, ct) is not { } index) return NotFound();
+        return TypedResults.Ok(index.Supported
+            ? new OpenQuestionsDto(true, index.Warning, index.ToScan().Questions)
+            : new OpenQuestionsDto(false, index.Rejection, []));
     }
 
-    private sealed record QuestionGroup(string Title, List<int> Numbers);
+    /// <summary>Section: the broad main topic (empty for groups stored before sections existed).</summary>
+    private sealed record QuestionGroup(string Title, List<int> Numbers, string? Section = null);
 
     /// <summary>
     /// Topic groups of ALL open questions, made once per document version with the cheap model and reused by shared answers and
     /// last-minute notes (stored as a QuestionGroups material shared by every reader of the same file version).
     /// </summary>
     private static async Task<(List<QuestionGroup>? Groups, IResult? Error)> GroupsAsync(AppDbContext db, StudyAi ai, Guid userId, bool admin, StudyDoc doc,
-        OpenQuestionScan scan, TimeProvider clock, CancellationToken ct)
+        OpenQuestionScan scan, string fingerprint, TimeProvider clock, CancellationToken ct)
     {
-        var key = StudyPrompts.CacheKey("groups", doc.LearningId, doc.Sha256, StudyPrompts.Version);
+        var key = StudyPrompts.CacheKey("groups", doc.LearningId, doc.Sha256, fingerprint, StudyPrompts.Version);
         var cached = await db.Set<LearningMaterial>().AsNoTracking()
             .Where(m => m.LearningDocumentId == doc.LearningId && m.CacheKey == key).Select(m => m.PayloadJson).FirstOrDefaultAsync(ct);
         if (cached is not null) return (JsonSerializer.Deserialize<List<QuestionGroup>>(cached, Json), null);
 
         var byNumber = scan.Questions.ToDictionary(q => q.Number);
         var all = scan.Questions.Select(q => q.Number).ToList();
-        var groups = new List<(string Title, List<int> Numbers)>();
+        var groups = new List<(string Section, string Title, List<int> Numbers)>();
         // Long documents are grouped in slices, so no question is cut off by a token limit.
-        foreach (var slice in all.Chunk(120))
+        foreach (var slice in all.Chunk(100))
         {
-            var list = string.Join('\n', slice.Select(n => $"{n}. {TutorPrompt.Neutralise(Shorten(byNumber[n].Text, 220))}"));
+            // The start of each answer shows what a question is really about (meaning, not just shared words).
+            var list = string.Join('\n', slice.Select(n => $"{n}. {TutorPrompt.Neutralise(Shorten(byNumber[n].Text, 220))}"
+                + (scan.Answers.TryGetValue(n, out var a) && a.Length > 0 ? $"\n   ↳ {TutorPrompt.Neutralise(Shorten(a.Replace('\n', ' '), 160))}" : "")));
             var result = await ai.RunAsync(userId, admin,
                 [new("system", StudyPrompts.System(TutorPrompt.DetectLanguage(list))), new("user", $"<question>\n{list}\n</question>\n{StudyPrompts.GroupTask}")],
-                "group_questions", StudyPrompts.GroupSchema(), Math.Min(6000, 300 + slice.Length * 18), light: true, ct);
+                "group_questions", StudyPrompts.GroupSchema(), Math.Min(6000, 300 + slice.Length * 26), light: true, ct);
             if (!result.Ok) return (null, TypedResults.Problem(result.Error, statusCode: result.Status));
             try
             {
                 groups.AddRange(StudyJson.NormalizeGroups(result.Json!.Value.GetProperty("groups").EnumerateArray()
-                    .Select(g => (StudyJson.Text(g, "title", 120), StudyJson.Numbers(g, "questionNumbers"))), slice, n => Shorten(byNumber[n].Text, 80)));
+                    .Select(g => (g.GetProperty("section").GetString()?.Trim() ?? "", StudyJson.Text(g, "title", 120), StudyJson.Numbers(g, "questionNumbers"))),
+                    slice, n => Shorten(byNumber[n].Text, 80)));
             }
             catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException) { return (null, InvalidOutput()); }
         }
 
-        var ordered = groups.Select(g => new QuestionGroup(g.Title, g.Numbers)).OrderByDescending(g => g.Numbers.Count).ThenBy(g => g.Numbers.Min()).ToList();
+        // Duplicate topics (also across slices) are merged; then main topics by size, their subtopics by size.
+        var merged = StudyJson.MergeSimilar(groups.Select(g => (g.Section.Length > 120 ? g.Section[..120] : g.Section, g.Title, g.Numbers)));
+        var sectionSize = merged.GroupBy(g => g.Section).ToDictionary(g => g.Key, g => g.Sum(x => x.Numbers.Count));
+        var ordered = merged.Select(g => new QuestionGroup(g.Title, g.Numbers, g.Section))
+            .OrderByDescending(g => g.Section is { Length: > 0 } s ? sectionSize[s] : g.Numbers.Count).ThenBy(g => g.Section)
+            .ThenByDescending(g => g.Numbers.Count).ThenBy(g => g.Numbers.Min()).ToList();
         db.Add(new LearningMaterial
         {
             Id = Guid.NewGuid(), UserId = userId, LearningDocumentId = doc.LearningId, DocumentSha256 = doc.Sha256, Kind = MaterialKind.QuestionGroups,
@@ -270,7 +310,8 @@ public static class LearningStudyEndpoints
     {
         var ordinals = new List<int> { question.ChunkOrdinal };
         string text;
-        if (scan.Answers.TryGetValue(question.Number, out var own) && own.Length >= 60) text = own;
+        if (scan.Answers.TryGetValue(question.Number, out var own) && own.Length >= OpenQuestionClassifier.MinAnswerCharacters)
+            text = $"{question.Number}. {question.Text}\n{own}"; // the question keeps its answer's context
         else
         {
             var hits = await retriever.SearchAsync(doc.LearningId, question.Text, 2, ct);
@@ -283,16 +324,18 @@ public static class LearningStudyEndpoints
     }
 
     private static async Task<IResult> SharedAnswers(Guid sessionId, SharedAnswerRequest request, ClaimsPrincipal user, AppDbContext db, StudyAi ai,
-        TimeProvider clock, CancellationToken ct)
+        OpenQuestionIndexer indexer, TimeProvider clock, CancellationToken ct)
     {
         var userId = user.GetUserId();
-        if (await FromSession(db, userId, sessionId, ct) is not { } doc) return NotFound();
-        var chunks = await TeachingStep.ChunksAsync(db, doc.LearningId, ct);
-        var key = SharedAnswerGenerator.CacheKey(userId, doc.DocumentId, doc.Sha256, chunks);
-        if (!request.Regenerate && await FromCache(db, userId, doc.LearningId, key, mine: true, clock, ct) is { } cached)
+        var (doc, index, error) = await OpenDocAsync(db, indexer, userId, sessionId, ct);
+        if (error is not null) return error;
+        // Built only from the document's open questions and their answers, so every reader of this version shares it.
+        var units = SharedAnswerGenerator.QuestionUnits(index!.Questions);
+        var key = SharedAnswerGenerator.CacheKey(doc!.DocumentId, doc.Sha256, index.Fingerprint());
+        if (!request.Regenerate && await FromCache(db, userId, doc.LearningId, key, mine: false, clock, ct) is { } cached)
             return TypedResults.Ok(cached);
 
-        var result = await SharedAnswerGenerator.GenerateAsync(chunks,
+        var result = await SharedAnswerGenerator.GenerateAsync(units,
             (messages, schemaName, schema, tokens, token) => ai.RunAsync(userId, user.IsInRole(Roles.Admin),
                 messages, schemaName, schema, tokens, light: false, token), ct);
         if (result.Payload is null) return TypedResults.Problem(result.Error, statusCode: result.Status);
@@ -310,56 +353,47 @@ public static class LearningStudyEndpoints
     // ---------- Son dəqiqə hazırlığı ----------
 
     private static async Task<IResult> LastMinute(Guid sessionId, LastMinuteRequest request, ClaimsPrincipal user, AppDbContext db, StudyAi ai,
-        IChunkRetriever retriever, TimeProvider clock, CancellationToken ct)
+        IChunkRetriever retriever, OpenQuestionIndexer indexer, TimeProvider clock, CancellationToken ct)
     {
         var userId = user.GetUserId();
         var admin = user.IsInRole(Roles.Admin);
-        if (await FromSession(db, userId, sessionId, ct) is not { } doc) return NotFound();
+        var (doc, index, openError) = await OpenDocAsync(db, indexer, userId, sessionId, ct);
+        if (openError is not null) return openError;
         var minutes = request.Minutes <= 15 ? 15 : request.Minutes <= 30 ? 30 : 60;
-        var chunks = await TeachingStep.ChunksAsync(db, doc.LearningId, ct);
-        if (chunks.Count == 0) return TypedResults.Problem("Sənəddə mətn tapılmadı.", statusCode: 409);
+        var fingerprint = index!.Fingerprint();
 
         // Built only from the document (no personal test history), so readers of the same version share it.
-        var key = StudyPrompts.CacheKey("notes", doc.LearningId, doc.Sha256, minutes, StudyPrompts.Version);
+        var key = StudyPrompts.CacheKey("notes", doc!.LearningId, doc.Sha256, fingerprint, minutes, StudyPrompts.Version);
         if (await FromCache(db, userId, doc.LearningId, key, mine: false, clock, ct) is { } cached) return TypedResults.Ok(cached);
 
         var topics = minutes switch { 15 => 5, 30 => 8, _ => 14 };
         var charBudget = minutes switch { 15 => 9000, 30 => 15000, _ => 26000 };
-        var (scan, multipleChoice) = await ScanAsync(db, doc, ct);
+        var scan = index.ToScan();
         var sources = new StringBuilder();
         var used = new List<LearningDocumentChunk>();
-        var fromQuestions = !multipleChoice && scan.Questions.Count >= 3;
-        if (fromQuestions)
+        const bool fromQuestions = true; // only open-question documents reach this point
+
+        // Topics asked about in the most questions first; each topic is backed by its questions' document answers.
+        var (groups, error) = await GroupsAsync(db, ai, userId, admin, doc, scan, fingerprint, clock, ct);
+        if (error is not null) return error;
+        var byNumber = scan.Questions.ToDictionary(q => q.Number);
+        var picked = groups!.Take(topics).ToList();
+        var perTopic = charBudget / Math.Max(1, picked.Count);
+        for (var i = 0; i < picked.Count; i++)
         {
-            // Topics asked about in the most questions first; each topic is backed by its questions' document answers.
-            var (groups, error) = await GroupsAsync(db, ai, userId, admin, doc, scan, clock, ct);
-            if (error is not null) return error;
-            var byNumber = scan.Questions.ToDictionary(q => q.Number);
-            var picked = groups!.Take(topics).ToList();
-            var perTopic = charBudget / Math.Max(1, picked.Count);
-            for (var i = 0; i < picked.Count; i++)
+            sources.Append($"<topic priority=\"{i + 1}\" questions=\"{picked[i].Numbers.Count}\" title=\"{TutorPrompt.Neutralise(picked[i].Title).Replace("\"", "'")}\">\n");
+            foreach (var n in picked[i].Numbers.Take(4))
             {
-                sources.Append($"<topic priority=\"{i + 1}\" questions=\"{picked[i].Numbers.Count}\" title=\"{TutorPrompt.Neutralise(picked[i].Title).Replace("\"", "'")}\">\n");
-                foreach (var n in picked[i].Numbers.Take(4))
-                {
-                    var (text, cs) = await QuestionSourceAsync(db, retriever, doc, scan, byNumber[n], perTopic / Math.Min(4, picked[i].Numbers.Count), ct);
-                    used.AddRange(cs);
-                    sources.Append($"<source>\n{TutorPrompt.Neutralise(text)}\n</source>\n");
-                }
-                sources.Append("</topic>\n");
+                var (text, cs) = await QuestionSourceAsync(db, retriever, doc, scan, byNumber[n], perTopic / Math.Min(4, picked[i].Numbers.Count), ct);
+                used.AddRange(cs);
+                sources.Append($"<source>\n{TutorPrompt.Neutralise(text)}\n</source>\n");
             }
-        }
-        else
-        {
-            // No question list: an even spread over the whole document.
-            var count = Math.Min(chunks.Count, minutes switch { 15 => 6, 30 => 10, _ => 16 });
-            var step = chunks.Count / (double)count;
-            for (var i = 0; i < count; i++) used.Add(chunks[(int)(i * step)]);
-            sources.Append(StudyPrompts.Sources(used));
+            sources.Append("</topic>\n");
         }
 
+        var first = index.Questions[0];
         var result = await ai.RunAsync(userId, admin,
-            [new("system", StudyPrompts.System(TutorPrompt.DetectLanguage(chunks[0].Text))), new("user", sources + StudyPrompts.NotesTask(minutes, topics, fromQuestions))],
+            [new("system", StudyPrompts.System(TutorPrompt.DetectLanguage(first.Text + " " + first.Answer))), new("user", sources + StudyPrompts.NotesTask(minutes, topics, fromQuestions))],
             "study_notes", StudyPrompts.NotesSchema(), minutes switch { 15 => 1300, 30 => 2200, _ => 3800 }, light: false, ct);
         if (!result.Ok) return TypedResults.Problem(result.Error, statusCode: result.Status);
 
@@ -419,11 +453,10 @@ public static class LearningStudyEndpoints
     {
         var userId = user.GetUserId();
         if (await FromSession(db, userId, sessionId, ct) is not { } doc) return NotFound();
-        var sharedKey = SharedAnswerGenerator.CacheKey(userId, doc.DocumentId, doc.Sha256,
-            await TeachingStep.ChunksAsync(db, doc.LearningId, ct));
+        // An indexed document version never changes, so the prompt version alone tells current results from old ones.
         var rows = await db.Set<LearningMaterial>().AsNoTracking().Where(m => m.UserId == userId && m.LearningDocumentId == doc.LearningId
                 && ((m.Kind == MaterialKind.LastMinute && m.PromptVersion == StudyPrompts.Version)
-                    || (m.Kind == MaterialKind.SharedAnswer && m.PromptVersion == SharedAnswerGenerator.Version && m.CacheKey == sharedKey)))
+                    || (m.Kind == MaterialKind.SharedAnswer && m.PromptVersion == SharedAnswerGenerator.Version)))
             .OrderByDescending(m => m.Saved).ThenByDescending(m => m.CreatedAt).Take(30).ToListAsync(ct);
         return TypedResults.Ok(rows.Select(m =>
         {
