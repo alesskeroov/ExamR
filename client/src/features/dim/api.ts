@@ -10,7 +10,7 @@ export interface DimSubject { code: string; name: string; closed: number; coded:
 export interface DimGroup { code: string; name: string; subjects: { code: string; name: string; coefficient: number }[] }
 export interface DimCatalog { buraxilis: DimSubject[]; blok: DimSubject[]; groups: DimGroup[] }
 
-export interface DimSection { subject: string; name: string; questionCount: number; random: boolean }
+export interface DimSection { subject: string; name: string; questionCount: number; random: boolean; sourceDocumentId?: string | null }
 
 export interface DimTest {
   id: string
@@ -126,7 +126,15 @@ export interface DimSourceQuestion {
   bank: { track: DimTrack; subject: string; topic: string | null } | null
 }
 
-export interface DimSourceDocument { id: string; originalFileName: string; questionCount: number }
+/** A parsed document: `valid` questions fit DİM tests; `bank` lists how many are already in the bank per subject. */
+export interface DimSourceDocument {
+  id: string
+  originalFileName: string
+  createdAt: string
+  questionCount: number
+  valid: number
+  bank: { track: DimTrack; subject: string; name: string; count: number }[]
+}
 
 export interface DimAdminTest {
   id: string
@@ -157,13 +165,13 @@ export interface DimTestCreate extends DimTestSettings {
   track: DimTrack
   kind: DimTestKind
   groupCode: string | null
-  sections: { subject: string; questionIds?: string[]; randomCount: number; drawPerAttempt: boolean }[]
+  sections: { subject: string; questionIds?: string[]; randomCount: number; drawPerAttempt: boolean; sourceDocumentId?: string | null }[]
 }
 
 export function useDimSourceDocuments() {
   return useQuery({
     queryKey: queryKeys.dim.sourceDocuments,
-    queryFn: async () => (await api.get<{ items: DimSourceDocument[] }>('/documents?mine=true&status=Completed&pageSize=100')).items,
+    queryFn: () => api.get<DimSourceDocument[]>('/admin/dim/documents'),
   })
 }
 
@@ -200,16 +208,13 @@ export const useApplyAnswerKey = () => useDimAdminMutation(({ documentId, text }
 
 type ApproveResult = { approved: number; rejected: { questionId: string; reason: string }[] }
 
-/** The API takes at most 500 questions per request, so a large selection is sent in chunks. */
-export const useApproveToBank = () => useDimAdminMutation(async (request: { track: DimTrack; subject: string; topic: string | null; questionIds: string[] }) => {
-  const total: ApproveResult = { approved: 0, rejected: [] }
-  for (let i = 0; i < request.questionIds.length; i += 500) {
-    const part = await api.post<ApproveResult>('/admin/dim/bank', { ...request, questionIds: request.questionIds.slice(i, i + 500) })
-    total.approved += part.approved
-    total.rejected.push(...part.rejected)
-  }
-  return total
-})
+/** Adds every question of the document that fits DİM tests to the bank in one request. */
+export const useApproveValid = () => useDimAdminMutation(({ documentId, ...body }: { documentId: string; track: DimTrack; subject: string; topic: string | null }) =>
+  api.post<ApproveResult>(`/admin/dim/documents/${documentId}/approve-valid`, body))
+
+export interface DimQuestionEdit { id: string; text: string; options: { id: string; text: string }[]; correctOptionId: string }
+
+export const useEditDimQuestion = () => useDimAdminMutation(({ id, ...body }: DimQuestionEdit) => api.put<void>(`/admin/dim/questions/${id}`, body))
 
 export const useRemoveFromBank = () => useDimAdminMutation((questionId: string) => api.delete(`/admin/dim/bank/${questionId}`))
 

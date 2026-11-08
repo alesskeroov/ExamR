@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using ExamFlow.Api.Common;
+using ExamFlow.Api.Features.Documents;
 using ExamFlow.Api.Features.Exams;
 using ExamFlow.Api.Features.Questions;
 using ExamFlow.Api.Infrastructure.Data;
@@ -19,7 +20,10 @@ public static class DimAdminEndpoints
     public static void MapDimAdminEndpoints(this RouteGroupBuilder api)
     {
         var group = api.MapGroup("/admin/dim").RequireAuthorization(policy => policy.RequireRole(Roles.Admin));
+        group.MapGet("/documents", SourceDocuments);
         group.MapGet("/documents/{documentId:guid}/questions", SourceQuestions);
+        group.MapPost("/documents/{documentId:guid}/approve-valid", ApproveValid).Validate<DimApproveDocumentRequest>();
+        group.MapPut("/questions/{questionId:guid}", EditQuestion).Validate<DimEditQuestionRequest>();
         group.MapPost("/documents/{documentId:guid}/answer-key", AnswerKey).Validate<DimAnswerKeyRequest>();
         group.MapPost("/bank", Approve).Validate<DimApproveRequest>();
         group.MapDelete("/bank/{questionId:guid}", RemoveFromBank);
@@ -28,6 +32,36 @@ public static class DimAdminEndpoints
         group.MapPost("/tests", CreateTest).Validate<DimTestRequest>();
         group.MapPut("/tests/{id:guid}", UpdateTest).Validate<DimTestSettingsRequest>();
         group.MapDelete("/tests/{id:guid}", DeleteTest);
+    }
+
+    /// <summary>The admin's parsed documents with DİM-ready and banked question counts.</summary>
+    private static async Task<IResult> SourceDocuments(ClaimsPrincipal user, AppDbContext db, CancellationToken ct)
+    {
+        var userId = user.GetUserId();
+        var documents = await db.Documents.AsNoTracking()
+            .Where(d => d.UploadedByUserId == userId && d.Status == DocumentStatus.Completed)
+            .OrderByDescending(d => d.CreatedAt)
+            .Select(d => new
+            {
+                d.Id, d.OriginalFileName, d.CreatedAt,
+                Total = db.Questions.Count(q => q.DocumentId == d.Id),
+                // Mirrors BankRejection: 2–5 non-empty options, exactly one correct, non-empty text.
+                Valid = db.Questions.Count(q => q.DocumentId == d.Id && q.Text.Trim() != ""
+                    && q.Options.Count >= 2 && q.Options.Count <= MaxOptions
+                    && q.Options.Count(o => o.IsCorrect) == 1 && !q.Options.Any(o => o.Text.Trim() == "")),
+            })
+            .ToListAsync(ct);
+
+        var ids = documents.Select(d => d.Id).ToList();
+        var bank = await db.DimBankQuestions.AsNoTracking()
+            .Where(b => ids.Contains(b.Question.DocumentId))
+            .GroupBy(b => new { b.Question.DocumentId, b.Track, b.Subject })
+            .Select(g => new { g.Key.DocumentId, g.Key.Track, g.Key.Subject, Count = g.Count() })
+            .ToListAsync(ct);
+
+        return TypedResults.Ok(documents.Select(d => new DimSourceDocumentDto(d.Id, d.OriginalFileName, d.CreatedAt, d.Total, d.Valid,
+            bank.Where(b => b.DocumentId == d.Id).OrderBy(b => b.Track).ThenBy(b => b.Subject)
+                .Select(b => new DimDocumentBankDto(b.Track, b.Subject, DimCatalog.SubjectName(b.Subject), b.Count)).ToList())).ToList());
     }
 
     /// <summary>Questions of a document the admin uploaded, with their answer key and bank state.</summary>
@@ -116,11 +150,74 @@ public static class DimAdminEndpoints
         var questions = await db.Questions.Include(q => q.Options)
             .Where(q => ids.Contains(q.Id) && q.Document.UploadedByUserId == userId)
             .ToListAsync(ct);
-        var existing = await db.DimBankQuestions.Where(b => ids.Contains(b.QuestionId)).ToDictionaryAsync(b => b.QuestionId, ct);
-
-        var now = clock.GetUtcNow();
-        var topic = string.IsNullOrWhiteSpace(request.Topic) ? null : request.Topic.Trim();
         var rejected = ids.Where(id => questions.All(q => q.Id != id)).Select(id => new DimRejectedDto(id, "Sual tapılmadı.")).ToList();
+        rejected.AddRange(await AddToBankAsync(db, questions, request.Track, request.Subject, request.Topic, userId, clock.GetUtcNow(), ct));
+        return TypedResults.Ok(new DimApproveResultDto(ids.Count - rejected.Count, rejected));
+    }
+
+    /// <summary>One click: every question of the document that fits DİM tests goes into the bank; the rest are reported.</summary>
+    private static async Task<IResult> ApproveValid(
+        Guid documentId, DimApproveDocumentRequest request, ClaimsPrincipal user, AppDbContext db, TimeProvider clock, CancellationToken ct)
+    {
+        if (!DimCatalog.IsSubjectOf(request.Track, request.Subject))
+            return Problem(StatusCodes.Status400BadRequest, "Fənn bu imtahan növünə aid deyil.");
+
+        var userId = user.GetUserId();
+        if (!await db.Documents.AnyAsync(d => d.Id == documentId && d.UploadedByUserId == userId, ct))
+            return Problem(StatusCodes.Status404NotFound, "Sənəd tapılmadı.");
+
+        var questions = await db.Questions.Include(q => q.Options).Where(q => q.DocumentId == documentId).ToListAsync(ct);
+        var rejected = await AddToBankAsync(db, questions, request.Track, request.Subject, request.Topic, userId, clock.GetUtcNow(), ct);
+        return TypedResults.Ok(new DimApproveResultDto(questions.Count - rejected.Count, rejected));
+    }
+
+    /// <summary>Fixes a parsed question in place: text, option texts and the single correct option.</summary>
+    private static async Task<IResult> EditQuestion(
+        Guid questionId, DimEditQuestionRequest request, ClaimsPrincipal user, AppDbContext db, CancellationToken ct)
+    {
+        var userId = user.GetUserId();
+        var question = await db.Questions.Include(q => q.Options)
+            .FirstOrDefaultAsync(q => q.Id == questionId && q.Document.UploadedByUserId == userId, ct);
+        if (question is null) return Problem(StatusCodes.Status404NotFound, "Sual tapılmadı.");
+        if (question.Options.Count < 2 || question.Options.Count > MaxOptions)
+            return Problem(StatusCodes.Status400BadRequest, "Bu sualın variant sayı DİM formatına uyğun deyil (2–5 variant olmalıdır).");
+        if (request.Options.Count != question.Options.Count || question.Options.Any(o => request.Options.All(r => r.Id != o.Id)))
+            return Problem(StatusCodes.Status400BadRequest, "Variantlar sualın variantlarına uyğun gəlmir.");
+        if (question.Options.All(o => o.Id != request.CorrectOptionId))
+            return Problem(StatusCodes.Status400BadRequest, "Düzgün cavabı seçin.");
+        if (string.IsNullOrWhiteSpace(request.Text) || request.Options.Any(o => string.IsNullOrWhiteSpace(o.Text)))
+            return Problem(StatusCodes.Status400BadRequest, "Sual və variant mətnləri boş ola bilməz.");
+
+        // UX_AnswerOptions_SingleCorrect allows one correct option at any moment: clear, save, then set the new one.
+        await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            foreach (var option in question.Options) option.IsCorrect = false;
+            await db.SaveChangesAsync(ct);
+            question.Text = request.Text.Trim();
+            foreach (var option in question.Options)
+            {
+                option.Text = request.Options.First(o => o.Id == option.Id).Text.Trim();
+                option.IsCorrect = option.Id == request.CorrectOptionId;
+            }
+
+            question.VerificationStatus = VerificationStatus.Verified;
+            question.ParseWarning = null;
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        });
+        return TypedResults.NoContent();
+    }
+
+    /// <summary>Adds (or re-classifies) the questions that fit DİM tests; returns the ones that do not, with the reason.</summary>
+    private static async Task<List<DimRejectedDto>> AddToBankAsync(
+        AppDbContext db, List<Question> questions, DimTrack track, string subject, string? topicText, Guid userId, DateTimeOffset now,
+        CancellationToken ct)
+    {
+        var ids = questions.Select(q => q.Id).ToList();
+        var existing = await db.DimBankQuestions.Where(b => ids.Contains(b.QuestionId)).ToDictionaryAsync(b => b.QuestionId, ct);
+        var topic = string.IsNullOrWhiteSpace(topicText) ? null : topicText.Trim();
+        var rejected = new List<DimRejectedDto>();
         foreach (var question in questions)
         {
             if (BankRejection(question) is { } reason)
@@ -136,15 +233,15 @@ public static class DimAdminEndpoints
                 db.DimBankQuestions.Add(bank);
             }
 
-            bank.Track = request.Track;
-            bank.Subject = request.Subject;
+            bank.Track = track;
+            bank.Subject = subject;
             bank.Topic = topic;
             bank.ApprovedByUserId = userId;
             bank.ApprovedAt = now;
         }
 
         await db.SaveChangesAsync(ct);
-        return TypedResults.Ok(new DimApproveResultDto(ids.Count - rejected.Count, rejected));
+        return rejected;
     }
 
     private static async Task<IResult> RemoveFromBank(Guid questionId, AppDbContext db, CancellationToken ct) =>
@@ -179,7 +276,7 @@ public static class DimAdminEndpoints
         var sections = new List<DimTestSection>();
         foreach (var section in request.Sections)
         {
-            var bank = await BankCandidatesAsync(db, request.Track, section.Subject, ct);
+            var bank = await BankCandidatesAsync(db, request.Track, section.Subject, section.SourceDocumentId, ct);
             var name = DimCatalog.SubjectName(section.Subject);
             if (section.QuestionIds.Count > 0)
             {
@@ -191,6 +288,8 @@ public static class DimAdminEndpoints
                 continue;
             }
 
+            if (section.SourceDocumentId is not null && bank.Count == 0)
+                return Problem(StatusCodes.Status400BadRequest, $"{name}: seçilmiş sənəddən bu fənn üzrə bankda sual yoxdur.");
             if (section.RandomCount < 1)
                 return Problem(StatusCodes.Status400BadRequest, $"{name}: sual seçin və ya təsadüfi sual sayını göstərin.");
             if (ExamEngine.CountDistinct(bank) < section.RandomCount)
@@ -198,7 +297,7 @@ public static class DimAdminEndpoints
                     $"{name}: bankda cəmi {ExamEngine.CountDistinct(bank)} unikal sual var, {section.RandomCount} tələb olunur.");
 
             sections.Add(section.DrawPerAttempt
-                ? new DimTestSection { Subject = section.Subject, RandomCount = section.RandomCount }
+                ? new DimTestSection { Subject = section.Subject, RandomCount = section.RandomCount, SourceDocumentId = section.SourceDocumentId }
                 : new DimTestSection { Subject = section.Subject, QuestionIds = ExamEngine.PickQuestions(bank, section.RandomCount, Random.Shared) });
         }
 
@@ -244,18 +343,24 @@ public static class DimAdminEndpoints
     private static async Task<IResult> DeleteTest(Guid id, AppDbContext db, CancellationToken ct)
     {
         // Attempts are ordinary exams; deleting them cascades to their DimAttempt rows, then the test can go.
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
-        var attemptExamIds = db.DimAttempts.Where(a => a.TestId == id).Select(a => a.ExamId);
-        await db.Exams.Where(e => attemptExamIds.Contains(e.Id)).ExecuteDeleteAsync(ct);
-        if (await db.DimTests.Where(t => t.Id == id).ExecuteDeleteAsync(ct) == 0) return NotFound();
-        await tx.CommitAsync(ct);
-        return TypedResults.NoContent();
+        // The retrying execution strategy requires a user transaction to run inside it.
+        var deleted = await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            var attemptExamIds = db.DimAttempts.Where(a => a.TestId == id).Select(a => a.ExamId);
+            await db.Exams.Where(e => attemptExamIds.Contains(e.Id)).ExecuteDeleteAsync(ct);
+            var count = await db.DimTests.Where(t => t.Id == id).ExecuteDeleteAsync(ct);
+            await tx.CommitAsync(ct);
+            return count;
+        });
+        return deleted == 0 ? NotFound() : TypedResults.NoContent();
     }
 
     /// <summary>Approved bank questions of one subject, as exam candidates (all are gradable).</summary>
-    internal static Task<List<ExamCandidate>> BankCandidatesAsync(AppDbContext db, DimTrack track, string subject, CancellationToken ct) =>
+    internal static Task<List<ExamCandidate>> BankCandidatesAsync(
+        AppDbContext db, DimTrack track, string subject, Guid? documentId, CancellationToken ct) =>
         db.DimBankQuestions.AsNoTracking()
-            .Where(b => b.Track == track && b.Subject == subject)
+            .Where(b => b.Track == track && b.Subject == subject && (documentId == null || b.Question.DocumentId == documentId))
             .Select(b => new ExamCandidate(b.QuestionId, b.Question.ContentHash, true))
             .ToListAsync(ct);
 
@@ -281,7 +386,7 @@ public static class DimAdminEndpoints
         from is not null && to is not null && from >= to ? "Başlama vaxtı bitmə vaxtından əvvəl olmalıdır." : null;
 
     internal static DimSectionDto ToSectionDto(DimTestSection s) =>
-        new(s.Subject, DimCatalog.SubjectName(s.Subject), s.QuestionCount, s.QuestionIds.Count == 0);
+        new(s.Subject, DimCatalog.SubjectName(s.Subject), s.QuestionCount, s.QuestionIds.Count == 0, s.SourceDocumentId);
 
     private static DimAdminTestDto ToAdminDto(DimTest t, int attempts) => new(
         t.Id, t.Track, t.Kind, t.GroupCode, t.Title, t.DurationMinutes, t.AttemptLimit, t.AvailableFrom, t.AvailableTo,

@@ -90,7 +90,7 @@ public static class DimEndpoints
             var ids = section.QuestionIds;
             if (ids.Count == 0)
             {
-                var bank = await DimAdminEndpoints.BankCandidatesAsync(db, test.Track, section.Subject, ct);
+                var bank = await DimAdminEndpoints.BankCandidatesAsync(db, test.Track, section.Subject, section.SourceDocumentId, ct);
                 ids = ExamEngine.PickQuestions(bank, section.RandomCount, Random.Shared);
                 if (ids.Count < section.RandomCount)
                     return Problem(StatusCodes.Status422UnprocessableEntity, "Sual bankında kifayət qədər sual yoxdur. Administratora bildirin.");

@@ -35,13 +35,16 @@ Sınaqdakı qapalı sual sayı rəsmi saydan fərqlənərsə, nəticə rəsmi sa
 ## Axın
 
 1. Admin PDF/DOCX-i adi `/api/documents` ilə yükləyir (parser sualları çıxarır, mümkünsə cavabı tanıyır).
-2. `POST /api/admin/dim/documents/{id}/answer-key` — `1-A 2-C …` cavab açarı (sual nömrəsinə görə).
-3. `POST /api/admin/dim/bank` — seçilmiş sualları fənn/mövzu ilə banka təsdiqləyir (2–5 variant, tam 1 düzgün).
-4. `POST /api/admin/dim/tests` — hazır (sabit suallar), bir dəfə təsadüfi və ya hər cəhddə təsadüfi sınaq.
+2. Səhv suallar: `POST /api/admin/dim/documents/{id}/answer-key` (`1-A 2-C …`) və ya tək sual üçün
+   `PUT /api/admin/dim/questions/{id}` (mətn, variant mətnləri, düzgün variant; variant sayı dəyişmir).
+3. `POST /api/admin/dim/documents/{id}/approve-valid` — sənədin bütün düzgün formatlı suallarını (2–5 variant, tam 1
+   düzgün, boş mətn yoxdur) fənn/mövzu ilə banka əlavə edir; səhvlər `rejected`-də qayıdır. Tək-tək: `POST /api/admin/dim/bank`.
+4. `POST /api/admin/dim/tests` — hazır (sabit suallar), bir dəfə təsadüfi və ya hər cəhddə təsadüfi sınaq. Bölmədə
+   `sourceDocumentId` verilsə, suallar yalnız həmin sənədin bankdakı suallarından seçilir (jsonb, migration yoxdur).
 5. İstifadəçi: `GET /api/dim/tests?track=Buraxilis|Blok` → `POST /api/dim/tests/{id}/start` → `/exams/{examId}`
    → bitirmə → `GET /api/dim/attempts/{examId}/report` (fənlər, DİM balı, zəif mövzular; yalnız bitmiş imtahan).
 
-Admin endpoint-ləri: `GET documents/{id}/questions`, `DELETE bank/{questionId}`, `GET bank/stats`,
+Admin endpoint-ləri: `GET documents` (sənədlər + düzgün/bankda sayları), `GET documents/{id}/questions`, `DELETE bank/{questionId}`, `GET bank/stats`,
 `GET|POST tests`, `PUT tests/{id}` (parametrlər/dərc), `DELETE tests/{id}` (sınağı və bütün cəhdlərini — istifadəçi nəticələri daxil — bir tranzaksiyada silir).
 
 ## UI
@@ -49,7 +52,10 @@ Admin endpoint-ləri: `GET documents/{id}/questions`, `DELETE bank/{questionId}`
 - İstifadəçi: sol menyu → "DİM sınaqları" → `/dim/buraxilis`, `/dim/blok` (tam/fənn filtri, Blokda qrup filtri;
   Başla / Davam et / Son nəticə). Nəticə səhifəsində DİM kartı (`features/dim/DimReportCard.tsx`).
 - Admin: Admin Panel → "DİM sınaqları" (`?section=dim`):
-  - *Sual bankı* — sənəd seç, cavab açarı, fənn/mövzu ilə toplu təsdiq (500-lük hissələrlə), bankdan çıxar;
-  - *Sınaqlar* — yeni sınaq (fənlər kataloqdan, default sual sayı = rəsmi qapalı say, "hər cəhddə təsadüfi" və ya
-    "bir dəfə seç"), dərc/dərcdən çıxar, redaktə (ad, müddət, limit, vaxt), sil (cəhdlər də silinir; təsdiq pəncərəsi cəhd sayını göstərir).
+  - *Sual bankı* — əvvəl imtahan+fənn seç, PDF yüklə; sənəd kartları (X düzgün / Y səhv / Z bankda); bir düymə ilə
+    bütün düzgün sualları banka əlavə et; "Səhv suallar" siyahısında sualı yerində düzəlt; cavab açarı yalnız cavabı
+    tapılmayan sual olanda görünür; bankdan çıxar;
+  - *Sınaqlar* — "Yeni sınaq": bankdakı sənədi seç, ad sənəd adından dolur; yalnız müddət, sual sayı, cəhd limiti;
+    hər cəhddə həmin sənəddən təsadüfi suallar; qaralama kimi yaranır → "Dərc et". İkinci yol: "Tam DİM sınağı
+    (bütün bankdan)". Redaktə: ad, müddət, limit (vaxt pəncərəsi UI-da yoxdur, saxlanılır). Sil: cəhdlər də silinir.
 - Hələ yoxdur: admin UI-da sualları tək-tək seçərək sınaq (API dəstəkləyir), açıq suallar, rus bölməsi.

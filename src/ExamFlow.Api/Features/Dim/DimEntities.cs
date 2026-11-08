@@ -53,6 +53,9 @@ public class DimTestSection
     public List<Guid> QuestionIds { get; set; } = [];
     public int RandomCount { get; set; }
 
+    /// <summary>When set, random questions are drawn only from bank questions of this uploaded document.</summary>
+    public Guid? SourceDocumentId { get; set; }
+
     public int QuestionCount => QuestionIds.Count > 0 ? QuestionIds.Count : RandomCount;
 }
 

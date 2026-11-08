@@ -51,6 +51,36 @@ public sealed record DimRejectedDto(Guid QuestionId, string Reason);
 
 public sealed record DimApproveResultDto(int Approved, IReadOnlyList<DimRejectedDto> Rejected);
 
+public sealed class DimApproveDocumentRequest
+{
+    public DimTrack Track { get; init; }
+
+    [Required, StringLength(10)]
+    public string Subject { get; init; } = string.Empty;
+
+    [StringLength(200)]
+    public string? Topic { get; init; }
+}
+
+public sealed record DimEditOptionRequest(Guid Id, [property: Required, StringLength(1000)] string Text);
+
+public sealed class DimEditQuestionRequest
+{
+    [Required, StringLength(4000)]
+    public string Text { get; init; } = string.Empty;
+
+    [Required]
+    public List<DimEditOptionRequest> Options { get; init; } = [];
+
+    public Guid CorrectOptionId { get; init; }
+}
+
+public sealed record DimDocumentBankDto(DimTrack Track, string Subject, string Name, int Count);
+
+/// <summary>An uploaded document with how many of its questions fit DİM tests and how many are already in the bank.</summary>
+public sealed record DimSourceDocumentDto(
+    Guid Id, string OriginalFileName, DateTimeOffset CreatedAt, int QuestionCount, int Valid, IReadOnlyList<DimDocumentBankDto> Bank);
+
 public sealed record DimBankStatDto(DimTrack Track, string Subject, string Name, int Count, int Topics);
 
 // ---- Admin: tests ----
@@ -68,6 +98,9 @@ public sealed class DimSectionRequest
 
     /// <summary>true = draw new random questions for every attempt; false = draw once now and keep them fixed.</summary>
     public bool DrawPerAttempt { get; init; }
+
+    /// <summary>Restrict the section to bank questions of one uploaded document.</summary>
+    public Guid? SourceDocumentId { get; init; }
 }
 
 public sealed class DimTestRequest
@@ -111,7 +144,7 @@ public sealed class DimTestSettingsRequest
     public bool IsPublished { get; init; }
 }
 
-public sealed record DimSectionDto(string Subject, string Name, int QuestionCount, bool Random);
+public sealed record DimSectionDto(string Subject, string Name, int QuestionCount, bool Random, Guid? SourceDocumentId = null);
 
 public sealed record DimAdminTestDto(
     Guid Id, DimTrack Track, DimTestKind Kind, string? GroupCode, string Title, int DurationMinutes, int? AttemptLimit,
