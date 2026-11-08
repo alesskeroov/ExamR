@@ -9,6 +9,7 @@ import { formatNumber } from '../../lib/format'
 import { cn } from '../../lib/utils'
 import { useCompletedDocuments } from '../documents/api'
 import { ChoiceCard } from '../../components/common/ChoiceCard'
+import { InfoTip } from '../../components/common/InfoTip'
 import { useActiveExam, useCreateExam, useExamAvailability, useExamResult, type ExamPool, type RevealMode } from './api'
 
 const MAX_MINUTES = 600
@@ -202,8 +203,19 @@ export function ExamSetupPage() {
                 checked={pool === 'Mistakes'}
                 onChange={() => selectPool('Mistakes')}
                 icon={<RotateCcw className="size-5" />}
-                title={range && availability.data ? `Səhvlərim (${formatNumber(mistakes)})` : 'Səhvlərim'}
+                title="Səhvlərim"
                 description="Son dəfə səhv cavablandırdığınız və ya boş buraxdığınız suallar. Düzgün cavablandırdıqca siyahıdan çıxır"
+                aside={
+                  <InfoTip label="Səhv sualların sayı">
+                    {!range
+                      ? 'Səhv sualların sayı PDF və aralıq seçildikdən sonra görünür.'
+                      : !availability.data || availability.isPlaceholderData
+                        ? 'Hesablanır…'
+                        : mistakes === 0
+                          ? `${range.from}–${range.to} aralığında səhv və ya boş buraxdığınız sual yoxdur.`
+                          : `${range.from}–${range.to} aralığında ${formatNumber(mistakes)} səhv və ya boş buraxdığınız sual var.`}
+                  </InfoTip>
+                }
               />
             </div>
           </Section>
