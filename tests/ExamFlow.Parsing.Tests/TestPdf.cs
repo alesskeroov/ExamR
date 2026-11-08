@@ -5,8 +5,12 @@ using UglyToad.PdfPig.Writer;
 
 namespace ExamFlow.Parsing.Tests;
 
-/// <summary>Style of one run of text inside a generated test line.</summary>
-public sealed record Run(string Text, bool Bold = false, (byte R, byte G, byte B)? Color = null);
+/// <summary>
+/// Style of one run of text inside a generated test line. <paramref name="Rise"/> moves it above (+) or below (−) the
+/// baseline and <paramref name="Size"/> overrides the font size (exponents, indices); <paramref name="NoGap"/> starts it
+/// right where the previous run ended.
+/// </summary>
+public sealed record Run(string Text, bool Bold = false, (byte R, byte G, byte B)? Color = null, double Rise = 0, double Size = 0, bool NoGap = false);
 
 /// <summary>Builds real PDFs (with real bold fonts and colours) for parser tests.</summary>
 public sealed class TestPdf
@@ -92,12 +96,15 @@ public sealed class TestPdf
 
                 var runs = lines[l];
                 var x = 50.0;
+                var end = x;
                 foreach (var run in runs)
                 {
                     var (r, g, b) = run.Color ?? (0, 0, 0);
                     page.SetTextAndFillColor(r, g, b);
-                    var letters = page.AddText(run.Text, FontSize, new PdfPoint(x, y), run.Bold ? bold : regular);
-                    x = (letters.Count > 0 ? letters[^1].EndBaseLine.X : x) + FontSize * 0.3;
+                    var start = run.NoGap ? end : x;
+                    var letters = page.AddText(run.Text, run.Size > 0 ? run.Size : FontSize, new PdfPoint(start, y + run.Rise), run.Bold ? bold : regular);
+                    end = letters.Count > 0 ? letters[^1].EndBaseLine.X : start;
+                    x = end + FontSize * 0.3;
                 }
 
                 page.ResetColor();

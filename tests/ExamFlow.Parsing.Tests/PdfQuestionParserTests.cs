@@ -36,6 +36,22 @@ public class PdfQuestionParserTests
     }
 
     [Fact]
+    public void Exponents_and_indices_stay_inside_the_formula()
+    {
+        var result = new TestPdf()
+            .Line(new Run("1. Hesablayin: x"), new Run("2", Rise: 5, Size: 8, NoGap: true), new Run("+ 2"),
+                new Run("n+1", Rise: 5, Size: 8, NoGap: true), new Run("+ log"), new Run("3", Rise: -4, Size: 8, NoGap: true),
+                new Run("9 = ?", NoGap: true))
+            .Line("A) 1").Line(new Run("B) 2", Bold: true)).Line("C) 3")
+            .Parse();
+
+        var question = Assert.Single(result.Questions);
+        Assert.Equal("Hesablayin: x² + 2ⁿ⁺¹ + log₃9 = ?", question.Text);
+        Assert.Equal(["1", "2", "3"], question.Options.Select(o => o.Text));
+        Assert.Equal(1, question.CorrectIndex);
+    }
+
+    [Fact]
     public void Without_emphasis_the_answer_is_left_unknown()
     {
         var result = new TestPdf()

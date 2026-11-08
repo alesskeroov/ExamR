@@ -41,7 +41,8 @@ Sınaqdakı qapalı sual sayı rəsmi saydan fərqlənərsə, nəticə rəsmi sa
    düzgün, boş mətn yoxdur) fənn/mövzu ilə banka əlavə edir; səhvlər `rejected`-də qayıdır. Tək-tək: `POST /api/admin/dim/bank`.
 4. `POST /api/admin/dim/tests` — hazır (sabit suallar), bir dəfə təsadüfi və ya hər cəhddə təsadüfi sınaq. Bölmədə
    `sourceDocumentId` verilsə, suallar yalnız həmin sənədin bankdakı suallarından seçilir (jsonb, migration yoxdur).
-5. İstifadəçi: `GET /api/dim/tests?track=Buraxilis|Blok` → `POST /api/dim/tests/{id}/start` → `/exams/{examId}`
+5. İstifadəçi: `GET /api/dim/tests?track=Buraxilis|Blok` → `POST /api/dim/tests/{id}/start` (`{ revealMode: AtEnd|Immediate }`,
+   boş body = `AtEnd`; səhifədə "İmtahan bitdikdə" / "Hər sualdan sonra" seçimi) → `/exams/{examId}`
    → bitirmə → `GET /api/dim/attempts/{examId}/report` (fənlər, DİM balı, zəif mövzular; yalnız bitmiş imtahan).
 
 Admin endpoint-ləri: `GET documents` (sənədlər + düzgün/bankda sayları), `GET documents/{id}/questions`, `DELETE bank/{questionId}`, `GET bank/stats`,

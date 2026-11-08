@@ -1,14 +1,16 @@
-import { CalendarClock, ClipboardList, Clock, Layers, Play, RotateCw } from 'lucide-react'
+import { CalendarClock, ClipboardList, Clock, Eye, EyeOff, Layers, Play, RotateCw } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { Alert } from '../../components/common/Alert'
 import { Button } from '../../components/common/Button'
+import { ChoiceCard } from '../../components/common/ChoiceCard'
 import { EmptyState } from '../../components/common/EmptyState'
 import { PageHeader } from '../../components/common/PageHeader'
 import { StatusBadge } from '../../components/common/StatusBadge'
 import { ApiError } from '../../lib/api-client'
 import { formatDate, formatNumber } from '../../lib/format'
 import { cn } from '../../lib/utils'
+import type { RevealMode } from '../exams/api'
 import { useDimCatalog, useDimTests, useStartDimTest, type DimGroup, type DimTest, type DimTrack } from './api'
 
 type KindFilter = 'All' | 'Full' | 'Subject'
@@ -31,6 +33,7 @@ export function DimTestsPage({ track }: { track: DimTrack }) {
   const catalog = useDimCatalog()
   const [kind, setKind] = useState<KindFilter>('All')
   const [group, setGroup] = useState<string>('')
+  const [revealMode, setRevealMode] = useState<RevealMode>('AtEnd')
   const groups = track === 'Blok' ? catalog.data?.groups ?? [] : []
   const selectedGroup = groups.find(g => g.code === group)
 
@@ -42,8 +45,18 @@ export function DimTestsPage({ track }: { track: DimTrack }) {
 
       <Alert tone="info" title="İlk versiya: yalnız qapalı (A–E) suallar">
         Rəsmi {copy[track].max} ballıq nəticə açıq tapşırıqları da əhatə edir. Nəticədə qapalı hissənin rəsmi düsturla balı və
-        açıq hissədə eyni nəticə fərziyyəsi ilə təxmini bal göstərilir. Düzgün cavablar imtahan bitdikdən sonra açılır.
+        açıq hissədə eyni nəticə fərziyyəsi ilə təxmini bal göstərilir.
       </Alert>
+
+      <fieldset className="mt-5">
+        <legend className="mb-2 text-sm font-medium text-slate-700">Düzgün cavablar</legend>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <ChoiceCard name="dim-reveal" checked={revealMode === 'AtEnd'} onChange={() => setRevealMode('AtEnd')} icon={<EyeOff className="size-5" />}
+            title="İmtahan bitdikdə" description="Real imtahan kimi: cavablar sona qədər dəyişdirilə bilər" />
+          <ChoiceCard name="dim-reveal" checked={revealMode === 'Immediate'} onChange={() => setRevealMode('Immediate')} icon={<Eye className="size-5" />}
+            title="Hər sualdan sonra" description="Hər sualda göz ikonu ilə düzgün cavabı görə bilərsiniz; göstərildikdən sonra variant dəyişmir" />
+        </div>
+      </fieldset>
 
       <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div role="tablist" aria-label="Sınaq növü" className="inline-flex w-full rounded-lg border border-slate-200 bg-white p-1 sm:w-auto">
@@ -79,7 +92,7 @@ export function DimTestsPage({ track }: { track: DimTrack }) {
             description={tests.data.length === 0 ? 'Administrator sınaq dərc etdikdə burada görünəcək.' : 'Seçilmiş filtrə uyğun sınaq tapılmadı.'} />
         ) : (
           <ul className="grid gap-4 md:grid-cols-2">
-            {visible.map(t => <li key={t.id}><TestCard test={t} /></li>)}
+            {visible.map(t => <li key={t.id}><TestCard test={t} revealMode={revealMode} /></li>)}
           </ul>
         )}
       </div>
@@ -93,7 +106,7 @@ function inGroup(test: DimTest, group: DimGroup | undefined) {
   return test.kind === 'Full' ? test.groupCode === group.code : test.sections.every(s => group.subjects.some(g => g.code === s.subject))
 }
 
-function TestCard({ test }: { test: DimTest }) {
+function TestCard({ test, revealMode }: { test: DimTest; revealMode: RevealMode }) {
   const navigate = useNavigate()
   const start = useStartDimTest()
   const last = test.lastAttempt
@@ -150,7 +163,7 @@ function TestCard({ test }: { test: DimTest }) {
           </Link>
         ) : (
           <Button disabled={!test.isOpen || limitReached} loading={start.isPending}
-            onClick={() => start.mutate(test.id, { onSuccess: ({ examId }) => navigate(`/exams/${examId}`) })}>
+            onClick={() => start.mutate({ testId: test.id, revealMode }, { onSuccess: ({ examId }) => navigate(`/exams/${examId}`) })}>
             <Play className="size-4" aria-hidden />{limitReached ? 'Cəhd limiti bitib' : 'Başla'}
           </Button>
         )}

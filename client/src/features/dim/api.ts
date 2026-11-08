@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '../../lib/api-client'
 import { queryKeys } from '../../lib/query-keys'
-import type { ExamStatus } from '../exams/api'
+import type { ExamStatus, RevealMode } from '../exams/api'
 
 export type DimTrack = 'Buraxilis' | 'Blok'
 export type DimTestKind = 'Full' | 'Subject'
@@ -87,7 +87,8 @@ export function useDimTests(track: DimTrack) {
 export function useStartDimTest() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (testId: string) => api.post<{ examId: string }>(`/dim/tests/${testId}/start`),
+    mutationFn: ({ testId, revealMode }: { testId: string; revealMode: RevealMode }) =>
+      api.post<{ examId: string }>(`/dim/tests/${testId}/start`, { revealMode }),
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.dim.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.exams.all })

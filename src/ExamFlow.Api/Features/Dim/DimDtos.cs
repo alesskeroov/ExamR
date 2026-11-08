@@ -160,6 +160,12 @@ public sealed record DimTestDto(
     int QuestionCount, IReadOnlyList<DimSectionDto> Sections, int? AttemptLimit, int AttemptsUsed,
     DateTimeOffset? AvailableFrom, DateTimeOffset? AvailableTo, bool IsOpen, DimLastAttemptDto? LastAttempt);
 
+/// <summary>Body of the start request; empty body = answers revealed at the end, like the real exam.</summary>
+public sealed class DimStartRequest
+{
+    public RevealMode RevealMode { get; init; } = RevealMode.AtEnd;
+}
+
 public sealed record DimStartedDto(Guid ExamId);
 
 public sealed record DimReportDto(

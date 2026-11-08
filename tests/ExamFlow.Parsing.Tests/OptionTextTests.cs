@@ -38,6 +38,30 @@ public class OptionTextTests
     }
 
     [Theory]
+    [InlineData("√3")]
+    [InlineData("√e")]
+    [InlineData("2√3")]
+    [InlineData("√(7 + 4√3)")]
+    public void Square_roots_are_not_answer_marks(string text)
+    {
+        Assert.False(OptionText.HasCorrectMarker(text));
+        Assert.Equal(text, OptionText.Clean(text));
+    }
+
+    [Fact]
+    public void Square_root_options_do_not_hide_the_marked_answer()
+    {
+        var result = new PdfQuestionParser().ParseLines([
+            L("6. √(7 + 4√3) − √(7 − 4√3) ifadəsinin qiymətini tapın."),
+            L("A) 4"), L("B) 2√3 ✓"), L("C) 4√3"), L("D) √e"), L("E) √3"),
+        ], 1);
+
+        var question = Assert.Single(result.Questions);
+        Assert.Equal(1, question.CorrectIndex);
+        Assert.Equal(["4", "2√3", "4√3", "√e", "√3"], question.Options.Select(o => o.Text));
+    }
+
+    [Theory]
     [InlineData("6 ✓ DOĞRU", "6")]
     [InlineData("24 ✓", "24")]
     [InlineData("HTTPS ✔ düzgün", "HTTPS")]

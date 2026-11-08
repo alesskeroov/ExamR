@@ -67,7 +67,8 @@ public static class DimEndpoints
         (test.AvailableFrom is null || now >= test.AvailableFrom) && (test.AvailableTo is null || now < test.AvailableTo);
 
     private static async Task<IResult> Start(
-        Guid id, ClaimsPrincipal user, AppDbContext db, TimeProvider clock, IOptions<ExamOptions> options, CancellationToken ct)
+        Guid id, DimStartRequest? request, ClaimsPrincipal user, AppDbContext db, TimeProvider clock, IOptions<ExamOptions> options,
+        CancellationToken ct)
     {
         var userId = user.GetUserId();
         var now = clock.GetUtcNow();
@@ -116,7 +117,7 @@ public static class DimEndpoints
         {
             UserId = userId,
             QuestionCount = (short)picked.Count,
-            RevealMode = RevealMode.AtEnd,
+            RevealMode = request?.RevealMode ?? RevealMode.AtEnd,
             Status = ExamStatus.InProgress,
             StartedAt = now,
             ExpiresAt = now.AddMinutes(test.DurationMinutes),

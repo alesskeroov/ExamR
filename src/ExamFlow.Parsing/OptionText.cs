@@ -5,12 +5,12 @@ namespace ExamFlow.Parsing;
 /// <summary>Removes answer hints that source files print inside the correct option's text.</summary>
 public static partial class OptionText
 {
-    // "C) ✓ text": the check mark after a letter label marks the correct option.
-    [GeneratedRegex(@"^\s*[√✓✔☑]\s*")]
+    // "C) ✓ text": the check mark after a letter label marks the correct option. "√3", "√(x+1)", "√e" are square roots.
+    [GeneratedRegex(@"^\s*(?:[✓✔☑]|√(?![\d(\p{Ll}]))\s*")]
     private static partial Regex LeadingMarker();
 
     // "B) 6 ✓ DOĞRU": a check mark at the end of the option, optionally followed by a "correct" word.
-    [GeneratedRegex(@"\s*[√✓✔☑]\s*(?:doğru|düzgün|correct|true)?\s*[.!]?\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"(?:\s*[✓✔☑]|\s+√)\s*(?:doğru|düzgün|correct|true)?\s*[.!]?\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex TrailingMarker();
 
     // Source references printed only after the correct option ("Mühazirə istinadı: Mövzu 5; …") give the answer away.

@@ -31,6 +31,11 @@ public static partial class QuestionSegmenter
 
     public static bool IsMarker(char c) => OptionMarkers.Contains(c) || CorrectMarkers.Contains(c);
 
+    /// <summary>A bullet/check mark that starts an option. "√3", "√(7 + 4√3)" or "√e" is a square root in a formula, not a mark.</summary>
+    public static bool StartsWithMarker(string text) =>
+        text.Length > 0 && IsMarker(text[0])
+        && !(text[0] == '√' && text.Length > 1 && (char.IsDigit(text[1]) || text[1] == '(' || char.IsLower(text[1])));
+
     // "-" counts as a delimiter only when no letter is glued to it: "11-ci sinif" or "1990-cı il" is not question 11 / 1990.
     [GeneratedRegex(@"^(?:(?<prefix>sual|№)\s*(?<n>\d{1,4})\s*[.):\-]?|(?<n>\d{1,4})\s*(?:[.):]|-(?!\p{L})))\s*", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex QuestionStart();
@@ -129,7 +134,7 @@ public static partial class QuestionSegmenter
             && !letters.Any(char.IsLower)
             && !title.Any(char.IsDigit)
             && !title.EndsWith('?')
-            && (next is null || !(OptionStart().IsMatch(next.Text) || IsMarker(next.Text[0])));
+            && (next is null || !(OptionStart().IsMatch(next.Text) || StartsWithMarker(next.Text)));
     }
 
     /// <summary>
@@ -193,7 +198,7 @@ public static partial class QuestionSegmenter
     private static int AnchorPrefixLength(TextLine line)
     {
         var first = line.Tokens[0].Text;
-        if (IsMarker(first[0]))
+        if (StartsWithMarker(first))
         {
             return 1;
         }
@@ -286,7 +291,7 @@ public static partial class QuestionSegmenter
         var token = tokens[index];
 
         // Bullet markers ("• text", "√ text", "•text") start an option at the beginning of a line only.
-        if (allowDot && index == 0 && IsMarker(token.Text[0]))
+        if (allowDot && index == 0 && StartsWithMarker(token.Text))
         {
             consumed = 1;
             labelAndRest = token.Text.Length > 1
