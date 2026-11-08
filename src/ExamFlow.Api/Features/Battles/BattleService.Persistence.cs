@@ -1,3 +1,6 @@
+using System.Security.Claims;
+using ExamFlow.Api.Features.Usage;
+using ExamFlow.Api.Infrastructure.Security;
 using System.Text.Json;
 using ExamFlow.Api.Features.Exams;
 using ExamFlow.Api.Infrastructure.Data;
@@ -24,10 +27,10 @@ public sealed partial class BattleService
         await strategyDb.Database.CreateExecutionStrategy().ExecuteAsync(() => PersistCoreAsync(room, ct, results));
     }
 
-    private async Task PersistCoreAsync(BattleRoom room, CancellationToken ct, IReadOnlyList<BattleResult>? results)
+    private async Task PersistCoreAsync(BattleRoom room, CancellationToken ct, IReadOnlyList<BattleResult>? results, AppDbContext? creationDb = null)
     {
         using var scope = scopes.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var db = creationDb ?? scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await using var transaction = results is null ? null : await db.Database.BeginTransactionAsync(ct);
         if (results is not null)
             await db.Database.ExecuteSqlRawAsync("SET LOCAL lock_timeout = '15s'; SELECT pg_advisory_xact_lock(hashtextextended('ExamR.BattleRankSettlement', 0));", ct);
@@ -133,19 +136,35 @@ public sealed partial class BattleService
         }
     }
 
-    public async Task<string> CreateAsync(Guid hostId, string hostName, string name, BattleSettings settings, CancellationToken ct)
+    public async Task<(string? Code, IResult? Error)> CreateAsync(ClaimsPrincipal user, string hostName, string name, BattleSettings settings, CancellationToken ct)
     {
         using var scope = scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        string code;
-        do { code = System.Security.Cryptography.RandomNumberGenerator.GetString(CodeAlphabet, CodeLength); }
-        while (await db.StoredBattleRooms.AnyAsync(r => r.Code == code, ct));
-        var room = new BattleRoom(code, hostId, settings, clock.GetUtcNow()) { Name = name };
-        room.Participants[hostId] = new BattleParticipant(hostId, hostName, clock.GetUtcNow());
-        await PersistAsync(room, ct);
-        _rooms[code] = room;
-        ScheduleOccupancyCheck(room, room.ConnectionRevision);
-        return code;
+        var usage = scope.ServiceProvider.GetRequiredService<UsageLimiter>();
+        var hostId = user.GetUserId();
+        BattleRoom? created = null;
+        var error = await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
+            db.ChangeTracker.Clear();
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            await usage.LockAsync(hostId, UsageKind.Battle, ct);
+            if (await db.StoredBattleRooms.AnyAsync(r => r.HostUserId == hostId && !r.IsClosed && r.Status != RoomStatus.Completed, ct))
+                return (IResult?)TypedResults.Problem("Artıq aktiv otağınız var.", statusCode: 409);
+            string code;
+            do { code = System.Security.Cryptography.RandomNumberGenerator.GetString(CodeAlphabet, CodeLength); }
+            while (await db.StoredBattleRooms.AnyAsync(r => r.Code == code, ct));
+            var room = new BattleRoom(code, hostId, settings, clock.GetUtcNow()) { Name = name };
+            room.Participants[hostId] = new BattleParticipant(hostId, hostName, clock.GetUtcNow());
+            if (await usage.TryConsumeAsync(user, UsageKind.Battle, room.BattleId, ct) is { } denied) return denied;
+            await PersistCoreAsync(room, ct, null, db);
+            await tx.CommitAsync(ct);
+            created = room;
+            return null;
+        });
+        if (error is not null) return (null, error);
+        _rooms[created!.Code] = created;
+        ScheduleOccupancyCheck(created, created.ConnectionRevision);
+        return (created.Code, null);
     }
 
     // Called under the room gate. A brief grace period is used only for transport loss, so

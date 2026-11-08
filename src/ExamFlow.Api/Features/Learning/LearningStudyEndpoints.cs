@@ -47,7 +47,7 @@ public static class LearningStudyEndpoints
 
     public static void MapLearningStudyEndpoints(this RouteGroupBuilder api)
     {
-        var group = api.MapGroup("/learning").RequireAuthorization();
+        var group = api.MapGroup("/learning").RequireAuthorization().AddEndpointFilter<ExamFlow.Api.Features.Usage.UsageLimitFilter>();
         group.MapPost("/chats/{sessionId:guid}/quiz", NextQuestion).RequireRateLimiting(AuthenticationSetup.LearningAiRateLimit);
         group.MapPost("/quiz/{itemId:guid}/answer", Answer).Validate<QuizAnswerRequest>().RequireRateLimiting(AuthenticationSetup.LearningAiRateLimit);
         group.MapGet("/chats/{sessionId:guid}/quiz/review", Review);

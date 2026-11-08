@@ -54,6 +54,7 @@ public sealed class LearningMessageSource
 /// </summary>
 public sealed class LearningAiUsage
 {
+    public bool CountsTowardsMonthlyQuota { get; set; } = true;
     public Guid Id { get; set; }
     public Guid UserId { get; set; }
     public Guid? SessionId { get; set; }

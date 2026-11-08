@@ -1,3 +1,4 @@
+using ExamFlow.Api.Features.Usage;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -52,7 +53,7 @@ public static class LearningEndpoints
     private const long LearningOptionsLimit = 50L * 1024 * 1024;
 
     private static async Task<IResult> Upload(IFormFile? file, ClaimsPrincipal user, AppDbContext db, IFileStorage storage, LearningQueue queue,
-        IOptions<LearningOptions> options, TimeProvider clock, CancellationToken ct)
+        IOptions<LearningOptions> options, TimeProvider clock, UsageLimiter usage, CancellationToken ct)
     {
         var limit = Math.Min(options.Value.MaxFileSizeBytes, LearningOptionsLimit);
         if (file is null || file.Length == 0) return Invalid("PDF, DOCX və ya TXT faylı seçilməyib.");
@@ -80,29 +81,37 @@ public static class LearningEndpoints
             if (existing is { } existingId)
                 return await StartOrReuse(existingId, userId, db, queue, clock, ct); // same file: index the existing document once
 
-            var document = new UploadedDocument
+            Guid queuedJob = Guid.Empty;
+            var result = await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
             {
-                OriginalFileName = SafeName(file.FileName),
-                FileSizeBytes = file.Length,
-                Sha256 = sha256,
-                // Not part of the exam pipeline: marked as processed with no questions, so the exam processor never
-                // picks it up and exam/study/battle lists (which require questions) do not show it.
-                Status = DocumentStatus.Completed,
-                ProcessedAt = clock.GetUtcNow(),
-                UploadedByUserId = userId,
-            };
-            db.Documents.Add(document);
-            document.StoredFileName = $"{document.Id:N}{extension}";
-            await using (var stored = File.OpenRead(tempPath))
-                await storage.SaveAsync(document.StoredFileName, stored, ct);
-
-            var (learning, job) = NewJob(document.Id, extension, clock);
-            db.Add(learning);
-            db.Add(job);
-            try { await db.SaveChangesAsync(ct); }
-            catch (DbUpdateException) { storage.Delete(document.StoredFileName); throw; }
-            queue.Enqueue(job.Id);
-            return TypedResults.Accepted($"/api/learning/documents/{document.Id}", await Dto(db, document.Id, ct));
+                db.ChangeTracker.Clear();
+                await using var tx = await db.Database.BeginTransactionAsync(ct);
+                await usage.LockAsync(userId, UsageKind.Upload, ct);
+                var duplicate = await db.Documents.AsNoTracking().Where(d => d.UploadedByUserId == userId && d.Sha256 == sha256)
+                    .Select(d => (Guid?)d.Id).FirstOrDefaultAsync(ct);
+                if (duplicate is not null) return (IResult)TypedResults.Problem("Bu sənəd artıq yüklənib.", statusCode: 409,
+                    extensions: new Dictionary<string, object?> { ["documentId"] = duplicate });
+                var document = new UploadedDocument
+                {
+                    OriginalFileName = SafeName(file.FileName), FileSizeBytes = file.Length, Sha256 = sha256,
+                    // Tutor extraction has its own state; keep it outside the exam parser queue.
+                    Status = DocumentStatus.Completed, ProcessedAt = clock.GetUtcNow(), UploadedByUserId = userId,
+                };
+                db.Documents.Add(document);
+                document.StoredFileName = $"{document.Id:N}{extension}";
+                var (learning, job) = NewJob(document.Id, extension, clock);
+                // Use the learning resource id so indexing an existing exam document cannot refund its upload.
+                if (await usage.TryConsumeAsync(user, UsageKind.Upload, learning.Id, ct) is { } denied) return denied;
+                await using (var stored = File.OpenRead(tempPath)) await storage.SaveAsync(document.StoredFileName, stored, ct);
+                db.Add(learning);
+                db.Add(job);
+                try { await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); }
+                catch (DbUpdateException) { storage.Delete(document.StoredFileName); throw; }
+                queuedJob = job.Id;
+                return (IResult)TypedResults.Accepted($"/api/learning/documents/{document.Id}", await Dto(db, document.Id, ct));
+            });
+            if (queuedJob != Guid.Empty) queue.Enqueue(queuedJob);
+            return result;
         }
         finally
         {

@@ -412,6 +412,9 @@ public sealed class StudyAi(IChatModel model, LearningAiBudget budget, IOptions<
         switch (decision)
         {
             case BudgetDecision.Busy: return new(null, 429, "Əvvəlki sorğu hələ hazırlanır. Bir az gözləyin.");
+            case BudgetDecision.MonthlyLimit:
+                var monthly = await budget.MonthlyAsync(userId, ct);
+                throw new ExamFlow.Api.Features.Usage.UsageLimitException(monthly);
             case BudgetDecision.DailyLimit: return new(null, 429, "Bugünkü AI sorğu limitinə çatdınız. Sabah yenidən cəhd edin.");
             case BudgetDecision.BudgetExhausted:
                 return new(null, 403, admin ? "AI büdcəsi bitib. Yeni AI sorğuları dayandırılıb." : "AI köməkçisi müvəqqəti əlçatan deyil. Daha sonra yenidən cəhd edin.");

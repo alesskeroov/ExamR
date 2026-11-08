@@ -1,3 +1,5 @@
+import { UsageMeter } from '../../components/common/UsageMeter'
+import { useUsageLimit } from '../usage/api'
 import './exam-flow.css'
 import { Clock, Eye, EyeOff, Layers, Loader2, PlayCircle, RotateCcw } from 'lucide-react'
 import { useId, useState, type ReactNode } from 'react'
@@ -19,6 +21,7 @@ const inputClass =
   'h-11 rounded-lg border border-slate-300 bg-white px-3 tabular-nums focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none aria-invalid:border-rose-400'
 
 export function ExamSetupPage() {
+  const monthly = useUsageLimit('Exam')
   const navigate = useNavigate()
   const active = useActiveExam()
   const documents = useCompletedDocuments()
@@ -98,7 +101,7 @@ export function ExamSetupPage() {
   const selectedDocument = documents.data?.items.find((d) => d.id === documentId)
 
   const canStart =
-    !!range && !countError && !timeError && !availability.isFetching && !create.isPending && !active.data
+    !monthly.blocked && !!range && !countError && !timeError && !availability.isFetching && !create.isPending && !active.data
 
   function selectDocument(id: string) {
     setDocumentId(id)
@@ -296,6 +299,7 @@ export function ExamSetupPage() {
         </div>
 
         <aside className="min-w-0 lg:sticky lg:top-8 lg:self-start">
+          <UsageMeter kind="Exam" />
           <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
             <h2 className="mb-4 font-semibold">Seçdiyiniz imtahan</h2>
             <dl className="flex flex-col gap-2.5 text-sm">

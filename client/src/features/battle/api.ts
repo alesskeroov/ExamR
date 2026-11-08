@@ -99,6 +99,7 @@ export const MAX_MESSAGE_LENGTH = 300
 export function useCreateBattle() {
   const client = useQueryClient()
   return useMutation({ mutationFn: (request: CreateBattleRequest) => api.post<{ code: string }>('/battles', request),
+    onSettled: () => client.invalidateQueries({ queryKey: queryKeys.usage.mine }),
     onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.battles.all }) })
 }
 

@@ -1,3 +1,5 @@
+import { UsageMeter } from '../../components/common/UsageMeter'
+import { useUsageLimit } from '../usage/api'
 import { CheckCircle2, FileText, Loader2, Search, TriangleAlert, Upload } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
 import { Alert } from '../../components/common/Alert'
@@ -14,6 +16,7 @@ const accept = '.pdf,.docx,.txt'
 /** Start of a new chat: pick (or upload) the one document this conversation will be about. */
 export function TutorDocumentPicker({ onStart, starting }: Props) {
   const { data, isLoading, isError, refetch } = useTutorDocuments()
+  const monthly = useUsageLimit('Upload')
   const index = useIndexDocument()
   const [term, setTerm] = useState('')
   const [progress, setProgress] = useState<number | null>(null)
@@ -25,7 +28,7 @@ export function TutorDocumentPicker({ onStart, starting }: Props) {
   }, [data, term])
 
   const upload = (file: File | undefined) => {
-    if (!file) return
+    if (!file || monthly.blocked) return
     setProgress(0)
     index.mutate({ file, onProgress: setProgress }, { onSettled: () => setProgress(null) })
   }
@@ -35,6 +38,7 @@ export function TutorDocumentPicker({ onStart, starting }: Props) {
       <h1 className="text-2xl font-bold tracking-tight sm:text-[28px]">Hansı sənəd üzərində işləyək?</h1>
       <p className="mt-2 text-slate-600">Söhbət yalnız seçdiyiniz sənədə əsaslanır. Başqa sənəd üçün yeni söhbət açın.</p>
 
+      <UsageMeter kind="Upload" />
       <div className="mt-6 flex flex-col gap-2 sm:flex-row">
         <label className="relative flex-1">
           <span className="sr-only">Sənəd axtar</span>
@@ -42,9 +46,9 @@ export function TutorDocumentPicker({ onStart, starting }: Props) {
           <input value={term} onChange={e => setTerm(e.target.value)} placeholder="Sənəd axtar…" type="search"
             className="h-11 w-full border border-slate-300 bg-white pr-3 pl-9 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
         </label>
-        <input ref={input} type="file" accept={accept} className="sr-only" tabIndex={-1} aria-hidden
+        <input ref={input} type="file" accept={accept} disabled={monthly.blocked || progress !== null} className="sr-only" tabIndex={-1} aria-hidden
           onChange={e => { upload(e.target.files?.[0]); e.target.value = '' }} />
-        <button type="button" onClick={() => input.current?.click()} disabled={progress !== null}
+        <button type="button" onClick={() => input.current?.click()} disabled={monthly.blocked || progress !== null}
           className="btn-primary inline-flex h-11 items-center justify-center gap-2 rounded-[10px] px-4 text-sm font-semibold disabled:opacity-70">
           {progress !== null ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Upload className="size-4" aria-hidden />}
           {progress !== null ? `Yüklənir ${progress}%` : 'Yeni sənəd yüklə'}

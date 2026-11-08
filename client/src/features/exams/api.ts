@@ -158,6 +158,7 @@ export function useActiveExam() {
 export function useCreateExam() {
   const queryClient = useQueryClient()
   return useMutation({
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.usage.mine }),
     mutationFn: (request: CreateExamRequest) => api.post<ExamSession>('/exams', request),
     onSuccess: (session) => {
       queryClient.setQueryData(queryKeys.exams.session(session.id), session)

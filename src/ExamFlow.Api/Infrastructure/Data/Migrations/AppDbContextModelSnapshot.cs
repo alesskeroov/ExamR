@@ -1079,6 +1079,9 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                         .HasPrecision(18, 6)
                         .HasColumnType("numeric(18,6)");
 
+                    b.Property<bool>("CountsTowardsMonthlyQuota")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1875,6 +1878,75 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.ToTable("StudyAttempts", (string)null);
                 });
 
+            modelBuilder.Entity("ExamFlow.Api.Features.Usage.UsageEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ResourceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ResourceId", "Kind");
+
+                    b.HasIndex("UserId", "Kind", "OccurredAt");
+
+                    b.ToTable("UsageEvents");
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Usage.UserUsageLimit", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("MonthlyAiRequests")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("MonthlyBattles")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("MonthlyExams")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("MonthlyUploads")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("Unlimited")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("UserUsageLimits", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_UserUsageLimits_MonthlyAiRequests", "\"MonthlyAiRequests\" IS NULL OR \"MonthlyAiRequests\" BETWEEN 0 AND 100000");
+
+                            t.HasCheckConstraint("CK_UserUsageLimits_MonthlyBattles", "\"MonthlyBattles\" IS NULL OR \"MonthlyBattles\" BETWEEN 0 AND 100000");
+
+                            t.HasCheckConstraint("CK_UserUsageLimits_MonthlyExams", "\"MonthlyExams\" IS NULL OR \"MonthlyExams\" BETWEEN 0 AND 100000");
+
+                            t.HasCheckConstraint("CK_UserUsageLimits_MonthlyUploads", "\"MonthlyUploads\" IS NULL OR \"MonthlyUploads\" BETWEEN 0 AND 100000");
+                        });
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey", b =>
                 {
                     b.Property<int>("Id")
@@ -2565,6 +2637,24 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Usage.UsageEvent", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Auth.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Usage.UserUsageLimit", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Auth.AppUser", null)
+                        .WithOne()
+                        .HasForeignKey("ExamFlow.Api.Features.Usage.UserUsageLimit", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

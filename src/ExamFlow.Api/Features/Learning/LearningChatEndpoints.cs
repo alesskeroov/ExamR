@@ -183,6 +183,7 @@ public static class LearningChatEndpoints
         switch (decision)
         {
             case BudgetDecision.Busy: return TypedResults.Problem("Əvvəlki cavab hələ hazırlanır. Bir az gözləyin.", statusCode: StatusCodes.Status429TooManyRequests);
+            case BudgetDecision.MonthlyLimit: return (await budget.MonthlyAsync(user.GetUserId(), ct)).Problem();
             case BudgetDecision.DailyLimit: return TypedResults.Problem("Bugünkü AI sorğu limitinə çatdınız. Sabah yenidən cəhd edin.", statusCode: StatusCodes.Status429TooManyRequests);
             case BudgetDecision.BudgetExhausted:
                 return TypedResults.Problem(user.IsInRole(Roles.Admin) ? "AI büdcəsi bitib. Yeni AI sorğuları dayandırılıb." : "AI köməkçisi müvəqqəti əlçatan deyil. Daha sonra yenidən cəhd edin.",
