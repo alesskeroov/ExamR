@@ -66,6 +66,7 @@ public static partial class LearningStudyEndpoints
         group.MapPost("/materials/{id:guid}/save", SaveMaterial).Validate<SaveMaterialRequest>();
         group.MapDelete("/materials/{id:guid}", DeleteMaterial);
         MapPrepare(group);
+        MapCards(group);
     }
 
     private sealed record StudyDoc(Guid LearningId, Guid DocumentId, byte[] Sha256, string Format);

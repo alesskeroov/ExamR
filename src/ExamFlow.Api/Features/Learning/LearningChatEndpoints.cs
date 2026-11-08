@@ -57,10 +57,10 @@ public static class LearningChatEndpoints
     private static async Task<IResult> Usage(ClaimsPrincipal user, LearningAiBudget budget, IOptions<LearningAiOptions> options, CancellationToken ct) =>
         user.IsInRole(Roles.Admin) ? TypedResults.Ok(await budget.StatusAsync(user.GetUserId(), ct)) : (IResult)TypedResults.Ok(new { enabled = options.Value.Enabled });
 
-    private static async Task<IResult> Create(CreateChatRequest request, ClaimsPrincipal user, AppDbContext db, IOptions<LearningAiOptions> options,
+    private static async Task<IResult> Create(CreateChatRequest request, ClaimsPrincipal user, AppDbContext db,
         OpenQuestionIndexer indexer, TimeProvider clock, CancellationToken ct)
     {
-        if (!options.Value.Enabled) return Disabled();
+        // No AI check: a session is also the home of the AI-free "Kartlar"; AI tools check LearningAi:Enabled themselves.
         var userId = user.GetUserId();
         if (!await DocumentAccess.Readable(db, userId).AnyAsync(d => d.Id == request.DocumentId, ct)) return NotFound("Sənəd tapılmadı.");
         var learning = await db.Set<LearningDocument>().AsNoTracking().Where(l => l.DocumentId == request.DocumentId)

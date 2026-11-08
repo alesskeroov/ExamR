@@ -266,3 +266,32 @@ export function useDeleteMaterial(chatId: string) {
     onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.tutor.materials(chatId) }),
   })
 }
+
+// ---------- Kartlar (no AI) ----------
+
+export type CardGrade = 'Again' | 'Hard' | 'Good'
+/** One of the document's own questions with its answer. box: 0 = new or forgotten, higher = known longer. */
+export interface StudyCard {
+  number: number; question: string; answer: string; page: number | null; sharedAnswer: boolean; box: number; isNew: boolean; dueAt: string | null
+}
+/** Counts over the whole document; `cards` = the next batch (due first, then new). */
+export interface CardDeck {
+  total: number; new: number; due: number; learning: number; learned: number; nextDueAt: string | null; warning: string | null; cards: StudyCard[]
+}
+
+/** `ahead`: practise cards that are not due yet (when today's cards are done). */
+export function useCards(chatId: string, ahead: boolean) {
+  return useQuery({
+    queryKey: queryKeys.tutor.cards(chatId, ahead),
+    queryFn: () => api.get<CardDeck>(`/learning/chats/${chatId}/cards${ahead ? '?ahead=true' : ''}`),
+    staleTime: 0, retry: false,
+  })
+}
+
+/** Saves the student's own grade; the deck is refreshed when the round ends, not after every card. */
+export function useReviewCard(chatId: string) {
+  return useMutation({
+    mutationFn: ({ number, grade }: { number: number; grade: CardGrade }) =>
+      api.post<{ number: number; box: number; dueAt: string }>(`/learning/chats/${chatId}/cards/${number}/review`, { grade }),
+  })
+}
