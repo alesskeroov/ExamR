@@ -63,15 +63,17 @@ export function ProductPreview() {
           <p className="lp-q lp-swap">{sample.q}</p>
           <div className="lp-options">
             {sample.options.map((option, i) => <div key={option} className="lp-option lp-swap" style={{ animationDelay: `${60 + i * 50}ms` }}
-              data-state={picked && i === sample.answer ? 'picked' : undefined}><b>{'ABCD'[i]}</b>{option}</div>)}
+              data-state={picked && i === sample.answer ? 'picked' : undefined}><b>{'ABCD'[i]}</b>{option}
+              {picked && i === sample.answer && <svg viewBox="0 0 20 20" className="lp-pen-check"><path d="M3.5 10.5 8 15 17 4.5" /></svg>}</div>)}
           </div>
         </div>
         <div className="lp-grid20">{Array.from({ length: 20 }, (_, i) => <i key={i} data-s={i < done ? 'done' : i === number - 1 ? 'now' : 'todo'} />)}</div>
       </div>
 
-      <div className="lp-float" aria-hidden>
-        <span key={done} className="lp-mono lp-swap font-semibold">{done}/{done}</span>
-        <span>düzgün · bu sessiya</span>
+      {/* The teacher's red-pen score: the ring is drawn once, the number updates as questions are answered. */}
+      <div className="lp-grade" aria-hidden>
+        <svg viewBox="0 0 132 80" className="lp-grade-ring"><path d="M70 7C108 5 128 24 124 44 120 66 80 75 50 71 20 67 5 52 9 33 13 16 38 7 76 10" /></svg>
+        <span key={done} className="lp-grade-score lp-swap">{done}/{done}</span>
       </div>
       <span className="lp-tag">nümunə interfeys</span>
     </div>
