@@ -94,9 +94,11 @@ public static class ExamEndpoints
             .FirstOrDefaultAsync(ct);
 
         var candidates = await Candidates(db, documentId, from ?? int.MinValue, to ?? int.MaxValue, ct);
+        var mistakes = ExamEngine.Mistakes(candidates, await PastAnswers(db, user.GetUserId(), documentId, ct));
         return TypedResults.Ok(new ExamAvailabilityDto(
             ExamEngine.CountDistinct(candidates),
             ExamEngine.CountDistinct(candidates.Where(c => !c.IsGradable)),
+            ExamEngine.CountDistinct(mistakes),
             numbers?.First,
             numbers?.Last,
             options.Value.MaxQuestions,
@@ -136,11 +138,20 @@ public static class ExamEndpoints
         }
 
         var candidates = await Candidates(db, documentId, request.RangeFrom, request.RangeTo, ct);
+        if (request.Pool == ExamPool.Mistakes)
+        {
+            candidates = ExamEngine.Mistakes(candidates, await PastAnswers(db, userId, documentId, ct));
+        }
+
         var available = ExamEngine.CountDistinct(candidates);
         if (available < request.QuestionCount)
         {
-            return Problem(StatusCodes.Status422UnprocessableEntity,
-                $"{request.RangeFrom}–{request.RangeTo} aralığında cəmi {available} unikal sual var.", new() { ["available"] = available });
+            var detail = request.Pool != ExamPool.Mistakes
+                ? $"{request.RangeFrom}–{request.RangeTo} aralığında cəmi {available} unikal sual var."
+                : available == 0
+                    ? $"{request.RangeFrom}–{request.RangeTo} aralığında səhv cavablandırdığınız və ya boş buraxdığınız sual yoxdur."
+                    : $"{request.RangeFrom}–{request.RangeTo} aralığında səhv cavablandırdığınız və ya boş buraxdığınız cəmi {available} sual var.";
+            return Problem(StatusCodes.Status422UnprocessableEntity, detail, new() { ["available"] = available });
         }
 
         var pickedIds = ExamEngine.PickQuestions(candidates, request.QuestionCount, Random.Shared);
@@ -401,19 +412,42 @@ public static class ExamEndpoints
             .Select(q => new ExamCandidate(q.Id, q.ContentHash, q.VerificationStatus != VerificationStatus.Unverified))
             .ToListAsync(ct);
 
-    /// <summary>File names of the exams' source PDFs (deleted PDFs are simply missing).</summary>
+    /// <summary>The user's graded answers to this PDF's questions in finished exams (input of <see cref="ExamEngine.Mistakes"/>).</summary>
+    private static Task<List<PastAnswer>> PastAnswers(AppDbContext db, Guid userId, Guid documentId, CancellationToken ct) =>
+        db.Exams.AsNoTracking()
+            .Where(e => e.UserId == userId && e.Status == ExamStatus.Completed && e.CompletedAt != null)
+            .SelectMany(e => e.Questions
+                .Where(q => q.Question != null && q.Question.DocumentId == documentId
+                    && q.Outcome != null && q.Outcome != ExamOutcome.Ungraded)
+                .Select(q => new PastAnswer(q.Question!.ContentHash, e.CompletedAt!.Value, q.Outcome!.Value)))
+            .ToListAsync(ct);
+
+    /// <summary>
+    /// File names of the exams' source PDFs (deleted PDFs are simply missing). DİM attempts have no source PDF:
+    /// their test title is added under the exam's own id.
+    /// </summary>
     private static async Task<Dictionary<Guid, string>> DocumentNames(AppDbContext db, IEnumerable<Exam> exams, CancellationToken ct)
     {
-        var ids = exams.SelectMany(e => e.SourceDocumentIds).Distinct().ToList();
-        return ids.Count == 0
+        var list = exams.ToList();
+        var ids = list.SelectMany(e => e.SourceDocumentIds).Distinct().ToList();
+        var names = ids.Count == 0
             ? []
             : await db.Documents.AsNoTracking().Where(d => ids.Contains(d.Id)).ToDictionaryAsync(d => d.Id, d => d.OriginalFileName, ct);
+        var withoutSource = list.Where(e => e.SourceDocumentIds.Count == 0).Select(e => e.Id).ToList();
+        if (withoutSource.Count > 0)
+        {
+            foreach (var attempt in await db.DimAttempts.AsNoTracking().Where(a => withoutSource.Contains(a.ExamId))
+                         .Select(a => new { a.ExamId, a.Test.Title }).ToListAsync(ct))
+                names[attempt.ExamId] = attempt.Title;
+        }
+
+        return names;
     }
 
     private static ExamSourceDto Source(Exam exam, IReadOnlyDictionary<Guid, string> names)
     {
         Guid? documentId = exam.SourceDocumentIds.Count == 1 ? exam.SourceDocumentIds[0] : null;
-        return new ExamSourceDto(documentId, documentId is { } id ? names.GetValueOrDefault(id) : null, exam.RangeFrom, exam.RangeTo);
+        return new ExamSourceDto(documentId, names.GetValueOrDefault(documentId ?? exam.Id), exam.RangeFrom, exam.RangeTo);
     }
 
     /// <summary>Copies the question into the exam with its options in a new random order.</summary>
@@ -449,11 +483,11 @@ public static class ExamEndpoints
             : exams.Include(e => e.Questions)).AsTracking().FirstOrDefaultAsync(ct);
     }
 
-    private static Task<Exam?> LoadActiveAsync(AppDbContext db, Guid userId, CancellationToken ct) =>
+    internal static Task<Exam?> LoadActiveAsync(AppDbContext db, Guid userId, CancellationToken ct) =>
         db.Exams.FirstOrDefaultAsync(e => e.UserId == userId && e.Status == ExamStatus.InProgress, ct);
 
     /// <summary>Completes an exam whose time is up (even if the browser was closed). Returns true if it is now completed.</summary>
-    private static async Task<bool> FinalizeIfExpiredAsync(AppDbContext db, Exam exam, DateTimeOffset now, ExamOptions options, CancellationToken ct)
+    internal static async Task<bool> FinalizeIfExpiredAsync(AppDbContext db, Exam exam, DateTimeOffset now, ExamOptions options, CancellationToken ct)
     {
         if (exam.Status == ExamStatus.Completed)
         {

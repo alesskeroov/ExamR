@@ -93,4 +93,15 @@ export const queryKeys = {
     session: (id: string) => ['exams', 'session', id] as const,
     result: (id: string) => ['exams', 'result', id] as const,
   },
+  dim: {
+    all: ['dim'] as const,
+    catalog: ['dim', 'catalog'] as const,
+    tests: (track: string) => ['dim', 'tests', track] as const,
+    report: (examId: string) => ['dim', 'report', examId] as const,
+    admin: ['dim', 'admin'] as const,
+    adminTests: ['dim', 'admin', 'tests'] as const,
+    bankStats: ['dim', 'admin', 'bank-stats'] as const,
+    sourceDocuments: ['dim', 'admin', 'documents'] as const,
+    sourceQuestions: (documentId: string) => ['dim', 'admin', 'documents', documentId] as const,
+  },
 }

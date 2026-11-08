@@ -11,6 +11,9 @@ public class UploadedDocument : IAuditable
     public string OriginalFileName { get; set; } = string.Empty;
     public string StoredFileName { get; set; } = string.Empty;
     public bool ShareWithEveryone { get; set; }
+
+    /// <summary>Source PDF of the DİM bank (uploaded or used on the DİM admin page); hidden from every user-facing list and flow.</summary>
+    public bool IsDimSource { get; set; }
     public long FileSizeBytes { get; set; }
     public byte[] Sha256 { get; set; } = [];
     public int? PageCount { get; set; }

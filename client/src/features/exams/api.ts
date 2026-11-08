@@ -5,6 +5,8 @@ import type { PagedResult } from '../documents/api'
 import type { VisualDto } from '../../lib/visuals'
 
 export type RevealMode = 'Immediate' | 'AtEnd'
+/** Mistakes = only questions the user last answered wrong or left blank. */
+export type ExamPool = 'All' | 'Mistakes'
 export type ExamStatus = 'InProgress' | 'Completed'
 export type CompletionReason = 'Submitted' | 'TimeExpired'
 export type ExamOutcome = 'Correct' | 'Incorrect' | 'Unanswered' | 'Ungraded'
@@ -101,6 +103,8 @@ export interface ExamSummary {
 export interface ExamAvailability {
   available: number
   ungraded: number
+  /** Questions of the range the user last answered wrong or left blank. */
+  mistakes: number
   /** First and last original question number of the PDF. */
   firstNumber: number | null
   lastNumber: number | null
@@ -115,6 +119,8 @@ export interface CreateExamRequest {
   rangeFrom: number
   rangeTo: number
   revealMode: RevealMode
+  /** Omitted = All. */
+  pool?: ExamPool
   /** Omitted = defaultDurationMinutes. */
   durationMinutes?: number
 }
@@ -253,6 +259,8 @@ export function useFinishExam(examId: string) {
       queryClient.setQueryData(queryKeys.exams.result(examId), result)
       queryClient.removeQueries({ queryKey: queryKeys.exams.session(examId) })
       void queryClient.invalidateQueries({ queryKey: queryKeys.exams.all })
+      // A finished DİM attempt changes its test card ("Davam et" → result, attempts used).
+      void queryClient.invalidateQueries({ queryKey: queryKeys.dim.all })
     },
   })
 }

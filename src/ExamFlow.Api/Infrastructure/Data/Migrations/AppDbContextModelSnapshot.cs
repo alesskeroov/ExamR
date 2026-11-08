@@ -359,6 +359,130 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.ToTable("StoredBattleRooms");
                 });
 
+            modelBuilder.Entity("ExamFlow.Api.Features.Dim.DimAttempt", b =>
+                {
+                    b.Property<Guid>("ExamId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Items")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("timestamp(3) with time zone");
+
+                    b.Property<Guid>("TestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("ExamId");
+
+                    b.HasIndex("TestId", "UserId");
+
+                    b.ToTable("DimAttempts", (string)null);
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Dim.DimBankQuestion", b =>
+                {
+                    b.Property<Guid>("QuestionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("ApprovedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("timestamp(3) with time zone");
+
+                    b.Property<Guid>("ApprovedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .IsUnicode(false)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<string>("Topic")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Track")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("QuestionId");
+
+                    b.HasIndex("Track", "Subject");
+
+                    b.ToTable("DimBankQuestions", (string)null);
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Dim.DimTest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<short?>("AttemptLimit")
+                        .HasColumnType("smallint");
+
+                    b.Property<DateTimeOffset?>("AvailableFrom")
+                        .HasPrecision(3)
+                        .HasColumnType("timestamp(3) with time zone");
+
+                    b.Property<DateTimeOffset?>("AvailableTo")
+                        .HasPrecision(3)
+                        .HasColumnType("timestamp(3) with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("timestamp(3) with time zone");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<short>("DurationMinutes")
+                        .HasColumnType("smallint");
+
+                    b.Property<string>("GroupCode")
+                        .HasMaxLength(10)
+                        .IsUnicode(false)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<bool>("IsPublished")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Sections")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Track")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Track", "IsPublished");
+
+                    b.ToTable("DimTests", (string)null);
+                });
+
             modelBuilder.Entity("ExamFlow.Api.Features.Documents.DocumentGroupShare", b =>
                 {
                     b.Property<Guid>("DocumentId")
@@ -405,6 +529,9 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
 
                     b.Property<long>("FileSizeBytes")
                         .HasColumnType("bigint");
+
+                    b.Property<bool>("IsDimSource")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("OriginalFileName")
                         .IsRequired()
@@ -1947,6 +2074,36 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                         .HasForeignKey("HostUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Dim.DimAttempt", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Exams.Exam", "Exam")
+                        .WithOne()
+                        .HasForeignKey("ExamFlow.Api.Features.Dim.DimAttempt", "ExamId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ExamFlow.Api.Features.Dim.DimTest", "Test")
+                        .WithMany()
+                        .HasForeignKey("TestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Exam");
+
+                    b.Navigation("Test");
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Dim.DimBankQuestion", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Questions.Question", "Question")
+                        .WithOne()
+                        .HasForeignKey("ExamFlow.Api.Features.Dim.DimBankQuestion", "QuestionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Question");
                 });
 
             modelBuilder.Entity("ExamFlow.Api.Features.Documents.DocumentGroupShare", b =>

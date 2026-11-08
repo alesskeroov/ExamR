@@ -1,4 +1,4 @@
-import { GraduationCap, MessagesSquare, ShieldCheck, DoorOpen, FileUp, History, LayoutDashboard, Library, ListChecks, LogOut, Menu, Swords, Users, X, type LucideIcon } from 'lucide-react'
+import { GraduationCap, MessagesSquare, ShieldCheck, DoorOpen, FileUp, History, LayoutDashboard, Library, ListChecks, LogOut, Menu, School, Swords, Users, X, type LucideIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useSearchParams } from 'react-router'
 import { useCurrentUser, useLogout } from '../features/auth/api'
@@ -15,6 +15,7 @@ const navItems: { to: string; label: string; icon: LucideIcon; group: string; en
   { to: '/tutor', label: 'AI Tutor', icon: MessagesSquare, group: 'Hazırlıq', badge: tutorEnabled ? 'Demo' : 'Tezliklə' },
   { to: '/exams/new', label: 'İmtahana başla', icon: ListChecks, group: 'İmtahan' },
   { to: '/exams', label: 'Tarixçə', icon: History, group: 'İmtahan', end: true },
+  { to: '/dim/buraxilis', label: 'Buraxılış imtahanı', icon: School, group: 'DİM sınaqları' },
   { to: '/battle', label: 'Battle', icon: Swords, group: 'Birlikdə', end: true },
   { to: '/battle/rooms', label: 'Otaqlarım', icon: DoorOpen, group: 'Birlikdə' },
   { to: '/friends', label: 'Dostlar', icon: Users, group: 'Birlikdə' },
@@ -163,7 +164,7 @@ function Brand() {
 }
 
 const extraPages: Record<string, string> = { '/notifications': 'Bildirişlər', '/profile': 'Profil' }
-const adminSections: Record<string, string> = { documents: 'Sənədlər', groups: 'Qruplar', admins: 'Adminlər' }
+const adminSections: Record<string, string> = { documents: 'Sənədlər', groups: 'Qruplar', admins: 'Adminlər', dim: 'DİM sınaqları' }
 
 function Breadcrumb() {
   const { pathname } = useLocation()

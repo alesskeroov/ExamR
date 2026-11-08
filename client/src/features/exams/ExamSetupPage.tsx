@@ -1,5 +1,5 @@
 import './exam-flow.css'
-import { Clock, Eye, EyeOff, Loader2, PlayCircle } from 'lucide-react'
+import { Clock, Eye, EyeOff, Layers, Loader2, PlayCircle, RotateCcw } from 'lucide-react'
 import { useId, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
@@ -8,7 +8,9 @@ import { PageHeader } from '../../components/common/PageHeader'
 import { formatNumber } from '../../lib/format'
 import { cn } from '../../lib/utils'
 import { useCompletedDocuments } from '../documents/api'
-import { useActiveExam, useCreateExam, useExamAvailability, useExamResult, type RevealMode } from './api'
+import { ChoiceCard } from '../../components/common/ChoiceCard'
+import { InfoTip } from '../../components/common/InfoTip'
+import { useActiveExam, useCreateExam, useExamAvailability, useExamResult, type ExamPool, type RevealMode } from './api'
 
 const MAX_MINUTES = 600
 
@@ -31,6 +33,9 @@ export function ExamSetupPage() {
   const [rangeInput, setRangeInput] = useState<{ from: string; to: string } | null>(null)
   const [count, setCount] = useState(20)
   const [revealMode, setRevealMode] = useState<RevealMode>('AtEnd')
+  const [pool, setPool] = useState<ExamPool>(() => (searchParams.get('pool') === 'mistakes' ? 'Mistakes' : 'All'))
+  // After choosing "Səhvlərim" the count is lowered to the number of mistakes once that is known.
+  const [fitCount, setFitCount] = useState(pool === 'Mistakes')
   // Typed time limit in minutes; null = automatic (the server's default, 30 minutes).
   const [minutesInput, setMinutesInput] = useState<number | null>(null)
 
@@ -68,15 +73,23 @@ export function ExamSetupPage() {
   const range = documentId && !rangeError && from !== null && to !== null ? { from, to } : undefined
   const availability = useExamAvailability(range ? documentId : '', range)
 
-  const available = range ? (availability.data?.available ?? 0) : 0
+  const mistakes = range ? (availability.data?.mistakes ?? 0) : 0
+  const available = range ? (pool === 'Mistakes' ? mistakes : (availability.data?.available ?? 0)) : 0
   const max = Math.min(available, availability.data?.maxQuestions ?? 200)
+  const availabilityReady = !!range && !!availability.data && !availability.isFetching && !availability.isPlaceholderData
+  if (fitCount && availabilityReady && (!retakeId || prefilled)) {
+    setFitCount(false)
+    if (max > 0 && count > max) setCount(max)
+  }
   const countError = !range
     ? null
-    : !Number.isInteger(count) || count < 1
-      ? 'Sual sayı ən azı 1 olmalıdır.'
-      : count > max
-        ? `Bu aralıqda ən çox ${formatNumber(max)} sual seçmək olar.`
-        : null
+    : pool === 'Mistakes' && availabilityReady && mistakes === 0
+      ? 'Bu aralıqda səhv cavablandırdığınız və ya boş buraxdığınız sual yoxdur.'
+      : !Number.isInteger(count) || count < 1
+        ? 'Sual sayı ən azı 1 olmalıdır.'
+        : count > max
+          ? `Bu aralıqda ən çox ${formatNumber(max)} sual seçmək olar.`
+          : null
   const autoMinutes = availability.data?.defaultDurationMinutes ?? 30
   const minutes = minutesInput ?? autoMinutes
   const timeError = !Number.isInteger(minutes) || minutes < 1 || minutes > MAX_MINUTES
@@ -92,6 +105,11 @@ export function ExamSetupPage() {
     setRangeInput(null)
   }
 
+  function selectPool(value: ExamPool) {
+    setPool(value)
+    setFitCount(value === 'Mistakes')
+  }
+
   function updateRange(field: 'from' | 'to', value: string) {
     setRangeInput((current) => ({ from: String(current?.from ?? from ?? ''), to: String(current?.to ?? to ?? ''), [field]: value }))
   }
@@ -99,7 +117,7 @@ export function ExamSetupPage() {
   function start() {
     if (!range) return
     create.mutate(
-      { questionCount: count, documentId, rangeFrom: range.from, rangeTo: range.to, revealMode,
+      { questionCount: count, documentId, rangeFrom: range.from, rangeTo: range.to, revealMode, pool,
         durationMinutes: minutesInput ?? undefined },
       { onSuccess: (session) => navigate(`/exams/${session.id}`) },
     )
@@ -177,7 +195,32 @@ export function ExamSetupPage() {
             </p>
           </Section>
 
-          <Section step={3} title="Sual sayı">
+          <Section step={3} title="Hansı suallar?">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <ChoiceCard name="pool" checked={pool === 'All'} onChange={() => selectPool('All')} icon={<Layers className="size-5" />} title="Bütün suallar" description="Aralıqdakı bütün suallardan təsadüfi seçilir" />
+              <ChoiceCard
+                name="pool"
+                checked={pool === 'Mistakes'}
+                onChange={() => selectPool('Mistakes')}
+                icon={<RotateCcw className="size-5" />}
+                title="Səhvlərim"
+                description="Son dəfə səhv cavablandırdığınız və ya boş buraxdığınız suallar. Düzgün cavablandırdıqca siyahıdan çıxır"
+                aside={
+                  <InfoTip label="Səhv sualların sayı">
+                    {!range
+                      ? 'Səhv sualların sayı PDF və aralıq seçildikdən sonra görünür.'
+                      : !availability.data || availability.isPlaceholderData
+                        ? 'Hesablanır…'
+                        : mistakes === 0
+                          ? `${range.from}–${range.to} aralığında səhv və ya boş buraxdığınız sual yoxdur.`
+                          : `${range.from}–${range.to} aralığında ${formatNumber(mistakes)} səhv və ya boş buraxdığınız sual var.`}
+                  </InfoTip>
+                }
+              />
+            </div>
+          </Section>
+
+          <Section step={4} title="Sual sayı">
             <div className="flex flex-wrap items-center gap-2">
               {PRESETS.map((preset) => (
                 <button
@@ -208,11 +251,15 @@ export function ExamSetupPage() {
               </label>
             </div>
             <p className={cn('mt-2', countError ? 'text-rose-600' : 'text-slate-500')}>
-              {countError ?? (range ? `Aralıqda ${formatNumber(available)} unikal sual var. Suallar təkrarlanmır.` : 'Əvvəlcə aralığı təyin edin.')}
+              {countError ?? (!range
+                ? 'Əvvəlcə aralığı təyin edin.'
+                : pool === 'Mistakes'
+                  ? `Aralıqda səhv və ya boş buraxdığınız ${formatNumber(available)} sual var.`
+                  : `Aralıqda ${formatNumber(available)} unikal sual var. Suallar təkrarlanmır.`)}
             </p>
           </Section>
 
-          <Section step={4} title="Vaxt limiti">
+          <Section step={5} title="Vaxt limiti">
             <div className="flex flex-wrap items-center gap-2">
               <label className="flex items-center gap-2">
                 <span className="sr-only">Vaxt limiti (dəqiqə)</span>
@@ -240,7 +287,7 @@ export function ExamSetupPage() {
             </p>
           </Section>
 
-          <Section step={5} title="Düzgün cavablar nə vaxt göstərilsin?">
+          <Section step={6} title="Düzgün cavablar nə vaxt göstərilsin?">
             <div className="grid gap-3 sm:grid-cols-2">
               <ChoiceCard name="reveal" checked={revealMode === 'AtEnd'} onChange={() => setRevealMode('AtEnd')} icon={<EyeOff className="size-5" />} title="İmtahan bitdikdə" description="Cavablar sona qədər dəyişdirilə bilər" />
               <ChoiceCard name="reveal" checked={revealMode === 'Immediate'} onChange={() => setRevealMode('Immediate')} icon={<Eye className="size-5" />} title="Hər sualdan sonra" description="Hər sualda “Cavabı göstər” ilə düzgün cavabı görə bilərsiniz; göstərildikdən sonra variant dəyişmir" />
@@ -258,6 +305,7 @@ export function ExamSetupPage() {
                 </span>
               </SummaryRow>
               <SummaryRow label="Aralıq">{range ? `${range.from}–${range.to}` : '—'}</SummaryRow>
+              <SummaryRow label="Suallar">{pool === 'Mistakes' ? 'Səhvlərim' : 'Hamısı'}</SummaryRow>
               <SummaryRow label="Mövcud sual">
                 {range && availability.isFetching ? <Loader2 className="size-4 animate-spin" /> : range ? formatNumber(available) : '—'}
               </SummaryRow>
@@ -270,7 +318,7 @@ export function ExamSetupPage() {
               </SummaryRow>
               <SummaryRow label="Cavablar">{revealMode === 'AtEnd' ? 'Sonda' : 'Hər sualdan sonra'}</SummaryRow>
             </dl>
-            {range && !!availability.data?.ungraded && (
+            {range && pool === 'All' && !!availability.data?.ungraded && (
               <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-amber-800">
                 Aralıqdakı {formatNumber(availability.data.ungraded)} sualın düzgün cavabı məlum deyil — düşsə, ballanmayacaq.
               </p>
@@ -339,35 +387,6 @@ function Section({ step, title, children }: { step: number; title: string; child
       </h2>
       {children}
     </section>
-  )
-}
-
-interface ChoiceCardProps {
-  name: string
-  checked: boolean
-  onChange: () => void
-  icon: ReactNode
-  title: string
-  description: string
-}
-
-function ChoiceCard({ name, checked, onChange, icon, title, description }: ChoiceCardProps) {
-  return (
-    <label
-      className={cn(
-        'flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm transition-colors duration-150 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-indigo-500',
-        checked ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50',
-      )}
-    >
-      <input type="radio" name={name} checked={checked} onChange={onChange} className="sr-only" />
-      <span className={cn('mt-0.5', checked ? 'text-indigo-600' : 'text-slate-400')} aria-hidden>
-        {icon}
-      </span>
-      <span>
-        <span className="block font-medium">{title}</span>
-        <span className="mt-1 block text-xs leading-5 text-slate-500">{description}</span>
-      </span>
-    </label>
   )
 }
 

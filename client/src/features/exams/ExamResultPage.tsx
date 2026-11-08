@@ -1,6 +1,6 @@
 import './exam-flow.css'
 import { answerDisplayText } from './answer-display'
-import { AlertTriangle, Check, Clock, History, RotateCw, X } from 'lucide-react'
+import { AlertTriangle, Check, Clock, History, RotateCcw, RotateCw, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
@@ -12,6 +12,8 @@ import { cn } from '../../lib/utils'
 import { bodyVisuals, optionVisuals, visibleText, visualUrls } from '../../lib/visuals'
 import { useExamResult, type ExamOutcome, type ExamResult, type ExamResultQuestion } from './api'
 import { sourceName, sourceRange } from './examSource'
+import { DimReportCard } from '../dim/DimReportCard'
+import { DimRetakeButton } from '../dim/DimRetakeButton'
 
 type Filter = 'All' | 'Correct' | 'Incorrect' | 'Unanswered'
 
@@ -86,12 +88,22 @@ function ResultView({ result }: { result: ExamResult }) {
               <History className="size-4" aria-hidden />
               Tarixçə
             </Link>
+            {canRetake(result) && result.incorrect + result.unanswered > 0 && (
+              // Mistakes mode over the same range: includes earlier mistakes there, not only this exam's.
+              <Link to={`/exams/new?retake=${result.id}&pool=mistakes`} className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 font-medium text-slate-700 hover:bg-slate-50">
+                <RotateCcw className="size-4" aria-hidden />
+                Səhvləri təkrarla
+              </Link>
+            )}
             {canRetake(result) && (
               // Opens the setup with this exam's settings, so they can be reviewed and changed first.
               <Link to={`/exams/new?retake=${result.id}`} className="inline-flex h-10 items-center gap-2 rounded-lg btn-primary px-4 font-medium">
                 <RotateCw className="size-4" aria-hidden />
                 Yenidən imtahan ver
               </Link>
+            )}
+            {result.source.documentId === null && (
+              <DimRetakeButton examId={result.id} questionCount={result.questionCount} durationMinutes={result.timeLimitMinutes} />
             )}
           </div>
         }
@@ -144,6 +156,8 @@ function ResultView({ result }: { result: ExamResult }) {
           </ol>
         </div>
       </section>
+
+      <DimReportCard examId={result.id} />
 
       <section aria-labelledby="review-heading" className="flex min-w-0 flex-col gap-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

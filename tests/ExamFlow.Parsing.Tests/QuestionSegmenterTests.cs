@@ -40,6 +40,44 @@ public class QuestionSegmenterTests
     }
 
     [Fact]
+    public void Ordinal_numbers_and_contents_entries_before_the_questions_are_not_questions()
+    {
+        var questions = QuestionSegmenter.Segment([
+            L("11-ci sinif buraxılış hazırlığı · 21 mövzu"),
+            L("1. Ədədlər və bölünmə — 15 sual"),
+            L("2. Adi kəsrlər — 15 sual"),
+            L("3. Faiz və nisbət ........ 12"),
+            L("1. ƏDƏDLƏR VƏ BÖLÜNMƏ"),
+            L("001. Birinci sual?"), L("A) x"), L("B) y"),
+            L("002. İkinci sual?"), L("A) x"), L("B) y"),
+        ]);
+
+        Assert.Equal([1, 2], questions.Select(q => q.Number));
+        Assert.Equal("Birinci sual?", string.Join(' ', questions[0].TextTokens.Select(t => t.Text)));
+    }
+
+    [Fact]
+    public void Upper_case_section_heading_is_not_glued_to_the_previous_option()
+    {
+        var questions = QuestionSegmenter.Segment([
+            L("30. Sual?"), L("A) x"), L("B) 1/2"),
+            L("3. FAİZ VƏ NİSBƏT"),
+            L("31. Növbəti?"), L("A) x"), L("B) y"),
+        ]);
+
+        Assert.Equal([30, 31], questions.Select(q => q.Number));
+        Assert.Equal("1/2", string.Join(' ', questions[0].Options[1].TextTokens.Select(t => t.Text)));
+    }
+
+    [Fact]
+    public void Upper_case_question_followed_by_options_is_kept()
+    {
+        var questions = QuestionSegmenter.Segment([L("1. AZƏRBAYCANIN PAYTAXTI"), L("A) Bakı"), L("B) Gəncə")]);
+
+        Assert.Equal(2, Assert.Single(questions).Options.Count);
+    }
+
+    [Fact]
     public void Option_letters_must_be_sequential()
     {
         var questions = QuestionSegmenter.Segment([L("1. Sual"), L("B) hələ variant deyil"), L("A) x"), L("B) y")]);

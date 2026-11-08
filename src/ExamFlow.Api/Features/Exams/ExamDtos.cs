@@ -20,9 +20,20 @@ public sealed class CreateExamRequest
 
     public RevealMode RevealMode { get; init; } = RevealMode.AtEnd;
 
+    public ExamPool Pool { get; init; } = ExamPool.All;
+
     /// <summary>Time limit in minutes; null = <see cref="ExamOptions.DefaultDurationMinutes"/>.</summary>
     [Range(1, ExamOptions.MaxDurationMinutes)]
     public int? DurationMinutes { get; init; }
+}
+
+/// <summary>Which questions of the range an exam draws from.</summary>
+public enum ExamPool
+{
+    All,
+
+    /// <summary>Only questions the user last answered wrong or left blank (see <see cref="ExamEngine.Mistakes"/>).</summary>
+    Mistakes,
 }
 
 public sealed class AnswerRequest
@@ -102,8 +113,11 @@ public sealed record ExamSummaryDto(
     int? Ungraded,
     decimal? ScorePercent);
 
-/// <summary>Questions available in a PDF range; FirstNumber/LastNumber are the PDF's own question numbers.</summary>
+/// <summary>
+/// Questions available in a PDF range; FirstNumber/LastNumber are the PDF's own question numbers.
+/// Mistakes = questions of the range the user last answered wrong or left blank.
+/// </summary>
 public sealed record ExamAvailabilityDto(
-    int Available, int Ungraded, int? FirstNumber, int? LastNumber, int MaxQuestions, int DefaultDurationMinutes);
+    int Available, int Ungraded, int Mistakes, int? FirstNumber, int? LastNumber, int MaxQuestions, int DefaultDurationMinutes);
 
 public sealed record ActiveExamDto(Guid Id);

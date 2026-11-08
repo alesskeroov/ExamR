@@ -1,6 +1,7 @@
 using ExamFlow.Api.Features.Auth;
 using ExamFlow.Api.Features.Study;
 using ExamFlow.Api.Features.Battles;
+using ExamFlow.Api.Features.Dim;
 using ExamFlow.Api.Features.Documents;
 using ExamFlow.Api.Features.Exams;
 using ExamFlow.Api.Features.Explanations;
@@ -48,6 +49,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<QuestionExplanation> QuestionExplanations => Set<QuestionExplanation>();
     public DbSet<ExplanationJob> ExplanationJobs => Set<ExplanationJob>();
+
+    public DbSet<DimBankQuestion> DimBankQuestions => Set<DimBankQuestion>();
+    public DbSet<DimTest> DimTests => Set<DimTest>();
+    public DbSet<DimAttempt> DimAttempts => Set<DimAttempt>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
