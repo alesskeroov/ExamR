@@ -97,6 +97,7 @@ builder.Services.Configure<LearningOptions>(builder.Configuration.GetSection(Lea
 builder.Services.AddSingleton<LearningQueue>();
 builder.Services.AddScoped<LearningProcessor>();
 builder.Services.AddScoped<OpenQuestionIndexer>();
+builder.Services.AddScoped<CardDeckService>();
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IChunkRetriever, LexicalChunkRetriever>();
 builder.Services.AddHostedService<LearningProcessingService>();

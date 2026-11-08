@@ -81,7 +81,7 @@ export function GuidePage() {
   const learn = (next: LearnScope) => go('learn', next.kind === 'topic' ? { scope: 'topic', topic: next.key } : next.kind === 'all' ? {} : { scope: next.kind })
   const showSource = (card: StudyCard) => setPreview({
     open: true,
-    source: { number: card.number, chunkOrdinal: card.chunkOrdinal, pageFrom: card.page, pageTo: card.page, section: null, excerpt: card.question, cited: true },
+    source: { number: card.source, chunkOrdinal: card.chunkOrdinal, pageFrom: card.page, pageTo: card.page, section: null, excerpt: card.front, cited: true },
   })
 
   const toggleSidebar = () => setSidebarOpen(open => { store(sidebarKey, open ? 'closed' : 'open'); return !open })

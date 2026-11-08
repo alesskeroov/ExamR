@@ -199,7 +199,7 @@ public static partial class OpenQuestionExtractor
                 var answer = string.Join('\n', paragraphs.Skip(index + 1).Take(end - index - 1).Select(p => p.Text));
                 // PDFs without paragraph spacing give "12. Question? Answer…" as one paragraph: the answer follows the question.
                 if (answer.Length == 0 && SplitInline(text) is { } split) (text, answer) = split;
-                if (answer.Length > 2400) answer = answer[..2400];
+                if (answer.Length > 6000) answer = answer[..6000];
                 found.Add((index, number, text, answer));
             }
 

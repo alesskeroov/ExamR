@@ -12,7 +12,7 @@ export function Skeleton({ label }: { label: string }) {
   )
 }
 
-/** Centered column used by the study tabs. */
-export function Frame({ children }: { children: import('react').ReactNode }) {
-  return <div className="mx-auto flex w-full max-w-2xl min-w-0 flex-col gap-4 px-4 py-5 sm:py-8" style={{ overflowWrap: 'anywhere' }}>{children}</div>
+/** Centered column used by the study tabs; wide for card grids. */
+export function Frame({ children, wide = false }: { children: import('react').ReactNode; wide?: boolean }) {
+  return <div className={`mx-auto flex w-full min-w-0 flex-col gap-4 px-4 py-5 sm:py-8 ${wide ? 'max-w-5xl' : 'max-w-2xl'}`} style={{ overflowWrap: 'anywhere' }}>{children}</div>
 }

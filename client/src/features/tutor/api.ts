@@ -270,17 +270,22 @@ export function useDeleteMaterial(chatId: string) {
 // ---------- Öyrənmə bələdçisi (no AI) ----------
 
 export type CardGrade = 'Again' | 'Hard' | 'Good'
-/** One of the document's own questions with its answer and the student's state. weak: last answered "Bilmirdim" or "Qismən". */
+/** Question = open question; Term = "X — definition" from an answer; List = "…:" with items; Test = test question and its correct option. */
+export type CardKind = 'Question' | 'Term' | 'List' | 'Test'
+/**
+ * One flashcard and the student's state. items: list items (List), terms explained in the answer (Question) or the
+ * explanation (Test); others: wrong test options; source: the document's question number. weak: last answered "Bilmirdim"/"Qismən".
+ */
 export interface StudyCard {
-  number: number; question: string; answer: string; page: number | null; chunkOrdinal: number; sharedAnswer: boolean; topicKey: string
-  seen: boolean; streak: number; mastered: boolean; weak: boolean
+  id: string; kind: CardKind; topicKey: string; front: string; back: string; items: string[]; others: string[]
+  source: number; page: number | null; chunkOrdinal: number; seen: boolean; streak: number; mastered: boolean; weak: boolean
 }
-export interface CardTopic { key: string; title: string; numbers: number[] }
+export interface CardTopic { key: string; title: string }
 /** The student's private deck: topics in document order and all cards. required = "Bilirdim" in a row to master a card. */
 export interface CardDeck { warning: string | null; required: number; topics: CardTopic[]; cards: StudyCard[] }
 /** What Öyrən studies: every card, weak cards, all mixed, or one topic. */
 export type LearnScope = { kind: 'all' } | { kind: 'weak' } | { kind: 'mixed' } | { kind: 'topic'; key: string }
-export interface CardState { number: number; streak: number; mastered: boolean; weak: boolean }
+export interface CardState { id: string; streak: number; mastered: boolean; weak: boolean }
 
 export function useDeck(chatId: string) {
   return useQuery({ queryKey: queryKeys.tutor.deck(chatId), queryFn: () => api.get<CardDeck>(`/learning/chats/${chatId}/deck`), retry: false })
@@ -290,10 +295,10 @@ export function useDeck(chatId: string) {
 export function useReviewCard(chatId: string) {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: ({ number, grade }: { number: number; grade: CardGrade }) =>
-      api.post<CardState>(`/learning/chats/${chatId}/cards/${number}/review`, { grade }),
+    mutationFn: ({ id, grade }: { id: string; grade: CardGrade }) =>
+      api.post<CardState>(`/learning/chats/${chatId}/cards/${id}/review`, { grade }),
     onSuccess: state => client.setQueryData<CardDeck>(queryKeys.tutor.deck(chatId), deck => deck && {
-      ...deck, cards: deck.cards.map(c => c.number === state.number ? { ...c, ...state, seen: true } : c),
+      ...deck, cards: deck.cards.map(c => c.id === state.id ? { ...c, ...state, seen: true } : c),
     }),
   })
 }

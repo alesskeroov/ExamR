@@ -1,7 +1,7 @@
 import { Flame, LibraryBig, Play, Shuffle } from 'lucide-react'
 import { Alert } from '../../components/common/Alert'
 import { cn } from '../../lib/utils'
-import type { CardDeck, LearnScope } from './api'
+import type { CardDeck, LearnScope, StudyCard } from './api'
 import { Frame } from './TutorShared'
 
 interface Props {
@@ -14,7 +14,8 @@ export function GuideTopics({ deck, onLearn }: Props) {
   const mastered = deck.cards.filter(c => c.mastered).length
   const weak = deck.cards.filter(c => c.weak).length
   const seen = deck.cards.filter(c => c.seen).length
-  const byNumber = new Map(deck.cards.map(c => [c.number, c]))
+  const byTopic = new Map<string, StudyCard[]>()
+  for (const card of deck.cards) byTopic.set(card.topicKey, [...(byTopic.get(card.topicKey) ?? []), card])
 
   return (
     <Frame>
@@ -23,7 +24,7 @@ export function GuideTopics({ deck, onLearn }: Props) {
         <div className="min-w-0">
           <h2 className="text-base font-semibold">Mövzular</h2>
           <p className="mt-0.5 text-sm text-slate-600">
-            Sənəddəki {deck.cards.length} sual kartlara çevrildi. Kart ardıcıl {deck.required} dəfə "Bilirdim" deyəndə mənimsənilmiş sayılır.
+            Sənəddən {deck.topics.length} mövzu və {deck.cards.length} kart hazırlandı. Kart ardıcıl {deck.required} dəfə "Bilirdim" deyəndə mənimsənilmiş sayılır.
           </p>
         </div>
       </header>
@@ -52,7 +53,7 @@ export function GuideTopics({ deck, onLearn }: Props) {
 
       <ul className="flex flex-col gap-2" aria-label="Mövzu siyahısı">
         {deck.topics.map(topic => {
-          const cards = topic.numbers.map(n => byNumber.get(n)).filter(c => c !== undefined)
+          const cards = byTopic.get(topic.key) ?? []
           const done = cards.filter(c => c.mastered).length
           const weakHere = cards.filter(c => c.weak).length
           const complete = done === cards.length

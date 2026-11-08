@@ -67,8 +67,8 @@ public static class LearningChatEndpoints
             .Select(l => new { l.Id, l.Status, l.Document.OriginalFileName }).FirstOrDefaultAsync(ct);
         if (learning is not { Status: LearningStatus.Completed })
             return TypedResults.Problem("Sənəd hələ söhbət üçün hazır deyil. Əvvəlcə emal olunmalıdır.", statusCode: StatusCodes.Status409Conflict);
-        // Only open-question PDFs (or the open part of a mixed PDF) are tutored.
-        if (await indexer.GetAsync(learning.Id, ct) is { Supported: false } rejected)
+        // Open questions (or the open part of a mixed document) and tests with marked answers give cards.
+        if (await indexer.GetAsync(learning.Id, ct) is { Supported: false, Kind: not OpenDocumentKind.MultipleChoice } rejected)
             return TypedResults.Problem(rejected.Rejection, statusCode: StatusCodes.Status422UnprocessableEntity);
 
         var now = clock.GetUtcNow();

@@ -66,7 +66,7 @@ export function TutorDocumentPicker({ onStart, starting, startError, resumable =
           {progress !== null ? `Yüklənir ${progress}%` : 'Yeni sənəd yüklə'}
         </button>
       </div>
-      <p className="mt-2 text-xs text-slate-500">Açıq suallı PDF və ya Word (.docx) — suallar nömrəli, cavab sualın altında · ən çox 50 MB. Variantlı testlər və skan edilmiş PDF-lər dəstəklənmir.</p>
+      <p className="mt-2 text-xs text-slate-500">PDF və ya Word (.docx): açıq suallar və cavabları, ya da düzgün cavabı işarələnmiş testlər · ən çox 50 MB. Skan edilmiş PDF-lər dəstəklənmir.</p>
 
       {typeError && <div className="mt-4"><Alert title="Fayl növü dəstəklənmir">{typeError}</Alert></div>}
       {index.isError && <div className="mt-4"><Alert title="Sənəd hazırlana bilmədi">{index.error.message}</Alert></div>}

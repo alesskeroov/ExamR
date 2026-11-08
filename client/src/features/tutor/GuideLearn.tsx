@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Alert } from '../../components/common/Alert'
 import { cn } from '../../lib/utils'
 import { useReviewCard, type CardDeck, type CardGrade, type LearnScope, type StudyCard } from './api'
+import { FlipCard } from './FlipCard'
 import { Frame } from './TutorShared'
 
 interface Props {
@@ -57,7 +58,7 @@ export function GuideLearn({ chatId, deck, scope, onScope, onSource }: Props) {
   if (session) {
     return (
       <Frame>
-        <Session key={scopeKey} chatId={chatId} cards={session} required={deck.required} onSource={onSource}
+        <Session key={scopeKey} chatId={chatId} cards={session} required={deck.required} topics={new Map(deck.topics.map(t => [t.key, t.title]))} onSource={onSource}
           onFinish={summary => { setSession(null); setResult(summary) }} />
       </Frame>
     )
@@ -126,23 +127,22 @@ function ScopeChip({ active, onClick, children }: { active: boolean; onClick: ()
 }
 
 interface SessionProps {
-  chatId: string; cards: StudyCard[]; required: number
+  chatId: string; cards: StudyCard[]; required: number; topics: Map<string, string>
   onSource: (card: StudyCard) => void
   onFinish: (summary: { mastered: number; total: number }) => void
 }
 
-function Session({ chatId, cards, required, onSource, onFinish }: SessionProps) {
+function Session({ chatId, cards, required, topics, onSource, onFinish }: SessionProps) {
   const review = useReviewCard(chatId)
   const [queue, setQueue] = useState(cards)
   const [masteredCount, setMasteredCount] = useState(0)
-  const [revealed, setRevealed] = useState(false)
-  const [typed, setTyped] = useState('')
+  const [flipped, setFlipped] = useState(false)
   const total = cards.length
   const card = queue[0]
 
   const grade = (value: CardGrade) => {
     if (!card || review.isPending) return
-    review.mutate({ number: card.number, grade: value }, {
+    review.mutate({ id: card.id, grade: value }, {
       onSuccess: state => {
         const rest = queue.slice(1)
         let next = rest
@@ -154,24 +154,23 @@ function Session({ chatId, cards, required, onSource, onFinish }: SessionProps) 
           next.splice(Math.min(comeBackAfter[value], rest.length), 0, { ...card, streak: state.streak, mastered: false, weak: state.weak, seen: true })
         }
         setMasteredCount(done)
-        setTyped('')
-        setRevealed(false)
+        setFlipped(false)
         if (next.length === 0) onFinish({ mastered: done, total })
         else setQueue(next)
       },
     })
   }
 
-  // Space/Enter reveals, 1–3 grade; ignored while typing an answer.
+  // Space flips (when the card itself is not focused, it handles its own keys); 1–3 grade once the back is shown.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
       if (target?.closest('textarea, input, select')) return
-      if (!revealed && (event.key === ' ' || event.key === 'Enter')) {
-        if (target?.closest('button, a')) return // the focused control handles its own key
+      if (event.key === ' ') {
+        if (target?.closest('button, a, [role=button]')) return // the focused control handles its own Space
         event.preventDefault()
-        setRevealed(true)
-      } else if (revealed) {
+        setFlipped(f => !f)
+      } else if (flipped) {
         const match = grades.find(g => g.key === event.key)
         if (match) grade(match.grade)
       }
@@ -181,7 +180,6 @@ function Session({ chatId, cards, required, onSource, onFinish }: SessionProps) 
   })
 
   if (!card) return null
-  const streak = card.streak
   return (
     <>
       <div className="flex items-center justify-between gap-3 text-sm">
@@ -192,59 +190,30 @@ function Session({ chatId, cards, required, onSource, onFinish }: SessionProps) 
         <div className="h-full rounded-full bg-emerald-500 transition-[width]" style={{ width: `${(masteredCount / total) * 100}%` }} />
       </div>
 
-      <article key={`${card.number}-${queue.length}`} className="tutor-enter tutor-border rounded-2xl border bg-white p-4 sm:p-6">
-        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-          <span className="font-semibold text-slate-700">Sual {card.number}</span>
-          {card.page != null && (
-            <button type="button" onClick={() => onSource(card)} className="underline-offset-2 hover:text-indigo-700 hover:underline">· Səh. {card.page}</button>
-          )}
-          {!card.seen && <span className="rounded-full bg-indigo-50 px-2 py-0.5 font-semibold text-indigo-700">Yeni</span>}
-          {card.weak && <span className="rounded-full bg-rose-50 px-2 py-0.5 font-semibold text-rose-700">Zəif</span>}
-          <span className="ml-auto" title={`Ardıcıl ${required} dəfə "Bilirdim" lazımdır`}>
-            {Array.from({ length: required }, (_, i) => (
-              <span key={i} className={cn('ml-1 inline-block size-2 rounded-full', i < streak ? 'bg-emerald-500' : 'bg-slate-200')} />
-            ))}
-          </span>
-        </div>
-        <h3 className="mt-2 text-[17px] font-semibold leading-snug text-slate-900">{card.question}</h3>
+      <div key={`${card.id}-${queue.length}`} className="tutor-enter">
+        <FlipCard card={card} topic={topics.get(card.topicKey) ?? ''} flipped={flipped} onFlip={() => setFlipped(f => !f)}
+          onSource={onSource} required={required} />
+      </div>
 
-        {!revealed ? (
-          <>
-            <label className="mt-4 block text-xs font-medium text-slate-500" htmlFor="card-answer">Cavabını yaz (istəyə görə)</label>
-            <textarea id="card-answer" value={typed} onChange={e => setTyped(e.target.value)} rows={3} maxLength={4000}
-              className="tutor-border mt-1 w-full resize-y rounded-xl border bg-transparent px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400"
-              placeholder="Yadına düşənləri qısa yaz…" />
-            <button type="button" onClick={() => setRevealed(true)}
-              className="btn-primary mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold">
-              <Eye className="size-4" aria-hidden />Cavabı göstər
-            </button>
-            <p className="mt-2 hidden text-center text-[11px] text-slate-400 sm:block">Boşluq — cavabı göstər · 1 / 2 / 3 — qiymət</p>
-          </>
-        ) : (
-          <>
-            {typed.trim() && (
-              <div className="tutor-sunken mt-4 rounded-xl px-3 py-2">
-                <p className="text-xs font-semibold text-slate-500">Sənin cavabın</p>
-                <p className="mt-1 text-sm whitespace-pre-line text-slate-800">{typed}</p>
-              </div>
-            )}
-            <div className="mt-4 border-l-4 border-l-emerald-400 pl-3">
-              <p className="text-xs font-semibold text-emerald-700">Sənəddəki cavab</p>
-              <p className="mt-1 text-sm leading-relaxed whitespace-pre-line text-slate-800">{card.answer}</p>
-              {card.sharedAnswer && <p className="mt-2 text-xs text-slate-500">Sənəddə bu cavab növbəti sual(lar)la birlikdə verilib.</p>}
-            </div>
-            <p className="mt-5 text-sm font-medium text-slate-700">Nə qədər bildin?</p>
-            <div className="mt-2 grid grid-cols-3 gap-2">
-              {grades.map(g => (
-                <button key={g.grade} type="button" onClick={() => grade(g.grade)} disabled={review.isPending}
-                  className={cn('min-h-12 rounded-xl border px-2 py-1.5 text-sm font-semibold disabled:opacity-60', g.tone)}>
-                  {g.label}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-      </article>
+      {flipped ? (
+        <div>
+          <p className="text-center text-sm font-medium text-slate-700">Nə qədər bildin?</p>
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            {grades.map(g => (
+              <button key={g.grade} type="button" onClick={() => grade(g.grade)} disabled={review.isPending}
+                className={cn('min-h-12 rounded-xl border px-2 py-1.5 text-sm font-semibold disabled:opacity-60', g.tone)}>
+                {g.label}<span className="ml-1 hidden text-[11px] font-normal opacity-70 sm:inline">({g.key})</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <button type="button" onClick={() => setFlipped(true)}
+          className="btn-primary inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold">
+          <Eye className="size-4" aria-hidden />Cavabı göstər
+        </button>
+      )}
+      <p className="hidden text-center text-[11px] text-slate-400 sm:block">Boşluq — kartı çevir · 1 / 2 / 3 — qiymət</p>
       {review.isError && <Alert title="Qiymət saxlanmadı">{review.error.message}</Alert>}
     </>
   )

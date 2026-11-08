@@ -100,7 +100,7 @@ public sealed record OpenQuestionIndex(string Version, OpenDocumentKind Kind, in
 /// </summary>
 public static partial class OpenQuestionClassifier
 {
-    public const string Version = "oq2";
+    public const string Version = "oq3";
     public const int MinOpenQuestions = 3;
     public const int MinAnswerCharacters = 20;
     /// <summary>A few "open" hits inside a large test are noise, not a mixed document.</summary>

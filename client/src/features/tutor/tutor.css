@@ -49,3 +49,13 @@
 .tutor-shared-action:hover { background: var(--app-sunken); }
 .tutor-shared-action:focus-visible { outline: 2px solid var(--app-accent); outline-offset: 2px; }
 .tutor-shared-action:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Flashcards: both faces share one grid cell (the card is as tall as its taller face) and turn around the Y axis. */
+.flip-card { perspective: 1600px; }
+.flip-card-inner { display: grid; transform-style: preserve-3d; transition: transform .5s cubic-bezier(.2, .8, .2, 1); }
+.flip-card-face { grid-area: 1 / 1; backface-visibility: hidden; -webkit-backface-visibility: hidden; min-width: 0; }
+.flip-card-back { transform: rotateY(180deg); }
+.flip-card.is-flipped .flip-card-inner { transform: rotateY(180deg); }
+@media (prefers-reduced-motion: reduce) {
+  .flip-card-inner { transition: none; }
+}
