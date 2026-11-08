@@ -1,6 +1,6 @@
 import './exam-flow.css'
 import { answerDisplayText } from './answer-display'
-import { AlertTriangle, Check, Clock, History, RotateCw, X } from 'lucide-react'
+import { AlertTriangle, Check, Clock, History, RotateCcw, RotateCw, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
@@ -87,6 +87,13 @@ function ResultView({ result }: { result: ExamResult }) {
               <History className="size-4" aria-hidden />
               Tarixçə
             </Link>
+            {canRetake(result) && result.incorrect + result.unanswered > 0 && (
+              // Mistakes mode over the same range: includes earlier mistakes there, not only this exam's.
+              <Link to={`/exams/new?retake=${result.id}&pool=mistakes`} className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 font-medium text-slate-700 hover:bg-slate-50">
+                <RotateCcw className="size-4" aria-hidden />
+                Səhvləri təkrarla
+              </Link>
+            )}
             {canRetake(result) && (
               // Opens the setup with this exam's settings, so they can be reviewed and changed first.
               <Link to={`/exams/new?retake=${result.id}`} className="inline-flex h-10 items-center gap-2 rounded-lg btn-primary px-4 font-medium">

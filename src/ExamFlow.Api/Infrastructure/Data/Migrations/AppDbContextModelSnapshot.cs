@@ -190,7 +190,7 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.HasIndex("CurrentRating", "Wins")
                         .IsDescending();
 
-                    b.ToTable("BattleRatings", (string)null);
+                    b.ToTable("BattleRatings");
                 });
 
             modelBuilder.Entity("ExamFlow.Api.Features.Battles.BattleResult", b =>
@@ -277,7 +277,7 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("StoredBattleMembers", (string)null);
+                    b.ToTable("StoredBattleMembers");
                 });
 
             modelBuilder.Entity("ExamFlow.Api.Features.Battles.StoredBattleRoom", b =>
@@ -356,7 +356,7 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
 
                     b.HasIndex("HostUserId", "Status");
 
-                    b.ToTable("StoredBattleRooms", (string)null);
+                    b.ToTable("StoredBattleRooms");
                 });
 
             modelBuilder.Entity("ExamFlow.Api.Features.Dim.DimAttempt", b =>
@@ -529,6 +529,9 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
 
                     b.Property<long>("FileSizeBytes")
                         .HasColumnType("bigint");
+
+                    b.Property<bool>("IsDimSource")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("OriginalFileName")
                         .IsRequired()
@@ -936,7 +939,7 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
 
                     b.HasIndex("UserHighId");
 
-                    b.ToTable("Friendships", (string)null);
+                    b.ToTable("Friendships");
                 });
 
             modelBuilder.Entity("ExamFlow.Api.Features.Friends.SocialNotification", b =>
@@ -994,7 +997,7 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
 
                     b.HasIndex("UserId", "ReadAt");
 
-                    b.ToTable("SocialNotifications", (string)null);
+                    b.ToTable("SocialNotifications");
                 });
 
             modelBuilder.Entity("ExamFlow.Api.Features.Friends.UserBlock", b =>
@@ -1009,7 +1012,7 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
 
                     b.HasIndex("BlockedUserId");
 
-                    b.ToTable("UserBlocks", (string)null);
+                    b.ToTable("UserBlocks");
                 });
 
             modelBuilder.Entity("ExamFlow.Api.Features.Groups.StudyGroup", b =>
@@ -1888,7 +1891,7 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("DataProtectionKeys", (string)null);
+                    b.ToTable("DataProtectionKeys");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", b =>
@@ -2173,7 +2176,7 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
 
                             b1.HasKey("UploadedDocumentId");
 
-                            b1.ToTable("UploadedDocuments", (string)null);
+                            b1.ToTable("UploadedDocuments");
 
                             b1
                                 .ToJson("ProcessingReport")
@@ -2223,7 +2226,7 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
 
                             b1.HasKey("ExamQuestionId");
 
-                            b1.ToTable("ExamQuestions", (string)null);
+                            b1.ToTable("ExamQuestions");
 
                             b1
                                 .ToJson("Snapshot")
@@ -2254,7 +2257,7 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
 
                                     b2.HasKey("QuestionSnapshotExamQuestionId", "__synthesizedOrdinal");
 
-                                    b2.ToTable("ExamQuestions", (string)null);
+                                    b2.ToTable("ExamQuestions");
 
                                     b2.WithOwner()
                                         .HasForeignKey("QuestionSnapshotExamQuestionId");
@@ -2292,7 +2295,7 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
 
                                     b2.HasKey("QuestionSnapshotExamQuestionId", "__synthesizedOrdinal");
 
-                                    b2.ToTable("ExamQuestions", (string)null);
+                                    b2.ToTable("ExamQuestions");
 
                                     b2.WithOwner()
                                         .HasForeignKey("QuestionSnapshotExamQuestionId");

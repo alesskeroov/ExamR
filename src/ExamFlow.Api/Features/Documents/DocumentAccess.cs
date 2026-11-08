@@ -5,7 +5,12 @@ namespace ExamFlow.Api.Features.Documents;
 
 public static class DocumentAccess
 {
-    public static IQueryable<UploadedDocument> Readable(AppDbContext db, Guid userId) => db.Documents.AsNoTracking()
+    /// <summary>Documents the user may use anywhere in the app. DİM source PDFs are never included.</summary>
+    public static IQueryable<UploadedDocument> Readable(AppDbContext db, Guid userId) =>
+        ReadableWithDimSources(db, userId).Where(d => !d.IsDimSource);
+
+    /// <summary>Readable documents including DİM sources; only for the DİM admin page's upload status polling.</summary>
+    public static IQueryable<UploadedDocument> ReadableWithDimSources(AppDbContext db, Guid userId) => db.Documents.AsNoTracking()
         .Where(d => d.UploadedByUserId == userId || d.ShareWithEveryone
             || db.DocumentUserShares.Any(s => s.DocumentId == d.Id && s.UserId == userId)
             || db.DocumentGroupShares.Any(s => s.DocumentId == d.Id

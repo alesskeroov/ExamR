@@ -291,7 +291,7 @@ function DimUpload({ disabled, onReady }: { disabled: boolean; onReady: (documen
   const [clientError, setClientError] = useState<string | null>(null)
   const [processing, setProcessing] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
-  const upload = useUploadDocument(setProgress)
+  const upload = useUploadDocument(setProgress, { dim: true })
 
   /** Parsing runs in the background on the server; poll until it finishes. */
   async function waitForParsing(document: DocumentDto) {

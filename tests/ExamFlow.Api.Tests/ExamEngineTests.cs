@@ -159,4 +159,52 @@ public class ExamEngineTests
     {
         Assert.Equal(TimeSpan.FromMinutes(30), new ExamOptions().DefaultDuration);
     }
+
+    private static readonly DateTimeOffset Day1 = new(2026, 11, 1, 10, 0, 0, TimeSpan.Zero);
+
+    private static PastAnswer Answer(int hash, int day, ExamOutcome outcome) =>
+        new(BitConverter.GetBytes(hash), Day1.AddDays(day), outcome);
+
+    [Fact]
+    public void Mistakes_follow_the_latest_graded_answer()
+    {
+        var candidates = Enumerable.Range(0, 5).Select(i => Candidate(i)).ToList();
+        PastAnswer[] history =
+        [
+            Answer(0, 0, ExamOutcome.Incorrect),                                    // still wrong
+            Answer(1, 0, ExamOutcome.Unanswered),                                   // left blank
+            Answer(2, 0, ExamOutcome.Incorrect), Answer(2, 1, ExamOutcome.Correct), // fixed later
+            Answer(3, 1, ExamOutcome.Incorrect), Answer(3, 0, ExamOutcome.Correct), // wrong again, out of order
+            // 4: never answered
+        ];
+
+        var mistakes = ExamEngine.Mistakes(candidates, history);
+
+        Assert.Equal([candidates[0].Id, candidates[1].Id, candidates[3].Id], mistakes.Select(c => c.Id));
+    }
+
+    [Fact]
+    public void Ungraded_answers_do_not_count_as_mistakes_or_fixes()
+    {
+        var candidates = new List<ExamCandidate> { Candidate(0), Candidate(1) };
+        PastAnswer[] history =
+        [
+            Answer(0, 0, ExamOutcome.Ungraded),
+            Answer(1, 0, ExamOutcome.Incorrect), Answer(1, 1, ExamOutcome.Ungraded),
+        ];
+
+        Assert.Equal([candidates[1].Id], ExamEngine.Mistakes(candidates, history).Select(c => c.Id));
+    }
+
+    [Fact]
+    public void Mistakes_match_duplicate_questions_by_content()
+    {
+        // The same question appears twice in the PDF; a wrong answer to either copy marks both.
+        var candidates = new List<ExamCandidate> { Candidate(7), Candidate(7), Candidate(8) };
+
+        var mistakes = ExamEngine.Mistakes(candidates, [Answer(7, 0, ExamOutcome.Incorrect)]);
+
+        Assert.Equal(2, mistakes.Count);
+        Assert.Equal(1, ExamEngine.CountDistinct(mistakes));
+    }
 }

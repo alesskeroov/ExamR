@@ -37,9 +37,12 @@ public static class DocumentEndpoints
         IFileStorage storage,
         ProcessingQueue queue,
         IOptions<DocumentOptions> options,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool? dim = null)
     {
         var limits = options.Value;
+        // Uploaded from the DİM admin page: kept out of exams, battles and every other user-facing list.
+        var isDimSource = dim == true && user.IsAdmin();
         if (file is null || file.Length == 0)
         {
             return Invalid("PDF və ya DOCX faylı seçilməyib.");
@@ -72,6 +75,11 @@ public static class DocumentEndpoints
             .Select(d => (Guid?)d.Id).FirstOrDefaultAsync(ct);
         if (duplicate is not null)
         {
+            if (isDimSource)
+            {
+                await db.Documents.Where(d => d.Id == duplicate).ExecuteUpdateAsync(s => s.SetProperty(d => d.IsDimSource, true), ct);
+            }
+
             return TypedResults.Problem(isDocx ? "Bu DOCX artıq yüklənib." : "Bu PDF artıq yüklənib.", statusCode: StatusCodes.Status409Conflict,
                 extensions: new Dictionary<string, object?> { ["documentId"] = duplicate });
         }
@@ -111,6 +119,7 @@ public static class DocumentEndpoints
             PageCount = pageCount,
             Status = DocumentStatus.Pending,
             UploadedByUserId = user.GetUserId(),
+            IsDimSource = isDimSource,
         };
         db.Documents.Add(document); // Assigns the sequential Guid key client-side.
         document.StoredFileName = $"{document.Id:N}{extension}";
@@ -142,7 +151,7 @@ public static class DocumentEndpoints
         var userId = user.GetUserId();
         var query = forBattle == true ? DocumentAccess.ForBattle(db, userId)
             : includeShared == true || shared == true ? DocumentAccess.Readable(db, userId)
-            : db.Documents.AsNoTracking().Where(d => d.UploadedByUserId == userId);
+            : db.Documents.AsNoTracking().Where(d => d.UploadedByUserId == userId && !d.IsDimSource);
         if (shared == true) query = query.Where(d => d.UploadedByUserId != userId);
         if (mine == true) query = query.Where(d => d.UploadedByUserId == userId);
         if (forExam == true)
@@ -256,8 +265,9 @@ public static class DocumentEndpoints
     }
 
     // Filter before projecting: EF cannot translate predicates on the constructed DTO.
+    // DİM sources are included: the DİM admin page polls its upload's parsing status here.
     private static Task<DocumentDto?> FindAsync(AppDbContext db, ClaimsPrincipal user, Guid id, CancellationToken ct) =>
-        Project(DocumentAccess.Readable(db, user.GetUserId()).Where(d => d.Id == id), user, db).FirstOrDefaultAsync(ct);
+        Project(DocumentAccess.ReadableWithDimSources(db, user.GetUserId()).Where(d => d.Id == id), user, db).FirstOrDefaultAsync(ct);
 
     private static IQueryable<DocumentDto> Project(IQueryable<UploadedDocument> query, ClaimsPrincipal user, AppDbContext db)
     {

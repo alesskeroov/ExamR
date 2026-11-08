@@ -2,6 +2,9 @@ namespace ExamFlow.Api.Features.Exams;
 
 public sealed record ExamCandidate(Guid Id, byte[] ContentHash, bool IsGradable);
 
+/// <summary>How a question was graded in one of the user's finished exams.</summary>
+public sealed record PastAnswer(byte[] ContentHash, DateTimeOffset CompletedAt, ExamOutcome Outcome);
+
 /// <summary>Pure exam logic (selection, shuffling, grading); no database access, so it is unit-testable.</summary>
 public static class ExamEngine
 {
@@ -34,6 +37,23 @@ public static class ExamEngine
 
     public static int CountDistinct(IEnumerable<ExamCandidate> candidates) =>
         candidates.Select(c => Convert.ToHexString(c.ContentHash)).Distinct().Count();
+
+    /// <summary>
+    /// Mistakes mode: the candidates whose most recent graded answer was wrong or left blank. Once the user answers
+    /// a question correctly it drops out; questions never seen or never graded are not included.
+    /// </summary>
+    public static List<ExamCandidate> Mistakes(IReadOnlyList<ExamCandidate> candidates, IEnumerable<PastAnswer> history)
+    {
+        var latest = history
+            .Where(a => a.Outcome != ExamOutcome.Ungraded)
+            .GroupBy(a => Convert.ToHexString(a.ContentHash))
+            .ToDictionary(g => g.Key, g => g.MaxBy(a => a.CompletedAt)!.Outcome);
+
+        return candidates
+            .Where(c => latest.TryGetValue(Convert.ToHexString(c.ContentHash), out var outcome)
+                && outcome is ExamOutcome.Incorrect or ExamOutcome.Unanswered)
+            .ToList();
+    }
 
     /// <summary>Fisher–Yates: every permutation is equally likely.</summary>
     public static void Shuffle<T>(IList<T> items, Random random)

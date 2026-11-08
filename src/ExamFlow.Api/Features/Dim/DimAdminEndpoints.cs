@@ -152,6 +152,7 @@ public static class DimAdminEndpoints
             .ToListAsync(ct);
         var rejected = ids.Where(id => questions.All(q => q.Id != id)).Select(id => new DimRejectedDto(id, "Sual tapılmadı.")).ToList();
         rejected.AddRange(await AddToBankAsync(db, questions, request.Track, request.Subject, request.Topic, userId, clock.GetUtcNow(), ct));
+        await MarkDimSourcesAsync(db, questions.Select(q => q.DocumentId).Distinct().ToList(), ct);
         return TypedResults.Ok(new DimApproveResultDto(ids.Count - rejected.Count, rejected));
     }
 
@@ -168,8 +169,14 @@ public static class DimAdminEndpoints
 
         var questions = await db.Questions.Include(q => q.Options).Where(q => q.DocumentId == documentId).ToListAsync(ct);
         var rejected = await AddToBankAsync(db, questions, request.Track, request.Subject, request.Topic, userId, clock.GetUtcNow(), ct);
+        await MarkDimSourcesAsync(db, [documentId], ct);
         return TypedResults.Ok(new DimApproveResultDto(questions.Count - rejected.Count, rejected));
     }
+
+    /// <summary>A document whose questions feed the DİM bank is hidden from exams, battles and document lists.</summary>
+    private static Task<int> MarkDimSourcesAsync(AppDbContext db, List<Guid> documentIds, CancellationToken ct) =>
+        db.Documents.Where(d => documentIds.Contains(d.Id) && !d.IsDimSource)
+            .ExecuteUpdateAsync(s => s.SetProperty(d => d.IsDimSource, true), ct);
 
     /// <summary>Fixes a parsed question in place: text, option texts and the single correct option.</summary>
     private static async Task<IResult> EditQuestion(

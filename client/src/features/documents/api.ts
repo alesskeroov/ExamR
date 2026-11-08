@@ -92,10 +92,11 @@ export function useDocument(id: string | null) {
   })
 }
 
-export function useUploadDocument(onProgress: (percent: number) => void) {
+/** `dim`: uploaded on the DİM admin page; the server hides such PDFs from exams, battles and document lists. */
+export function useUploadDocument(onProgress: (percent: number) => void, { dim = false }: { dim?: boolean } = {}) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (file: File) => uploadFile<DocumentDto>('/documents', file, onProgress),
+    mutationFn: (file: File) => uploadFile<DocumentDto>(dim ? '/documents?dim=true' : '/documents', file, onProgress),
     onSuccess: (document) => {
       queryClient.setQueryData(queryKeys.documents.detail(document.id), document)
       void queryClient.invalidateQueries({ queryKey: queryKeys.documents.completed })

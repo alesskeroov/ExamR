@@ -94,9 +94,11 @@ public static class ExamEndpoints
             .FirstOrDefaultAsync(ct);
 
         var candidates = await Candidates(db, documentId, from ?? int.MinValue, to ?? int.MaxValue, ct);
+        var mistakes = ExamEngine.Mistakes(candidates, await PastAnswers(db, user.GetUserId(), documentId, ct));
         return TypedResults.Ok(new ExamAvailabilityDto(
             ExamEngine.CountDistinct(candidates),
             ExamEngine.CountDistinct(candidates.Where(c => !c.IsGradable)),
+            ExamEngine.CountDistinct(mistakes),
             numbers?.First,
             numbers?.Last,
             options.Value.MaxQuestions,
@@ -136,11 +138,20 @@ public static class ExamEndpoints
         }
 
         var candidates = await Candidates(db, documentId, request.RangeFrom, request.RangeTo, ct);
+        if (request.Pool == ExamPool.Mistakes)
+        {
+            candidates = ExamEngine.Mistakes(candidates, await PastAnswers(db, userId, documentId, ct));
+        }
+
         var available = ExamEngine.CountDistinct(candidates);
         if (available < request.QuestionCount)
         {
-            return Problem(StatusCodes.Status422UnprocessableEntity,
-                $"{request.RangeFrom}–{request.RangeTo} aralığında cəmi {available} unikal sual var.", new() { ["available"] = available });
+            var detail = request.Pool != ExamPool.Mistakes
+                ? $"{request.RangeFrom}–{request.RangeTo} aralığında cəmi {available} unikal sual var."
+                : available == 0
+                    ? $"{request.RangeFrom}–{request.RangeTo} aralığında səhv cavablandırdığınız və ya boş buraxdığınız sual yoxdur."
+                    : $"{request.RangeFrom}–{request.RangeTo} aralığında səhv cavablandırdığınız və ya boş buraxdığınız cəmi {available} sual var.";
+            return Problem(StatusCodes.Status422UnprocessableEntity, detail, new() { ["available"] = available });
         }
 
         var pickedIds = ExamEngine.PickQuestions(candidates, request.QuestionCount, Random.Shared);
@@ -399,6 +410,16 @@ public static class ExamEndpoints
         db.Questions.AsNoTracking()
             .Where(q => q.DocumentId == documentId && q.SourceNumber >= from && q.SourceNumber <= to && q.Options.Count >= 2)
             .Select(q => new ExamCandidate(q.Id, q.ContentHash, q.VerificationStatus != VerificationStatus.Unverified))
+            .ToListAsync(ct);
+
+    /// <summary>The user's graded answers to this PDF's questions in finished exams (input of <see cref="ExamEngine.Mistakes"/>).</summary>
+    private static Task<List<PastAnswer>> PastAnswers(AppDbContext db, Guid userId, Guid documentId, CancellationToken ct) =>
+        db.Exams.AsNoTracking()
+            .Where(e => e.UserId == userId && e.Status == ExamStatus.Completed && e.CompletedAt != null)
+            .SelectMany(e => e.Questions
+                .Where(q => q.Question != null && q.Question.DocumentId == documentId
+                    && q.Outcome != null && q.Outcome != ExamOutcome.Ungraded)
+                .Select(q => new PastAnswer(q.Question!.ContentHash, e.CompletedAt!.Value, q.Outcome!.Value)))
             .ToListAsync(ct);
 
     /// <summary>
