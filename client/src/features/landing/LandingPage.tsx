@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
-import { ArrowRight, ArrowUpRight, Check, Menu, Moon, Plus, Sun, X } from 'lucide-react'
+import { ArrowUpRight, Check, Menu, Moon, Plus, Sun, X } from 'lucide-react'
 import { Link, useLocation } from 'react-router'
 import { useTheme } from '../../lib/use-theme'
 import { ProductPreview } from './ProductPreview'
@@ -120,11 +120,10 @@ export function LandingPage() {
         <section className="lp-hero" aria-labelledby="hero-title">
           <div className="lp-wrap lp-hero-grid">
             <div>
-              <p className="lp-eyebrow">PDF · DOCX → interaktiv imtahan</p>
-              <h1 id="hero-title" className="lp-h1 mt-4">Konspektin artıq <span className="lp-mark">imtahandır.</span></h1>
+              <h1 id="hero-title" className="lp-h1">Konspektin artıq imtahandır.</h1>
               <p className="lp-lead">Sual-cavab faylını yüklə — ExamR sualları, variantları və düzgün cavabları özü tanıyır. Vaxtlı imtahan ver, səhvlərini təkrar et, dostunla yarış və irəliləyişini rəqəmlərlə izlə.</p>
               <div className="lp-cta">
-                <Link viewTransition to={auth('register')} className="lp-btn lp-btn-primary">İlk faylını yüklə <ArrowRight className="lp-arrow size-4" aria-hidden /></Link>
+                <Link viewTransition to={auth('register')} className="lp-btn lp-btn-primary">İlk faylını yüklə</Link>
                 <a href="#imkanlar" onClick={e => go(e, '#imkanlar')} className="lp-btn lp-btn-quiet">Rejimlərə bax</a>
               </div>
               <ul className="lp-facts" aria-label="Əsas üstünlüklər">
@@ -204,7 +203,7 @@ export function LandingPage() {
             <h2 className="lp-close-title">Sual-cavab faylın hazırdırsa, qalanını ExamR edir.</h2>
             <p className="lp-close-text">Faylı yüklə, bir neçə dəqiqəyə ilk imtahanını ver və zəif mövzularını gör.</p>
             <div className="lp-close-actions">
-              <Link viewTransition to={auth('register')} className="lp-btn lp-btn-primary">Pulsuz başla <ArrowRight className="lp-arrow size-4" aria-hidden /></Link>
+              <Link viewTransition to={auth('register')} className="lp-btn lp-btn-primary">Pulsuz başla</Link>
               <Link viewTransition to={auth('login')} className="lp-btn lp-close-secondary">Daxil ol</Link>
             </div>
             <p className="lp-close-note">Pulsuz · kart tələb olunmur · Google ilə də giriş</p>

@@ -1,13 +1,13 @@
 .auth-page {
-  --auth-bg: #fbfaf7;
+  --auth-bg: #f5f6f2;
   --auth-surface: #fff;
-  --auth-soft: #f0f0fa;
-  --auth-text: #1d2338;
-  --auth-muted: #647089;
-  --auth-border: #e2e5f0;
-  --auth-accent: #6550db;
-  --auth-accent-soft: #eef0fb;
-  --auth-shadow: 0 24px 80px -32px rgb(47 37 107 / 20%);
+  --auth-soft: #eceee8;
+  --auth-text: #17201c;
+  --auth-muted: #56615b;
+  --auth-border: #dce1da;
+  --auth-accent: #0e6655;
+  --auth-accent-soft: #e2efe9;
+  --auth-shadow: 0 24px 80px -32px rgb(23 32 28 / 20%);
   display: flex;
   min-height: 100dvh;
   flex-direction: column;
@@ -16,14 +16,14 @@
   background: var(--auth-bg);
 }
 .auth-page[data-theme='dark'] {
-  --auth-bg: #0e1020;
-  --auth-surface: #1b1e2e;
-  --auth-soft: #24283b;
-  --auth-text: #eff0fa;
-  --auth-muted: #a7afc6;
-  --auth-border: #34394f;
-  --auth-accent: #b0a0ff;
-  --auth-accent-soft: #302a50;
+  --auth-bg: #0f1513;
+  --auth-surface: #161e1b;
+  --auth-soft: #1d2622;
+  --auth-text: #e9efeb;
+  --auth-muted: #9caaa3;
+  --auth-border: #26322d;
+  --auth-accent: #5fd0b8;
+  --auth-accent-soft: #173029;
   --auth-shadow: 0 24px 80px -30px rgb(0 0 0 / 50%);
   color-scheme: dark;
 }
@@ -50,7 +50,7 @@
 .auth-progress-track, .auth-tabs { background: var(--auth-soft); }
 .auth-tabs { position: relative; isolation: isolate; }
 .auth-tabs::before { content: ''; position: absolute; z-index: -1; inset: 4px auto 4px 4px; width: calc((100% - 8px) / 2); border-radius: 8px; background: var(--auth-surface); box-shadow: 0 1px 4px rgb(0 0 0 / 7%); transition: transform 380ms cubic-bezier(.34, 1.4, .64, 1), box-shadow 200ms; }
-.auth-tabs:hover::before { box-shadow: 0 2px 8px rgb(47 37 107 / 12%); }
+.auth-tabs:hover::before { box-shadow: 0 2px 8px rgb(23 32 28 / 12%); }
 .auth-tabs [role='tab'] { transition: color 200ms ease, transform 150ms ease; }
 .auth-tabs [role='tab']:active:not(:disabled) { transform: scale(.97); }
 .auth-tabs[data-mode='register']::before { transform: translateX(100%); }
@@ -64,7 +64,7 @@
 .auth-page input.auth-remember { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .auth-remember-box { display: grid; place-items: center; width: 16px; height: 16px; border: 1px solid var(--auth-muted); border-radius: 5px; color: transparent; transition: background-color 150ms, border-color 150ms; }
 .auth-remember-option:has(:checked) { color: var(--auth-accent); background: var(--auth-accent-soft); }
-.auth-remember-option:has(:checked) .auth-remember-box { background: #4652c6; border-color: #4652c6; color: white; }
+.auth-remember-option:has(:checked) .auth-remember-box { background: #0e6655; border-color: #0e6655; color: white; }
 .auth-remember-option:has(:focus-visible) { outline: 2px solid var(--auth-accent); outline-offset: 2px; }
 .auth-remember-option:has(:disabled) { opacity: .6; cursor: default; }
 .auth-page .auth-form-footer { border-color: var(--auth-border); color: var(--auth-muted); }
@@ -83,8 +83,8 @@
 .auth-page input[aria-invalid='true']:focus { box-shadow: 0 0 0 3px rgb(240 116 141 / 15%); }
 .auth-password-toggle { color: var(--auth-muted); }
 .auth-password-toggle:hover { color: var(--auth-accent); background: var(--auth-soft); }
-.auth-page .auth-submit { height: 46px; border-radius: 10px; background: #4652c6; box-shadow: none; transition: background-color 150ms, box-shadow 200ms, transform 120ms; }
-.auth-page .auth-submit:hover:not(:disabled) { background: #3a45ab; box-shadow: none; }
+.auth-page .auth-submit { height: 46px; border-radius: 10px; background: #0e6655; box-shadow: none; transition: background-color 150ms, box-shadow 200ms, transform 120ms; }
+.auth-page .auth-submit:hover:not(:disabled) { background: #0b5246; box-shadow: none; }
 .auth-page .auth-submit:disabled { opacity: .6; }
 .auth-page [role='alert'] { border: 1px solid rgb(225 72 108 / 20%); font-size: 13px; }
 .auth-page[data-theme='dark'] .bg-rose-50 { background: #392330; color: #ffb4c6; }
@@ -109,7 +109,7 @@
 @keyframes auth-float { 0%, 100% { translate: 0 0; } 50% { translate: 0 -6px; } }
 @media (max-width: 1023px) {
   .auth-main { padding-top: 12px; }
-  .auth-form-card { box-shadow: 0 14px 50px -26px rgb(47 37 107 / 25%); }
+  .auth-form-card { box-shadow: 0 14px 50px -26px rgb(23 32 28 / 25%); }
 }
 @media (max-width: 479px) {
   .auth-header { padding: 20px; }
@@ -130,16 +130,16 @@
 /* Shared with the landing page: mono eyebrow, highlighter mark, ink logo tile. */
 .auth-eyebrow-mono { font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, monospace; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--auth-accent); }
 .auth-mark { background: linear-gradient(transparent 58%, rgb(255 205 90 / 55%) 58% 92%, transparent 92%); padding: 0 .08em; }
-.auth-page[data-theme='dark'] .auth-mark { background: linear-gradient(transparent 58%, rgb(163 173 255 / 32%) 58% 92%, transparent 92%); }
+.auth-page[data-theme='dark'] .auth-mark { background: linear-gradient(transparent 58%, rgb(243 207 85 / 26%) 58% 92%, transparent 92%); }
 .auth-logo-mark { background: var(--auth-text); color: var(--auth-bg); }
 .auth-story .lp-stage { --lp-surface: var(--auth-surface); --lp-sunken: var(--auth-soft); --lp-line: var(--auth-border); --lp-ink: var(--auth-text); --lp-bg: var(--auth-bg); --lp-muted: var(--auth-muted); --lp-faint: var(--auth-muted); --lp-accent: var(--auth-accent); --lp-accent-soft: var(--auth-accent-soft); --lp-accent-ink: #fff; --lp-shadow: var(--auth-shadow); --lp-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, monospace; color: var(--auth-text); }
 /* Primary action matches the landing page: ink at rest, violet on hover. */
 .auth-page .auth-submit { background: var(--auth-text); color: var(--auth-bg); box-shadow: none; }
 .auth-page .auth-submit:hover:not(:disabled) { background: var(--auth-accent); color: #fff; box-shadow: none; }
-.auth-page[data-theme='dark'] .auth-submit:hover:not(:disabled) { color: #14112c; }
+.auth-page[data-theme='dark'] .auth-submit:hover:not(:disabled) { color: #0f1513; }
 
 /* Form refinements: flatter paper card, ink tab indicator, quieter labels, clear focus. */
-.auth-page .auth-form-card { border-radius: 22px; box-shadow: 0 1px 0 rgb(21 23 42 / 4%), 0 24px 60px -36px rgb(21 23 42 / 30%); }
+.auth-page .auth-form-card { border-radius: 22px; box-shadow: 0 1px 0 rgb(23 32 28 / 4%), 0 24px 60px -36px rgb(23 32 28 / 30%); }
 .auth-page[data-theme='dark'] .auth-form-card { box-shadow: 0 24px 60px -30px rgb(0 0 0 / 70%); }
 .auth-page .auth-tabs { background: transparent; border: 1px solid var(--auth-border); border-radius: 12px; }
 .auth-page .auth-tabs::before { background: var(--auth-text); box-shadow: none; border-radius: 8px; }

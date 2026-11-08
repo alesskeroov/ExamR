@@ -1,4 +1,4 @@
-import { useUsageLimit, type UsageKind } from '../../features/usage/api'
+import { useUsage, useUsageLimit, type UsageKind } from '../../features/usage/api'
 import { Alert } from './Alert'
 
 const labels: Record<UsageKind, string> = { Upload: 'sənəd', Exam: 'imtahan', Battle: 'battle', AiRequest: 'AI sorğusu' }
@@ -23,10 +23,34 @@ export function UsageMeter({ kind }: { kind: UsageKind }) {
   </div>
 }
 
-export function UsageCard() {
+const stripLabels: Record<UsageKind, string> = { Upload: 'Sənəd', Exam: 'İmtahan', Battle: 'Battle', AiRequest: 'AI sorğusu' }
+
+/** Dashboard footer: this month's limits as three thin meters in one row, one shared reset date. */
+export function UsageStrip({ className }: { className?: string }) {
+  const usage = useUsage()
   const kinds: UsageKind[] = ['Upload', 'Exam', 'Battle']
-  return <section aria-label="Bu ayın limitləri" className="my-6 rounded-xl border border-slate-200 bg-white p-5">
-    <h2 className="mb-3 font-semibold">Bu ayın limitləri</h2>
-    <div className="grid gap-4 sm:grid-cols-2">{kinds.map(kind => <UsageMeter key={kind} kind={kind} />)}</div>
+  if (usage.isPending) return <div role="status" aria-label="Limitlər yüklənir" className={`h-12 animate-pulse rounded-lg bg-sunken ${className ?? ''}`} />
+  if (usage.error || !usage.data) return null
+  const date = new Date(new Date(usage.data.resetsAt).getTime() + 4 * 3600000)
+  return <section aria-labelledby="usage-strip-title" className={className}>
+    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+      <h2 id="usage-strip-title" className="text-[15px] font-bold">Bu ayın limitləri</h2>
+      <p className="text-[13px] text-muted">{date.getUTCDate()} {months[date.getUTCMonth()]}, 00:00-da yenilənir</p>
+    </div>
+    <ul className="mt-4 grid gap-x-10 gap-y-5 sm:grid-cols-3">{kinds.map(kind => {
+      const item = usage.data.items.find(x => x.kind === kind)
+      if (!item) return null
+      const ratio = item.limit === null ? 0 : item.limit === 0 ? 1 : Math.min(1, item.used / item.limit)
+      return <li key={kind}>
+        <div className="flex items-baseline justify-between gap-3 text-[13.5px]">
+          <span className="text-muted">{stripLabels[kind]}</span>
+          <span className="ds-num font-semibold">{item.limit === null ? 'Limitsiz' : `${item.used} / ${item.limit}`}</span>
+        </div>
+        {item.limit !== null && <div role="progressbar" aria-label={`${stripLabels[kind]} limiti`} aria-valuenow={item.used} aria-valuemin={0} aria-valuemax={Math.max(item.used, item.limit)} className="mt-2 h-1 overflow-hidden rounded-full bg-line">
+          <div className={`h-full rounded-full ${ratio >= 1 ? 'bg-bad' : ratio >= .8 ? 'bg-amber-500' : 'bg-accent'}`} style={{ width: `${ratio * 100}%` }} />
+        </div>}
+        {item.limit !== null && item.used >= item.limit && <p className="mt-1.5 text-xs font-medium text-bad">Limit bitib</p>}
+      </li>
+    })}</ul>
   </section>
 }
