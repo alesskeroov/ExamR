@@ -53,6 +53,7 @@ export function useDocumentChunks(documentId: string | null, enabled: boolean) {
 export function useCreateChat() {
   const client = useQueryClient()
   return useMutation({
+    onSettled: () => client.invalidateQueries({ queryKey: queryKeys.usage.mine }),
     mutationFn: (documentId: string) => api.post<ChatSession>('/learning/chats', { documentId }),
     onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.tutor.chats }),
   })
@@ -61,6 +62,7 @@ export function useCreateChat() {
 export function useDeleteChat() {
   const client = useQueryClient()
   return useMutation({
+    onSettled: () => client.invalidateQueries({ queryKey: queryKeys.usage.mine }),
     mutationFn: (id: string) => api.delete(`/learning/chats/${id}`),
     onSuccess: (_, id) => {
       client.removeQueries({ queryKey: queryKeys.tutor.chat(id) })
@@ -73,6 +75,7 @@ export function useDeleteChat() {
 export function useIndexDocument() {
   const client = useQueryClient()
   return useMutation({
+    onSettled: () => client.invalidateQueries({ queryKey: queryKeys.usage.mine }),
     mutationFn: (input: { file: File; onProgress?: (percent: number) => void } | { documentId: string }) =>
       'file' in input
         ? uploadFile<IndexedDocument>('/learning/documents', input.file, input.onProgress)
@@ -116,11 +119,14 @@ export function useQuizReview(chatId: string) {
   return useQuery({ queryKey: queryKeys.tutor.review(chatId), queryFn: () => api.get<QuizReview>(`/learning/chats/${chatId}/quiz/review`) })
 }
 export function useNextQuestion(chatId: string) {
-  return useMutation({ mutationFn: () => api.post<QuizQuestion>(`/learning/chats/${chatId}/quiz`) })
+  const client = useQueryClient()
+  return useMutation({
+    onSettled: () => client.invalidateQueries({ queryKey: queryKeys.usage.mine }), mutationFn: () => api.post<QuizQuestion>(`/learning/chats/${chatId}/quiz`) })
 }
 export function useAnswerQuestion(chatId: string) {
   const client = useQueryClient()
   return useMutation({
+    onSettled: () => client.invalidateQueries({ queryKey: queryKeys.usage.mine }),
     mutationFn: ({ id, answer, giveUp }: { id: string; answer?: string; giveUp?: boolean }) => api.post<QuizResult>(`/learning/quiz/${id}/answer`, { answer, giveUp }),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: queryKeys.tutor.review(chatId) })
@@ -140,6 +146,7 @@ export function useMaterial<T>(id: string | null) {
 function useMaterialMutation<TBody, TPayload>(chatId: string, path: string) {
   const client = useQueryClient()
   return useMutation({
+    onSettled: () => client.invalidateQueries({ queryKey: queryKeys.usage.mine }),
     mutationFn: (body: TBody) => api.post<Material<TPayload>>(`/learning/chats/${chatId}/${path}`, body),
     onSuccess: material => {
       client.setQueryData(queryKeys.tutor.material(material.id), material)
@@ -154,6 +161,7 @@ export const useLastMinute = (chatId: string) => useMaterialMutation<{ minutes: 
 export function useSaveMaterial(chatId: string) {
   const client = useQueryClient()
   return useMutation({
+    onSettled: () => client.invalidateQueries({ queryKey: queryKeys.usage.mine }),
     mutationFn: ({ id, saved }: { id: string; saved: boolean }) => api.post<void>(`/learning/materials/${id}/save`, { saved }),
     onSuccess: (_, { id, saved }) => {
       client.setQueryData<Material>(queryKeys.tutor.material(id), m => m && { ...m, saved })
@@ -164,6 +172,7 @@ export function useSaveMaterial(chatId: string) {
 export function useDeleteMaterial(chatId: string) {
   const client = useQueryClient()
   return useMutation({
+    onSettled: () => client.invalidateQueries({ queryKey: queryKeys.usage.mine }),
     mutationFn: (id: string) => api.delete(`/learning/materials/${id}`),
     onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.tutor.materials(chatId) }),
   })

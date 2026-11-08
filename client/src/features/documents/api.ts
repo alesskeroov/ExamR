@@ -84,9 +84,14 @@ export function useCompletedDocuments(forBattle = false) {
 
 /** Polls every 1.5 s until processing finishes. */
 export function useDocument(id: string | null) {
+  const client = useQueryClient()
   return useQuery({
     queryKey: queryKeys.documents.detail(id ?? ''),
-    queryFn: () => api.get<DocumentDto>(`/documents/${id}`),
+    queryFn: async () => {
+      const document = await api.get<DocumentDto>(`/documents/${id}`)
+      if (document.status === 'Failed') void client.invalidateQueries({ queryKey: queryKeys.usage.mine })
+      return document
+    },
     enabled: id !== null,
     refetchInterval: (query) => (isProcessing(query.state.data?.status) ? 1500 : false),
   })
@@ -96,6 +101,7 @@ export function useDocument(id: string | null) {
 export function useUploadDocument(onProgress: (percent: number) => void, { dim = false }: { dim?: boolean } = {}) {
   const queryClient = useQueryClient()
   return useMutation({
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.usage.mine }),
     mutationFn: (file: File) => uploadFile<DocumentDto>(dim ? '/documents?dim=true' : '/documents', file, onProgress),
     onSuccess: (document) => {
       queryClient.setQueryData(queryKeys.documents.detail(document.id), document)

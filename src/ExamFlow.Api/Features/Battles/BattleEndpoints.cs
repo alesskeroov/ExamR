@@ -73,9 +73,9 @@ public static class BattleEndpoints
         var name = request.Name?.Trim() ?? string.Empty;
         if (name.Length == 0) name = "Battle otağı";
         var hostName = await db.Users.Where(u => u.Id == userId).Select(u => u.Nickname).SingleAsync(ct);
-        var code = await battles.CreateAsync(userId, hostName, name, new BattleSettings(
+        var (code, error) = await battles.CreateAsync(user, hostName, name, new BattleSettings(
             documentId, documentName, request.RangeFrom, request.RangeTo, request.QuestionCount, request.SecondsPerQuestion), ct);
-        return TypedResults.Created($"/battle/{code}", new CreateBattleResponse(code));
+        return error ?? TypedResults.Created($"/battle/{code}", new CreateBattleResponse(code!));
     }
 
     private static async Task<IResult> MyRooms(bool? includeCompleted, ClaimsPrincipal user, AppDbContext db, CancellationToken ct)

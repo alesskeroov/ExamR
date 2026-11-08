@@ -1,3 +1,4 @@
+import { UsageCard } from '../../components/common/UsageMeter'
 import { ArrowRight, Check, Database, Server } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
@@ -44,6 +45,7 @@ export function DashboardPage() {
         <Link to="/exams/new" className="btn-primary inline-flex h-10 items-center rounded-[10px] px-3.5 text-sm font-semibold transition-colors">İmtahana başla</Link>
       </div>
     </header>
+    <UsageCard />
 
     <div className="grid gap-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:gap-14">
 

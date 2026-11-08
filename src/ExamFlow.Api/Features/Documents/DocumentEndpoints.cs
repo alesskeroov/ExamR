@@ -1,3 +1,4 @@
+using ExamFlow.Api.Features.Usage;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using ExamFlow.Api.Common;
@@ -34,6 +35,7 @@ public static class DocumentEndpoints
         IFormFile? file,
         ClaimsPrincipal user,
         AppDbContext db,
+        UsageLimiter usage,
         IFileStorage storage,
         ProcessingQueue queue,
         IOptions<DocumentOptions> options,
@@ -111,36 +113,50 @@ public static class DocumentEndpoints
             pageCount = inspection.PageCount;
         }
 
-        var document = new UploadedDocument
+        Guid uploadedId = Guid.Empty;
+        var result = await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
         {
-            OriginalFileName = SafeDisplayName(file.FileName),
-            FileSizeBytes = file.Length,
-            Sha256 = sha256,
-            PageCount = pageCount,
-            Status = DocumentStatus.Pending,
-            UploadedByUserId = user.GetUserId(),
-            IsDimSource = isDimSource,
-        };
-        db.Documents.Add(document); // Assigns the sequential Guid key client-side.
-        document.StoredFileName = $"{document.Id:N}{extension}";
+            db.ChangeTracker.Clear();
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            var document = new UploadedDocument
+            {
+                OriginalFileName = SafeDisplayName(file.FileName),
+                FileSizeBytes = file.Length,
+                Sha256 = sha256,
+                PageCount = pageCount,
+                Status = DocumentStatus.Pending,
+                UploadedByUserId = user.GetUserId(),
+                IsDimSource = isDimSource,
+            };
+            db.Documents.Add(document); // Assigns the sequential Guid key client-side.
+            document.StoredFileName = $"{document.Id:N}{extension}";
 
-        buffer.Position = 0;
-        await storage.SaveAsync(document.StoredFileName, buffer, ct);
+            await usage.LockAsync(userId, UsageKind.Upload, ct);
+            var concurrentDuplicate = await db.Documents.AsNoTracking().Where(d => d.UploadedByUserId == userId && d.Sha256 == sha256)
+                .Select(d => (Guid?)d.Id).FirstOrDefaultAsync(ct);
+            if (concurrentDuplicate is not null)
+                return (IResult)TypedResults.Problem("Bu sənəd artıq yüklənib.", statusCode: 409,
+                    extensions: new Dictionary<string, object?> { ["documentId"] = concurrentDuplicate });
+            if (await usage.TryConsumeAsync(user, UsageKind.Upload, document.Id, ct) is { } denied) return denied;
+            buffer.Position = 0;
+            await storage.SaveAsync(document.StoredFileName, buffer, ct);
 
-        try
-        {
-            await db.SaveChangesAsync(ct);
-        }
-        catch (DbUpdateException)
-        {
-            storage.Delete(document.StoredFileName);
-            throw;
-        }
+            try
+            {
+                await db.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
+            }
+            catch (DbUpdateException)
+            {
+                storage.Delete(document.StoredFileName);
+                throw;
+            }
 
-        queue.Enqueue(document.Id);
-
-        var dto = await FindAsync(db, user, document.Id, ct);
-        return TypedResults.Accepted($"/api/documents/{document.Id}", dto);
+            uploadedId = document.Id;
+            return (IResult)TypedResults.Accepted($"/api/documents/{document.Id}", await FindAsync(db, user, document.Id, ct));
+        });
+        if (uploadedId != Guid.Empty) queue.Enqueue(uploadedId);
+        return result;
     }
 
     private static async Task<IResult> List(

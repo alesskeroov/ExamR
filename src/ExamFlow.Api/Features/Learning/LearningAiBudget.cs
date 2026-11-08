@@ -1,10 +1,12 @@
+using ExamFlow.Api.Features.Usage;
+using ExamFlow.Api.Infrastructure.Security;
 using ExamFlow.Api.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace ExamFlow.Api.Features.Learning;
 
-public enum BudgetDecision { Reserved, BudgetExhausted, DailyLimit, Busy }
+public enum BudgetDecision { Reserved, BudgetExhausted, DailyLimit, MonthlyLimit, Busy }
 
 public sealed record AiBudgetStatus(string Model, decimal TotalBudgetUsd, decimal SpentUsd, decimal ReservedUsd, decimal RemainingUsd,
     int RequestsToday, int DailyRequestsPerUser, long InputTokens, long OutputTokens, bool Enabled);
@@ -29,7 +31,7 @@ public static class AiCost
 /// Reserves money before a model call and settles it after. An app lock serialises the check-and-insert across
 /// parallel requests (and API instances), so two calls cannot both spend the last cents.
 /// </summary>
-public sealed class LearningAiBudget(AppDbContext db, IOptions<LearningAiOptions> options, TimeProvider clock)
+public sealed class LearningAiBudget(AppDbContext db, IOptions<LearningAiOptions> options, TimeProvider clock, UsageLimiter limiter)
 {
     // A reservation older than this belongs to a crashed request and stops holding budget.
     private static readonly TimeSpan StaleReservation = TimeSpan.FromMinutes(10);
@@ -50,8 +52,12 @@ public sealed class LearningAiBudget(AppDbContext db, IOptions<LearningAiOptions
 
             if (await usage.AnyAsync(u => u.UserId == userId && u.Status == LearningUsageStatus.Reserved && u.CreatedAt > fresh, ct))
                 return (BudgetDecision.Busy, (LearningAiUsage?)null);
+            await limiter.LockAsync(userId, UsageKind.AiRequest, ct);
+            var admin = await (from ur in db.UserRoles join r in db.Roles on ur.RoleId equals r.Id where ur.UserId == userId && r.Name == Roles.Admin select ur).AnyAsync(ct);
+            var monthly = await limiter.CheckAsync(userId, admin, UsageKind.AiRequest, ct);
+            if (!monthly.Allowed) return (BudgetDecision.MonthlyLimit, (LearningAiUsage?)null);
             var dayStart = new DateTimeOffset(now.UtcDateTime.Date, TimeSpan.Zero);
-            if (await usage.CountAsync(u => u.UserId == userId && u.CreatedAt >= dayStart && u.Status != LearningUsageStatus.Released, ct) >= o.DailyRequestsPerUser)
+            if (!admin && await usage.CountAsync(u => u.UserId == userId && u.CreatedAt >= dayStart && u.Status != LearningUsageStatus.Released, ct) >= o.DailyRequestsPerUser)
                 return (BudgetDecision.DailyLimit, (LearningAiUsage?)null);
             if (await CommittedAsync(fresh, ct) + amount > o.TotalBudgetUsd)
                 return (BudgetDecision.BudgetExhausted, (LearningAiUsage?)null);
@@ -67,6 +73,8 @@ public sealed class LearningAiBudget(AppDbContext db, IOptions<LearningAiOptions
             return (BudgetDecision.Reserved, (LearningAiUsage?)row);
         });
     }
+
+    public Task<UsageCheck> MonthlyAsync(Guid userId, CancellationToken ct) => limiter.CheckAsync(userId, false, UsageKind.AiRequest, ct);
 
     /// <summary>Records real usage. Without usage data (stream cut off) the estimate is charged, never zero.</summary>
     public async Task SettleAsync(Guid usageId, Guid? messageId, ChatModelUsage? actual, ChatModelUsage estimate, bool failedBeforeOutput)

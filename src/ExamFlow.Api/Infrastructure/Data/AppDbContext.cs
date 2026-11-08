@@ -1,3 +1,4 @@
+using ExamFlow.Api.Features.Usage;
 using ExamFlow.Api.Features.Auth;
 using ExamFlow.Api.Features.Study;
 using ExamFlow.Api.Features.Battles;
@@ -21,6 +22,9 @@ namespace ExamFlow.Api.Infrastructure.Data;
 public class AppDbContext(DbContextOptions<AppDbContext> options)
     : IdentityDbContext<AppUser, IdentityRole<Guid>, Guid>(options), IDataProtectionKeyContext
 {
+    public DbSet<UsageEvent> UsageEvents => Set<UsageEvent>();
+    public DbSet<UserUsageLimit> UserUsageLimits => Set<UserUsageLimit>();
+
     public DbSet<UploadedDocument> Documents => Set<UploadedDocument>();
     public DbSet<DocumentUserShare> DocumentUserShares => Set<DocumentUserShare>();
     public DbSet<DocumentGroupShare> DocumentGroupShares => Set<DocumentGroupShare>();

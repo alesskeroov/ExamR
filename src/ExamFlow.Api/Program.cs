@@ -1,3 +1,4 @@
+using ExamFlow.Api.Features.Usage;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.DataProtection;
@@ -68,6 +69,8 @@ builder.Services.AddHostedService<SmtpEmailService>();
 // Startup line so a misconfiguration is visible without sending a test email; only whether values are set, never them.
 static string Set(string? value) => string.IsNullOrWhiteSpace(value) ? "missing" : "set";
 Console.WriteLine($"Email provider: {emailProvider} | Gmail client {Set(builder.Configuration["Email:Gmail:ClientId"])}, secret {Set(builder.Configuration["Email:Gmail:ClientSecret"])}, refresh token {Set(builder.Configuration["Email:Gmail:RefreshToken"])}, from {Set(builder.Configuration["Email:From"])}");
+builder.Services.AddOptions<UsageOptions>().Bind(builder.Configuration.GetSection(UsageOptions.Section)).ValidateDataAnnotations().ValidateOnStart();
+builder.Services.AddScoped<UsageLimiter>();
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -242,6 +245,7 @@ api.MapFriendsEndpoints();
 api.MapGroupEndpoints();
 api.MapAdminEndpoints();
 api.MapExplanationAdminEndpoints();
+api.MapUsageEndpoints();
 api.MapDimEndpoints();
 api.MapDimAdminEndpoints();
 api.MapLearningEndpoints();

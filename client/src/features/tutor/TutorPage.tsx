@@ -1,3 +1,5 @@
+import { UsageMeter } from '../../components/common/UsageMeter'
+import { useUsageLimit } from '../usage/api'
 import { useQueryClient } from '@tanstack/react-query'
 import { ArrowUp, BookOpenText, CircleHelp, FileText, Layers, MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRight, Plus, Square, Timer, Trash2, X, type LucideIcon } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
@@ -46,6 +48,7 @@ const followUps = [
 ]
 
 function TutorWorkspace() {
+  const monthly = useUsageLimit('AiRequest')
   const [params, setParams] = useSearchParams()
   const chatId = params.get('chat')
   const tabParam = params.get('tab')
@@ -125,7 +128,7 @@ function TutorWorkspace() {
   const openSource = (source: ChatSource) => setPreview({ open: true, source })
 
   const send = async (text: string) => {
-    if (!chatId || streaming) return
+    if (!chatId || streaming || monthly.blocked) return
     const controller = new AbortController()
     abort.current = controller
     stickToBottom.current = true
@@ -159,6 +162,7 @@ function TutorWorkspace() {
       if (controller.signal.aborted) patch(a => ({ ...a, status: 'Cancelled' }))
       else patch(a => ({ ...a, status: 'Failed', error: error instanceof ApiError || error instanceof Error ? error.message : 'Şəbəkə xətası.' }))
     } finally {
+      void client.invalidateQueries({ queryKey: queryKeys.usage.mine })
       if (abort.current === controller) abort.current = null
     }
     void client.invalidateQueries({ queryKey: queryKeys.tutor.usage })
@@ -274,9 +278,10 @@ function TutorWorkspace() {
           <div className="p-6"><Alert title="Söhbət tapılmadı" action={<button type="button" onClick={newChat} className="text-sm font-semibold underline">Yeni söhbət</button>}>Silinmiş ola bilər və ya sizə aid deyil.</Alert></div>
         ) : session && tab !== 'learn' ? (
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-            {tab === 'quiz' && <TutorQuiz key={chatId} chatId={chatId} disabled={usage.data?.enabled === false} />}
-            {tab === 'shared' && <TutorShared key={chatId} chatId={chatId} disabled={usage.data?.enabled === false} />}
-            {tab === 'last' && <TutorLastMinute key={chatId} chatId={chatId} disabled={usage.data?.enabled === false} />}
+            <UsageMeter kind="AiRequest" />
+            {tab === 'quiz' && <TutorQuiz key={chatId} chatId={chatId} disabled={monthly.blocked || usage.data?.enabled === false} />}
+            {tab === 'shared' && <TutorShared key={chatId} chatId={chatId} disabled={monthly.blocked || usage.data?.enabled === false} />}
+            {tab === 'last' && <TutorLastMinute key={chatId} chatId={chatId} disabled={monthly.blocked || usage.data?.enabled === false} />}
           </div>
         ) : (
           <>
@@ -299,7 +304,7 @@ function TutorWorkspace() {
               <div className="shrink-0 px-3 sm:px-4">
                 <div className="mx-auto flex max-w-3xl gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none]" aria-label="Son cavab üçün">
                   {followUps.map(f => (
-                    <button key={f.label} type="button" onClick={() => void send(f.prompt)} disabled={usage.data?.enabled === false}
+                    <button key={f.label} type="button" onClick={() => void send(f.prompt)} disabled={monthly.blocked || usage.data?.enabled === false}
                       className="tutor-border inline-flex h-8 shrink-0 items-center rounded-full border bg-white px-3 text-xs font-medium whitespace-nowrap text-slate-700 hover:border-indigo-200 hover:bg-indigo-50/50 disabled:opacity-50">
                       {f.label}
                     </button>
@@ -307,7 +312,8 @@ function TutorWorkspace() {
                 </div>
               </div>
             )}
-            <Composer key={chatId} disabled={!session || usage.data?.enabled === false} streaming={streaming} onSend={text => send(text)} onStop={stop} />
+            <UsageMeter kind="AiRequest" />
+            <Composer key={chatId} disabled={monthly.blocked || !session || usage.data?.enabled === false} streaming={streaming} onSend={text => send(text)} onStop={stop} />
           </>
         )}
       </section>

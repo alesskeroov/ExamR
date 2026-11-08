@@ -1,3 +1,5 @@
+import { UsageMeter } from '../../components/common/UsageMeter'
+import { useUsageLimit } from '../usage/api'
 import './exam-flow.css'
 import { answerDisplayText } from './answer-display'
 import { AlertTriangle, Check, Clock, History, RotateCcw, RotateCw, X } from 'lucide-react'
@@ -40,6 +42,7 @@ export function ExamResultPage() {
 }
 
 function ResultView({ result }: { result: ExamResult }) {
+  const monthly = useUsageLimit('Exam')
   const [filter, setFilter] = useState<Filter>('All')
   const [focused, setFocused] = useState<number | null>(null)
 
@@ -90,14 +93,14 @@ function ResultView({ result }: { result: ExamResult }) {
             </Link>
             {canRetake(result) && result.incorrect + result.unanswered > 0 && (
               // Mistakes mode over the same range: includes earlier mistakes there, not only this exam's.
-              <Link to={`/exams/new?retake=${result.id}&pool=mistakes`} className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 font-medium text-slate-700 hover:bg-slate-50">
+              <Link aria-disabled={monthly.blocked} tabIndex={monthly.blocked ? -1 : undefined} onClick={e => { if (monthly.blocked) e.preventDefault() }} style={monthly.blocked ? { opacity: .45, cursor: "not-allowed" } : undefined} to={`/exams/new?retake=${result.id}&pool=mistakes`} className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 font-medium text-slate-700 hover:bg-slate-50">
                 <RotateCcw className="size-4" aria-hidden />
                 Səhvləri təkrarla
               </Link>
             )}
             {canRetake(result) && (
               // Opens the setup with this exam's settings, so they can be reviewed and changed first.
-              <Link to={`/exams/new?retake=${result.id}`} className="inline-flex h-10 items-center gap-2 rounded-lg btn-primary px-4 font-medium">
+              <Link aria-disabled={monthly.blocked} tabIndex={monthly.blocked ? -1 : undefined} onClick={e => { if (monthly.blocked) e.preventDefault() }} style={monthly.blocked ? { opacity: .45, cursor: "not-allowed" } : undefined} to={`/exams/new?retake=${result.id}`} className="inline-flex h-10 items-center gap-2 rounded-lg btn-primary px-4 font-medium">
                 <RotateCw className="size-4" aria-hidden />
                 Yenidən imtahan ver
               </Link>
@@ -109,6 +112,7 @@ function ResultView({ result }: { result: ExamResult }) {
         }
       />
 
+      {canRetake(result) && <UsageMeter kind="Exam" />}
       <section aria-label="Xülasə" className="result-reveal mb-5 rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
         <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
           <div className="min-w-0">

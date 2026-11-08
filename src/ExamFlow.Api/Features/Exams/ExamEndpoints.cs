@@ -1,3 +1,4 @@
+using ExamFlow.Api.Features.Usage;
 using System.Security.Claims;
 using ExamFlow.Api.Common;
 using ExamFlow.Api.Features.Questions;
@@ -106,7 +107,7 @@ public static class ExamEndpoints
     }
 
     private static async Task<IResult> Create(
-        CreateExamRequest request, ClaimsPrincipal user, AppDbContext db, TimeProvider clock,
+        CreateExamRequest request, ClaimsPrincipal user, AppDbContext db, TimeProvider clock, UsageLimiter usage,
         IOptions<ExamOptions> options, CancellationToken ct)
     {
         var userId = user.GetUserId();
@@ -161,32 +162,40 @@ public static class ExamEndpoints
             .ToDictionaryAsync(q => q.Id, ct);
         var visuals = await QuestionVisuals.ForQuestionsAsync(db, pickedIds, ct);
 
-        var exam = new Exam
+        return await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
         {
-            UserId = userId,
-            QuestionCount = (short)request.QuestionCount,
-            RevealMode = request.RevealMode,
-            SourceDocumentIds = [documentId],
-            RangeFrom = request.RangeFrom,
-            RangeTo = request.RangeTo,
-            Status = ExamStatus.InProgress,
-            StartedAt = now,
-            ExpiresAt = now + ExamEngine.Duration(request.DurationMinutes, settings),
-            Questions = pickedIds.Select((id, position) => Freeze(questions[id], position, visuals[id])).ToList(),
-        };
+            db.ChangeTracker.Clear();
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            var exam = new Exam
+            {
+                UserId = userId,
+                QuestionCount = (short)request.QuestionCount,
+                RevealMode = request.RevealMode,
+                SourceDocumentIds = [documentId],
+                RangeFrom = request.RangeFrom,
+                RangeTo = request.RangeTo,
+                Status = ExamStatus.InProgress,
+                StartedAt = now,
+                ExpiresAt = now + ExamEngine.Duration(request.DurationMinutes, settings),
+                Questions = pickedIds.Select((id, position) => Freeze(questions[id], position, visuals[id])).ToList(),
+            };
 
-        db.Exams.Add(exam);
-        try
-        {
-            await db.SaveChangesAsync(ct);
-        }
-        catch (DbUpdateException)
-        {
-            // UX_Exams_UserActive: another request started an exam at the same moment.
-            return Problem(StatusCodes.Status409Conflict, "Davam edən imtahanınız var.");
-        }
+            exam.Id = Guid.NewGuid();
+            if (await usage.TryConsumeAsync(user, UsageKind.Exam, exam.Id, ct) is { } denied) return denied;
+            db.Exams.Add(exam);
+            try
+            {
+                await db.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
+            }
+            catch (DbUpdateException)
+            {
+                // UX_Exams_UserActive: another request started an exam at the same moment.
+                return Problem(StatusCodes.Status409Conflict, "Davam edən imtahanınız var.");
+            }
 
-        return TypedResults.Created($"/api/exams/{exam.Id}", ToSession(exam, now));
+            return (IResult)TypedResults.Created($"/api/exams/{exam.Id}", ToSession(exam, now));
+        });
     }
 
     private static async Task<IResult> History(

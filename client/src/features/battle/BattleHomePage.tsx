@@ -1,3 +1,5 @@
+import { UsageMeter } from '../../components/common/UsageMeter'
+import { useUsageLimit } from '../usage/api'
 import { LogIn, Swords, Users } from 'lucide-react'
 import { RankLeaderboard, RankSummary } from './RankSummary'
 import { useId, useState, type FormEvent, type ReactNode } from 'react'
@@ -31,6 +33,7 @@ export function BattleHomePage() {
 }
 
 function CreateRoomCard() {
+  const monthly = useUsageLimit('Battle')
   const navigate = useNavigate()
   const documents = useCompletedDocuments(true)
   const create = useCreateBattle()
@@ -58,7 +61,7 @@ function CreateRoomCard() {
 
   function submit(event: FormEvent) {
     event.preventDefault()
-    if (!rangeValid || !countValid) return
+    if (monthly.blocked || !rangeValid || !countValid) return
     create.mutate(
       { name, documentId, rangeFrom: from!, rangeTo: to!, questionCount, secondsPerQuestion: seconds },
       { onSuccess: ({ code }) => navigate(`/battle/${code}`) },
@@ -67,6 +70,7 @@ function CreateRoomCard() {
 
   return (
     <Card icon={<Swords className="size-5" />} title="Otaq yarat" subtitle="Siz host olacaqsınız: yarışı siz başladırsınız və idarə edirsiniz.">
+      <UsageMeter kind="Battle" />
       <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
         <Field label="Otağın adı">
           {id => <input id={id} value={name} maxLength={100} onChange={e => setName(e.target.value)} placeholder="Məsələn, axşam sınağı" className={inputClass} />}
@@ -150,7 +154,7 @@ function CreateRoomCard() {
           </p>
         )}
 
-        <Button type="submit" disabled={!rangeValid || !countValid || availability.isFetching} loading={create.isPending}>
+        <Button type="submit" disabled={monthly.blocked || !rangeValid || !countValid || availability.isFetching} loading={create.isPending}>
           <Users className="size-4" aria-hidden />
           Otaq yarat
         </Button>

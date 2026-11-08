@@ -1,3 +1,4 @@
+using ExamFlow.Api.Features.Usage;
 using System.Threading.Channels;
 using ExamFlow.Api.Infrastructure.Data;
 using ExamFlow.Api.Infrastructure.Storage;
@@ -82,7 +83,7 @@ public sealed class LearningProcessingService(
 }
 
 /// <summary>Turns one stored file into paragraphs and chunks; never touches the exam question data.</summary>
-public sealed class LearningProcessor(AppDbContext db, IFileStorage storage, IOptions<LearningOptions> options, TimeProvider clock, ILogger<LearningProcessor> logger)
+public sealed class LearningProcessor(AppDbContext db, UsageLimiter usage, IFileStorage storage, IOptions<LearningOptions> options, TimeProvider clock, ILogger<LearningProcessor> logger)
 {
     public async Task ProcessAsync(Guid jobId, CancellationToken stoppingToken)
     {
@@ -147,6 +148,7 @@ public sealed class LearningProcessor(AppDbContext db, IFileStorage storage, IOp
 
         if (failure is not null)
         {
+            await usage.RefundAsync(learning.Id, UsageKind.Upload, CancellationToken.None);
             Fail(job, learning, failure);
             await db.SaveChangesAsync(CancellationToken.None);
             logger.LogWarning("Learning document {DocumentId} failed: {Reason}", learning.DocumentId, failure);

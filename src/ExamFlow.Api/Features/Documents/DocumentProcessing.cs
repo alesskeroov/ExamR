@@ -1,3 +1,4 @@
+using ExamFlow.Api.Features.Usage;
 using System.Threading.Channels;
 using ExamFlow.Api.Features.Questions;
 using ExamFlow.Api.Infrastructure.Data;
@@ -83,6 +84,7 @@ public sealed class DocumentProcessingService(
 /// <summary>Parses one document and stores its questions.</summary>
 public sealed class DocumentProcessor(
     AppDbContext db,
+    UsageLimiter usage,
     IFileStorage storage,
     PdfQuestionParser parser,
     DocxQuestionParser docxParser,
@@ -262,6 +264,7 @@ public sealed class DocumentProcessor(
 
     private async Task FailAsync(UploadedDocument document, string message, CancellationToken ct)
     {
+        await usage.RefundAsync(document.Id, UsageKind.Upload, ct);
         document.Status = DocumentStatus.Failed;
         document.ErrorMessage = message;
         document.ProcessedAt = clock.GetUtcNow();

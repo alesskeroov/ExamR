@@ -1,3 +1,4 @@
+import { UsageAdmin } from '../usage/UsageAdmin'
 import { useEffect, useId, useState } from 'react'
 import { FolderOpen, Lightbulb, School, ShieldCheck, Users } from 'lucide-react'
 import { DimAdminSection } from '../dim/DimAdminSection'
@@ -15,6 +16,7 @@ import { cn } from '../../lib/utils'
 import { useAdminRole, useAdmins, useAdminUserSearch, type AdminUser } from './api'
 
 const sections = [
+  { id: 'usage', label: 'Limitlər', icon: Users },
   { id: 'documents', label: 'Sənədlər', icon: FolderOpen },
   { id: 'explanations', label: 'İzah Bankı', icon: Lightbulb },
   { id: 'dim', label: 'DİM sınaqları', icon: School },
@@ -36,7 +38,7 @@ export function AdminPage() {
         return <button key={item.id} type="button" aria-pressed={active} onClick={() => setParams({ section: item.id })} className={cn('flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors', active ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50')}><item.icon className="size-4" aria-hidden />{item.label}</button>
       })}
     </nav>
-    {section === 'dim' ? <DimAdminSection /> : section === 'explanations' ? <ExplanationBankPage /> : section === 'groups' ? <GroupsAdminPage /> : section === 'admins' ? <AdminsSection currentUserId={user.id} /> : <UploadPage admin />}
+    {section === 'usage' ? <UsageAdmin /> : section === 'dim' ? <DimAdminSection /> : section === 'explanations' ? <ExplanationBankPage /> : section === 'groups' ? <GroupsAdminPage /> : section === 'admins' ? <AdminsSection currentUserId={user.id} /> : <UploadPage admin />}
   </>
 }
 

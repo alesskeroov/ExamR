@@ -1,4 +1,10 @@
 export const queryKeys = {
+  usage: {
+    all: ['usage'] as const,
+    mine: ['usage', 'mine'] as const,
+    adminUsers: (q: string, page: number) => ['usage', 'admin', q, page] as const,
+    adminUser: (id: string) => ['usage', 'admin', id] as const,
+  },
   admins: {
     all: ['admins'] as const,
     list: ['admins', 'list'] as const,

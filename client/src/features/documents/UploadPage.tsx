@@ -1,3 +1,5 @@
+import { UsageMeter } from '../../components/common/UsageMeter'
+import { useUsageLimit } from '../usage/api'
 import { AlertCircle, FileText, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useSearchParams } from 'react-router'
@@ -18,6 +20,7 @@ import { DocumentSharingModal } from './DocumentSharingModal'
 import { SharedDocuments } from './SharedDocuments'
 
 export function UploadPage({ admin = false }: { admin?: boolean }) {
+  const monthly = useUsageLimit('Upload')
   const [searchParams, setSearchParams] = useSearchParams()
   const selectedId = searchParams.get('doc')
   const select = (id: string) => setSearchParams({ doc: id })
@@ -27,6 +30,7 @@ export function UploadPage({ admin = false }: { admin?: boolean }) {
   const upload = useUploadDocument(setProgress)
 
   function handleFile(file: File) {
+    if (monthly.blocked) return
     setClientError(null)
     upload.reset()
     if (!/\.(pdf|docx)$/i.test(file.name)) {
@@ -52,9 +56,10 @@ export function UploadPage({ admin = false }: { admin?: boolean }) {
 
       <div className="flex flex-col gap-6">
         <div id="document-upload" className="flex min-w-0 flex-col gap-6">
+          {!admin && <UsageMeter kind="Upload" />}
           <FileDropzone
             accept="application/pdf,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx"
-            disabled={upload.isPending}
+            disabled={upload.isPending || monthly.blocked}
             hint="Maksimum 20 MB · mətn əsaslı PDF və DOCX"
             onFile={handleFile}
           />
