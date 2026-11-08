@@ -91,17 +91,12 @@ function DocumentCounts({ document: d }: { document: DimSourceDocument }) {
   )
 }
 
+/** Only Buraxılış is offered for now; Blok is paused (the API still supports it). */
 function SubjectFields({ value, onChange }: { value: Classification; onChange: (next: Classification) => void }) {
   const catalog = useDimCatalog()
-  const subjects = value.track === 'Buraxilis' ? catalog.data?.buraxilis ?? [] : catalog.data?.blok ?? []
+  const subjects = catalog.data?.buraxilis ?? []
   return (
-    <div className="mt-3 grid gap-3 sm:grid-cols-2">
-      <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">İmtahan
-        <select className={inputClass} value={value.track} onChange={e => onChange({ track: e.target.value as DimTrack, subject: '' })}>
-          <option value="Buraxilis">Buraxılış (XI sinif)</option>
-          <option value="Blok">Blok</option>
-        </select>
-      </label>
+    <div className="mt-3 grid gap-3 sm:max-w-sm">
       <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Fənn
         <select className={inputClass} value={value.subject} onChange={e => onChange({ ...value, subject: e.target.value })}>
           <option value="">Fənn seçin</option>

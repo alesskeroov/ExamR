@@ -81,7 +81,8 @@ function CreateFromDocument({ onDone, onFull }: { onDone: () => void; onFull: ()
   const [settings, setSettings] = useState<SettingsForm>({ title: '', duration: '60', limit: '' })
 
   // One option per document and subject it was added to the bank under.
-  const sources = (documents.data ?? []).flatMap(d => d.bank.map(b => ({ key: `${d.id}|${b.track}|${b.subject}`, document: d, ...b })))
+  const sources = (documents.data ?? []).flatMap(d => d.bank.filter(b => b.track === 'Buraxilis')
+    .map(b => ({ key: `${d.id}|${b.track}|${b.subject}`, document: d, ...b })))
   const picked = sources.find(s => s.key === source)
 
   const choose = (key: string) => {
@@ -124,7 +125,7 @@ function CreateFromDocument({ onDone, onFull }: { onDone: () => void; onFull: ()
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Button loading={create.isPending} disabled={!picked || !settingsValid(settings) || !(Number(count) >= 1 && Number(count) <= (picked?.count ?? 0))} onClick={submit}>Yarat</Button>
         <Button variant="ghost" onClick={onDone}>Ləğv et</Button>
-        <button type="button" onClick={onFull} className="ml-auto text-sm font-medium text-indigo-700 hover:underline">Tam DİM sınağı (bütün bankdan)</button>
+        <button type="button" onClick={onFull} className="ml-auto text-sm font-medium text-indigo-700 hover:underline">Tam Buraxılış sınağı (bütün bankdan)</button>
       </div>
       <p className="mt-2 text-xs text-slate-500">Sınaq qaralama kimi yaranır — siyahıda “Dərc et” düyməsi ilə istifadəçilərə açın.</p>
     </section>
@@ -136,17 +137,16 @@ function CreateFullTest({ onDone }: { onDone: () => void }) {
   const catalog = useDimCatalog()
   const stats = useDimBankStats()
   const create = useCreateDimTest()
-  const [track, setTrack] = useState<DimTrack>('Buraxilis')
-  const [group, setGroup] = useState('')
+  const track: DimTrack = 'Buraxilis'
   const [settings, setSettings] = useState<SettingsForm>({ title: '', duration: '180', limit: '' })
 
   if (!catalog.data) return <div className="h-40 animate-pulse rounded-xl bg-slate-200/60" aria-label="Yüklənir" />
-  const sections = sectionSubjects(catalog.data, track, 'Full', group, '')
+  const sections = sectionSubjects(catalog.data, track, 'Full', '', '')
   const inBank = (code: string) => stats.data?.find(s => s.track === track && s.subject === code)?.count ?? 0
   const short = sections.filter(s => s.closed > inBank(s.code))
 
   const submit = () => create.mutate({
-    track, kind: 'Full', groupCode: track === 'Blok' ? group : null,
+    track, kind: 'Full', groupCode: null,
     title: settings.title.trim(), durationMinutes: Number(settings.duration), attemptLimit: settings.limit ? Number(settings.limit) : null,
     availableFrom: null, availableTo: null, isPublished: false,
     sections: sections.map(s => ({ subject: s.code, randomCount: s.closed, drawPerAttempt: true })),
@@ -154,24 +154,8 @@ function CreateFullTest({ onDone }: { onDone: () => void }) {
 
   return (
     <section className="rounded-xl border border-indigo-200 bg-white p-4 sm:p-5">
-      <h2 className="font-semibold">Tam DİM sınağı</h2>
-      <p className="mt-1 text-sm text-slate-600">Bütün bankdan, rəsmi qapalı sual sayı ilə; hər cəhddə yeni suallar.</p>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">İmtahan
-          <select className={inputClass} value={track} onChange={e => { setTrack(e.target.value as DimTrack); setGroup(''); create.reset() }}>
-            <option value="Buraxilis">Buraxılış (XI sinif, 300 bal)</option>
-            <option value="Blok">Blok (400 bal)</option>
-          </select>
-        </label>
-        {track === 'Blok' && (
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">İxtisas qrupu
-            <select className={inputClass} value={group} onChange={e => setGroup(e.target.value)}>
-              <option value="">Qrup seçin</option>
-              {catalog.data.groups.map(g => <option key={g.code} value={g.code}>{g.name}</option>)}
-            </select>
-          </label>
-        )}
-      </div>
+      <h2 className="font-semibold">Tam Buraxılış sınağı</h2>
+      <p className="mt-1 text-sm text-slate-600">Bütün bankdan, rəsmi qapalı sual sayı ilə (Azərbaycan dili, Riyaziyyat, Xarici dil); hər cəhddə yeni suallar.</p>
       {sections.length > 0 && (
         <p className={cn('mt-3 text-sm', short.length > 0 ? 'text-rose-700' : 'text-slate-600')}>
           {sections.map(s => `${s.name} ${s.closed} (bankda ${inBank(s.code)})`).join(' · ')}

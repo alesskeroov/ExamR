@@ -46,7 +46,8 @@ export const router = createBrowserRouter([
       { path: 'exams', element: <ExamHistoryPage /> },
       { path: 'exams/:id/result', element: <ExamResultPage /> },
       { path: 'dim/buraxilis', element: <DimTestsPage key="Buraxilis" track="Buraxilis" /> },
-      { path: 'dim/blok', element: <DimTestsPage key="Blok" track="Blok" /> },
+      // Blok exams are paused; only Buraxılış is offered for now (the API still supports Blok).
+      { path: 'dim/blok', element: <Navigate to="/dim/buraxilis" replace /> },
       { path: 'battle', element: <BattleHomePage /> },
       { path: 'battle/rooms', element: <MyRoomsPage /> },
       { path: 'friends', element: <FriendsPage /> },

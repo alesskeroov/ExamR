@@ -1,5 +1,5 @@
-import { CalendarClock, ClipboardList, Clock, Eye, EyeOff, Layers, Play, RotateCw } from 'lucide-react'
-import { useState } from 'react'
+import { BookOpenCheck, CalendarClock, ClipboardList, Clock, Eye, EyeOff, Layers, Play, RotateCw, Trophy } from 'lucide-react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { Alert } from '../../components/common/Alert'
 import { Button } from '../../components/common/Button'
@@ -11,7 +11,7 @@ import { ApiError } from '../../lib/api-client'
 import { formatDate, formatNumber } from '../../lib/format'
 import { cn } from '../../lib/utils'
 import type { RevealMode } from '../exams/api'
-import { useDimCatalog, useDimTests, useStartDimTest, type DimGroup, type DimTest, type DimTrack } from './api'
+import { useDimTests, useStartDimTest, type DimTest, type DimTrack } from './api'
 
 type KindFilter = 'All' | 'Full' | 'Subject'
 
@@ -28,16 +28,17 @@ const copy: Record<DimTrack, { title: string; description: string; max: number }
   },
 }
 
+/** Accent per subject, so cards are told apart at a glance. */
+const accents: Record<string, string> = {
+  riy: 'bg-indigo-50 text-indigo-600',
+  az: 'bg-emerald-50 text-emerald-600',
+  xdil: 'bg-amber-50 text-amber-600',
+}
+
 export function DimTestsPage({ track }: { track: DimTrack }) {
   const tests = useDimTests(track)
-  const catalog = useDimCatalog()
   const [kind, setKind] = useState<KindFilter>('All')
-  const [group, setGroup] = useState<string>('')
-  const [revealMode, setRevealMode] = useState<RevealMode>('AtEnd')
-  const groups = track === 'Blok' ? catalog.data?.groups ?? [] : []
-  const selectedGroup = groups.find(g => g.code === group)
-
-  const visible = (tests.data ?? []).filter(t => (kind === 'All' || t.kind === kind) && inGroup(t, selectedGroup))
+  const visible = (tests.data ?? []).filter(t => kind === 'All' || t.kind === kind)
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -48,42 +49,20 @@ export function DimTestsPage({ track }: { track: DimTrack }) {
         açıq hissədə eyni nəticə fərziyyəsi ilə təxmini bal göstərilir.
       </Alert>
 
-      <fieldset className="mt-5">
-        <legend className="mb-2 text-sm font-medium text-slate-700">Düzgün cavablar</legend>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <ChoiceCard name="dim-reveal" checked={revealMode === 'AtEnd'} onChange={() => setRevealMode('AtEnd')} icon={<EyeOff className="size-5" />}
-            title="İmtahan bitdikdə" description="Real imtahan kimi: cavablar sona qədər dəyişdirilə bilər" />
-          <ChoiceCard name="dim-reveal" checked={revealMode === 'Immediate'} onChange={() => setRevealMode('Immediate')} icon={<Eye className="size-5" />}
-            title="Hər sualdan sonra" description="Hər sualda göz ikonu ilə düzgün cavabı görə bilərsiniz; göstərildikdən sonra variant dəyişmir" />
-        </div>
-      </fieldset>
-
-      <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div role="tablist" aria-label="Sınaq növü" className="inline-flex w-full rounded-lg border border-slate-200 bg-white p-1 sm:w-auto">
-          {([['All', 'Hamısı'], ['Full', 'Tam sınaqlar'], ['Subject', 'Fənn sınaqları']] as const).map(([value, label]) => (
-            <button key={value} type="button" role="tab" aria-selected={kind === value} onClick={() => setKind(value)}
-              className={cn('flex-1 whitespace-nowrap rounded-md px-2 py-1.5 text-sm font-medium transition-colors sm:flex-none sm:px-3',
-                kind === value ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100')}>
-              {label}
-            </button>
-          ))}
-        </div>
-        {groups.length > 0 && (
-          <label className="flex items-center gap-2 text-sm text-slate-600">
-            <span className="shrink-0">İxtisas qrupu</span>
-            <select value={group} onChange={e => setGroup(e.target.value)}
-              className="h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm text-slate-800 sm:w-48">
-              <option value="">Bütün qruplar</option>
-              {groups.map(g => <option key={g.code} value={g.code}>{g.name}</option>)}
-            </select>
-          </label>
-        )}
+      <div role="tablist" aria-label="Sınaq növü" className="mt-5 inline-flex w-full rounded-lg border border-slate-200 bg-white p-1 sm:w-auto">
+        {([['All', 'Hamısı'], ['Full', 'Tam sınaqlar'], ['Subject', 'Fənn sınaqları']] as const).map(([value, label]) => (
+          <button key={value} type="button" role="tab" aria-selected={kind === value} onClick={() => setKind(value)}
+            className={cn('flex-1 whitespace-nowrap rounded-md px-2 py-1.5 text-sm font-medium transition-colors sm:flex-none sm:px-3',
+              kind === value ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100')}>
+            {label}
+          </button>
+        ))}
       </div>
 
       <div className="mt-5">
         {tests.isPending ? (
           <div className="grid gap-4 md:grid-cols-2" aria-label="Yüklənir">
-            {[0, 1, 2, 3].map(i => <div key={i} className="h-48 animate-pulse rounded-xl bg-slate-200/60" />)}
+            {[0, 1, 2, 3].map(i => <div key={i} className="h-56 animate-pulse rounded-xl bg-slate-200/60" />)}
           </div>
         ) : tests.isError ? (
           <Alert title="Sınaqlar yüklənmədi">{tests.error.message}</Alert>
@@ -92,7 +71,7 @@ export function DimTestsPage({ track }: { track: DimTrack }) {
             description={tests.data.length === 0 ? 'Administrator sınaq dərc etdikdə burada görünəcək.' : 'Seçilmiş filtrə uyğun sınaq tapılmadı.'} />
         ) : (
           <ul className="grid gap-4 md:grid-cols-2">
-            {visible.map(t => <li key={t.id}><TestCard test={t} revealMode={revealMode} /></li>)}
+            {visible.map(t => <li key={t.id}><TestCard test={t} /></li>)}
           </ul>
         )}
       </div>
@@ -100,52 +79,66 @@ export function DimTestsPage({ track }: { track: DimTrack }) {
   )
 }
 
-/** A full test belongs to its group; a subject test to every group that has the subject. */
-function inGroup(test: DimTest, group: DimGroup | undefined) {
-  if (!group) return true
-  return test.kind === 'Full' ? test.groupCode === group.code : test.sections.every(s => group.subjects.some(g => g.code === s.subject))
-}
-
-function TestCard({ test, revealMode }: { test: DimTest; revealMode: RevealMode }) {
+function TestCard({ test }: { test: DimTest }) {
   const navigate = useNavigate()
   const start = useStartDimTest()
+  const [choosing, setChoosing] = useState(false)
   const last = test.lastAttempt
   const inProgress = last?.status === 'InProgress'
   const limitReached = test.attemptLimit !== null && test.attemptsUsed >= test.attemptLimit
   const activeExamId = start.error instanceof ApiError ? start.error.problem?.activeExamId as string | undefined : undefined
+  const subject = test.kind === 'Subject' ? test.sections[0]?.subject : undefined
+  const accent = (subject && accents[subject]) || 'bg-slate-100 text-slate-600'
+
+  const begin = (revealMode: RevealMode) => start.mutate({ testId: test.id, revealMode }, {
+    onSuccess: ({ examId }) => navigate(`/exams/${examId}`),
+    onSettled: () => setChoosing(false),
+  })
 
   return (
-    <article className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-medium tracking-wide text-indigo-700 uppercase">
-            {test.kind === 'Full' ? 'Tam sınaq' : 'Fənn sınağı'}{test.groupName && ` · ${test.groupName}`}
-          </p>
-          <h2 className="mt-1 text-lg leading-snug font-semibold text-slate-900">{test.title}</h2>
+    <article className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md sm:p-5">
+      <div className="flex items-start gap-3">
+        <span className={cn('grid size-11 shrink-0 place-items-center rounded-xl', accent)} aria-hidden>
+          {test.kind === 'Full' ? <Layers className="size-5" /> : <BookOpenCheck className="size-5" />}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-medium tracking-wide text-indigo-700 uppercase">{test.kind === 'Full' ? 'Tam sınaq' : 'Fənn sınağı'}</p>
+          <h2 className="mt-0.5 text-lg leading-snug font-semibold break-words text-slate-900">{test.title}</h2>
         </div>
         {inProgress ? <StatusBadge tone="info">Davam edir</StatusBadge>
-          : !test.isOpen ? <StatusBadge tone="warning">Hazırda bağlıdır</StatusBadge>
+          : !test.isOpen ? <StatusBadge tone="warning">Bağlıdır</StatusBadge>
           : null}
       </div>
 
-      <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="Fənlər">
-        {test.sections.map(s => (
-          <li key={s.subject} className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
-            {s.name} · {s.questionCount}
-          </li>
-        ))}
-      </ul>
+      {test.sections.length > 1 && (
+        <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="Fənlər">
+          {test.sections.map(s => (
+            <li key={s.subject} className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">{s.name} · {s.questionCount}</li>
+          ))}
+        </ul>
+      )}
 
-      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-slate-600">
-        <div className="flex items-center gap-1.5"><Layers className="size-4 text-slate-400" aria-hidden /><dt className="sr-only">Suallar</dt><dd>{test.questionCount} sual</dd></div>
-        <div className="flex items-center gap-1.5"><Clock className="size-4 text-slate-400" aria-hidden /><dt className="sr-only">Müddət</dt><dd>{test.durationMinutes} dəq</dd></div>
-        <div className="flex items-center gap-1.5"><RotateCw className="size-4 text-slate-400" aria-hidden /><dt className="sr-only">Cəhdlər</dt>
-          <dd>{test.attemptLimit === null ? `${test.attemptsUsed} cəhd · limitsiz` : `${test.attemptsUsed} / ${test.attemptLimit} cəhd`}</dd></div>
-        {(test.availableFrom || test.availableTo) && (
-          <div className="col-span-2 flex items-center gap-1.5"><CalendarClock className="size-4 text-slate-400" aria-hidden /><dt className="sr-only">Vaxt</dt>
-            <dd>{[test.availableFrom && formatDate(test.availableFrom), test.availableTo && formatDate(test.availableTo)].filter(Boolean).join(' – ')}</dd></div>
-        )}
+      <dl className="mt-4 flex flex-wrap gap-x-5 gap-y-1.5 text-sm text-slate-600">
+        <Stat icon={<Layers className="size-4" />} label="Suallar">{test.questionCount} sual</Stat>
+        <Stat icon={<Clock className="size-4" />} label="Müddət">{test.durationMinutes} dəq</Stat>
+        <Stat icon={<RotateCw className="size-4" />} label="Cəhdlər">
+          {test.attemptLimit === null ? `${test.attemptsUsed} cəhd · limitsiz` : `${test.attemptsUsed} / ${test.attemptLimit} cəhd`}
+        </Stat>
       </dl>
+
+      {(test.availableFrom || test.availableTo) && (
+        <p className="mt-3 flex items-center gap-1.5 text-sm text-slate-600">
+          <CalendarClock className="size-4 text-slate-400" aria-hidden />
+          {[test.availableFrom && formatDate(test.availableFrom), test.availableTo && formatDate(test.availableTo)].filter(Boolean).join(' – ')}
+        </p>
+      )}
+
+      {last && !inProgress && last.scorePercent !== null && (
+        <Link to={`/exams/${last.examId}/result`} className="mt-3 inline-flex items-center gap-1.5 self-start text-sm text-slate-600 hover:text-indigo-700">
+          <Trophy className="size-4 text-amber-500" aria-hidden />Son nəticə:
+          <span className="font-semibold text-slate-900 tabular-nums">{formatNumber(last.scorePercent)}%</span>
+        </Link>
+      )}
 
       {start.isError && (
         <div className="mt-3">
@@ -156,23 +149,60 @@ function TestCard({ test, revealMode }: { test: DimTest; revealMode: RevealMode 
         </div>
       )}
 
-      <div className="mt-auto flex flex-wrap items-center gap-2 pt-4">
+      <div className="mt-auto pt-4">
         {inProgress && last ? (
-          <Link to={`/exams/${last.examId}`} className="btn-primary inline-flex h-10 items-center gap-2 rounded-lg px-4 font-medium">
+          <Link to={`/exams/${last.examId}`} className="btn-primary inline-flex h-11 w-full items-center justify-center gap-2 rounded-[10px] px-4 font-semibold">
             <Play className="size-4" aria-hidden />Davam et
           </Link>
         ) : (
-          <Button disabled={!test.isOpen || limitReached} loading={start.isPending}
-            onClick={() => start.mutate({ testId: test.id, revealMode }, { onSuccess: ({ examId }) => navigate(`/exams/${examId}`) })}>
-            <Play className="size-4" aria-hidden />{limitReached ? 'Cəhd limiti bitib' : 'Başla'}
+          <Button className="w-full" disabled={!test.isOpen || limitReached} loading={start.isPending} onClick={() => { start.reset(); setChoosing(true) }}>
+            <Play className="size-4" aria-hidden />{limitReached ? 'Cəhd limiti bitib' : last ? 'Yenidən başla' : 'Başla'}
           </Button>
         )}
-        {last && !inProgress && (
-          <Link to={`/exams/${last.examId}/result`} className="inline-flex h-10 items-center rounded-lg border border-slate-300 bg-white px-4 font-medium text-slate-700 hover:bg-slate-50">
-            Son nəticə{last.scorePercent !== null && ` · ${formatNumber(last.scorePercent)}%`}
-          </Link>
-        )}
       </div>
+
+      {choosing && <StartDialog test={test} starting={start.isPending} onStart={begin} onClose={() => setChoosing(false)} />}
     </article>
+  )
+}
+
+function Stat({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <dt className="text-slate-400"><span aria-hidden>{icon}</span><span className="sr-only">{label}</span></dt>
+      <dd className="tabular-nums">{children}</dd>
+    </div>
+  )
+}
+
+/** Asked after "Başla": how the correct answers are shown, like on the regular exam setup page. */
+function StartDialog({ test, starting, onStart, onClose }: {
+  test: DimTest; starting: boolean; onStart: (mode: RevealMode) => void; onClose: () => void
+}) {
+  const dialog = useRef<HTMLDialogElement>(null)
+  const titleId = useId()
+  const [mode, setMode] = useState<RevealMode>('AtEnd')
+  useEffect(() => {
+    const element = dialog.current
+    element?.showModal()
+    return () => element?.close()
+  }, [])
+
+  return (
+    <dialog ref={dialog} aria-labelledby={titleId} onCancel={event => { event.preventDefault(); if (!starting) onClose() }}
+      className="m-auto max-h-[85dvh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl backdrop:bg-slate-900/45 backdrop:backdrop-blur-sm">
+      <h2 id={titleId} className="text-lg font-semibold text-slate-900">{test.title}</h2>
+      <p className="mt-1 text-sm text-slate-600">{test.questionCount} sual · {test.durationMinutes} dəqiqə. Düzgün cavablar nə vaxt göstərilsin?</p>
+      <div className="mt-4 grid gap-3">
+        <ChoiceCard name={`reveal-${test.id}`} checked={mode === 'AtEnd'} onChange={() => setMode('AtEnd')} icon={<EyeOff className="size-5" />}
+          title="İmtahan bitdikdə" description="Real imtahan kimi: cavablar sona qədər dəyişdirilə bilər" />
+        <ChoiceCard name={`reveal-${test.id}`} checked={mode === 'Immediate'} onChange={() => setMode('Immediate')} icon={<Eye className="size-5" />}
+          title="Hər sualdan sonra" description="Hər sualda göz ikonu ilə düzgün cavabı görə bilərsiniz; göstərildikdən sonra variant dəyişmir" />
+      </div>
+      <div className="mt-6 flex justify-end gap-3">
+        <Button variant="secondary" disabled={starting} onClick={onClose}>Ləğv et</Button>
+        <Button loading={starting} onClick={() => onStart(mode)}><Play className="size-4" aria-hidden />İmtahanı başla</Button>
+      </div>
+    </dialog>
   )
 }
