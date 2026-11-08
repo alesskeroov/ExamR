@@ -1,9 +1,8 @@
-import { BookOpenCheck, CalendarClock, ClipboardList, Clock, Eye, EyeOff, Layers, Play, RotateCw, Trophy } from 'lucide-react'
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { BookOpenCheck, CalendarClock, ClipboardList, Clock, Layers, Play, RotateCw, Trophy } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { Alert } from '../../components/common/Alert'
 import { Button } from '../../components/common/Button'
-import { ChoiceCard } from '../../components/common/ChoiceCard'
 import { EmptyState } from '../../components/common/EmptyState'
 import { PageHeader } from '../../components/common/PageHeader'
 import { StatusBadge } from '../../components/common/StatusBadge'
@@ -12,6 +11,7 @@ import { formatDate, formatNumber } from '../../lib/format'
 import { cn } from '../../lib/utils'
 import type { RevealMode } from '../exams/api'
 import { useDimTests, useStartDimTest, type DimTest, type DimTrack } from './api'
+import { DimStartDialog } from './DimStartDialog'
 
 type KindFilter = 'All' | 'Full' | 'Subject'
 
@@ -161,7 +161,10 @@ function TestCard({ test }: { test: DimTest }) {
         )}
       </div>
 
-      {choosing && <StartDialog test={test} starting={start.isPending} onStart={begin} onClose={() => setChoosing(false)} />}
+      {choosing && (
+        <DimStartDialog testId={test.id} title={test.title} questionCount={test.questionCount} durationMinutes={test.durationMinutes}
+          starting={start.isPending} onStart={begin} onClose={() => setChoosing(false)} />
+      )}
     </article>
   )
 }
@@ -175,34 +178,3 @@ function Stat({ icon, label, children }: { icon: ReactNode; label: string; child
   )
 }
 
-/** Asked after "Başla": how the correct answers are shown, like on the regular exam setup page. */
-function StartDialog({ test, starting, onStart, onClose }: {
-  test: DimTest; starting: boolean; onStart: (mode: RevealMode) => void; onClose: () => void
-}) {
-  const dialog = useRef<HTMLDialogElement>(null)
-  const titleId = useId()
-  const [mode, setMode] = useState<RevealMode>('AtEnd')
-  useEffect(() => {
-    const element = dialog.current
-    element?.showModal()
-    return () => element?.close()
-  }, [])
-
-  return (
-    <dialog ref={dialog} aria-labelledby={titleId} onCancel={event => { event.preventDefault(); if (!starting) onClose() }}
-      className="m-auto max-h-[85dvh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl backdrop:bg-slate-900/45 backdrop:backdrop-blur-sm">
-      <h2 id={titleId} className="text-lg font-semibold text-slate-900">{test.title}</h2>
-      <p className="mt-1 text-sm text-slate-600">{test.questionCount} sual · {test.durationMinutes} dəqiqə. Düzgün cavablar nə vaxt göstərilsin?</p>
-      <div className="mt-4 grid gap-3">
-        <ChoiceCard name={`reveal-${test.id}`} checked={mode === 'AtEnd'} onChange={() => setMode('AtEnd')} icon={<EyeOff className="size-5" />}
-          title="İmtahan bitdikdə" description="Real imtahan kimi: cavablar sona qədər dəyişdirilə bilər" />
-        <ChoiceCard name={`reveal-${test.id}`} checked={mode === 'Immediate'} onChange={() => setMode('Immediate')} icon={<Eye className="size-5" />}
-          title="Hər sualdan sonra" description="Hər sualda göz ikonu ilə düzgün cavabı görə bilərsiniz; göstərildikdən sonra variant dəyişmir" />
-      </div>
-      <div className="mt-6 flex justify-end gap-3">
-        <Button variant="secondary" disabled={starting} onClick={onClose}>Ləğv et</Button>
-        <Button loading={starting} onClick={() => onStart(mode)}><Play className="size-4" aria-hidden />İmtahanı başla</Button>
-      </div>
-    </dialog>
-  )
-}

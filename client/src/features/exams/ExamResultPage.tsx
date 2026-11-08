@@ -13,6 +13,7 @@ import { bodyVisuals, optionVisuals, visibleText, visualUrls } from '../../lib/v
 import { useExamResult, type ExamOutcome, type ExamResult, type ExamResultQuestion } from './api'
 import { sourceName, sourceRange } from './examSource'
 import { DimReportCard } from '../dim/DimReportCard'
+import { DimRetakeButton } from '../dim/DimRetakeButton'
 
 type Filter = 'All' | 'Correct' | 'Incorrect' | 'Unanswered'
 
@@ -100,6 +101,9 @@ function ResultView({ result }: { result: ExamResult }) {
                 <RotateCw className="size-4" aria-hidden />
                 Yenidən imtahan ver
               </Link>
+            )}
+            {result.source.documentId === null && (
+              <DimRetakeButton examId={result.id} questionCount={result.questionCount} durationMinutes={result.timeLimitMinutes} />
             )}
           </div>
         }

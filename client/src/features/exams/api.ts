@@ -259,6 +259,8 @@ export function useFinishExam(examId: string) {
       queryClient.setQueryData(queryKeys.exams.result(examId), result)
       queryClient.removeQueries({ queryKey: queryKeys.exams.session(examId) })
       void queryClient.invalidateQueries({ queryKey: queryKeys.exams.all })
+      // A finished DİM attempt changes its test card ("Davam et" → result, attempts used).
+      void queryClient.invalidateQueries({ queryKey: queryKeys.dim.all })
     },
   })
 }

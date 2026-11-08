@@ -170,4 +170,5 @@ public sealed record DimStartedDto(Guid ExamId);
 
 public sealed record DimReportDto(
     Guid ExamId, Guid TestId, string Title, DimTrack Track, DimTestKind Kind, string? GroupCode, string? GroupName,
-    int Correct, int Incorrect, int Unanswered, int Ungraded, decimal? ScorePercent, DimScore Score, string Notice);
+    int Correct, int Incorrect, int Unanswered, int Ungraded, decimal? ScorePercent, DimScore Score, string Notice,
+    int? AttemptLimit, int AttemptsUsed, bool CanStart);

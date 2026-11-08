@@ -39,10 +39,15 @@ public static class DimEndpoints
                 g.Subjects.Select(s => new DimGroupSubjectDto(s.Code, DimCatalog.SubjectName(s.Code), s.Coefficient)).ToList())).ToList()));
     }
 
-    private static async Task<IResult> Tests(DimTrack track, ClaimsPrincipal user, AppDbContext db, TimeProvider clock, CancellationToken ct)
+    private static async Task<IResult> Tests(
+        DimTrack track, ClaimsPrincipal user, AppDbContext db, TimeProvider clock, IOptions<ExamOptions> options, CancellationToken ct)
     {
         var userId = user.GetUserId();
         var now = clock.GetUtcNow();
+        // An attempt whose time ran out is graded first, so its card does not keep offering "Davam et".
+        if (await ExamEndpoints.LoadActiveAsync(db, userId, ct) is { } active)
+            await ExamEndpoints.FinalizeIfExpiredAsync(db, active, now, options.Value, ct);
+
         var tests = await db.DimTests.AsNoTracking()
             .Where(t => t.Track == track && t.IsPublished)
             .OrderByDescending(t => t.CreatedAt)
@@ -165,9 +170,11 @@ public static class DimEndpoints
             .Select(q => new DimGradedItem(items[q.Position].Subject, items[q.Position].Topic, q.Outcome ?? ExamEngine.OutcomeOf(q)))
             .ToList();
         var test = attempt.Test;
+        var used = await db.DimAttempts.CountAsync(a => a.TestId == test.Id && a.UserId == userId, ct);
         return TypedResults.Ok(new DimReportDto(exam.Id, test.Id, test.Title, test.Track, test.Kind, test.GroupCode, DimCatalog.Group(test.GroupCode)?.Name,
             exam.CorrectCount ?? 0, exam.IncorrectCount ?? 0, exam.UnansweredCount ?? 0, exam.UngradedCount ?? 0, exam.ScorePercent,
-            DimScoring.Score(test.Track, test.GroupCode, graded), ClosedOnlyNotice));
+            DimScoring.Score(test.Track, test.GroupCode, graded), ClosedOnlyNotice,
+            test.AttemptLimit, used, test.IsPublished && IsOpen(test, clock.GetUtcNow())));
     }
 
     private static IResult Problem(int status, string detail, Dictionary<string, object?>? extensions = null) =>

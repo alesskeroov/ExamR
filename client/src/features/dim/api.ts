@@ -67,6 +67,11 @@ export interface DimReport {
     weakTopics: { subject: string; topic: string; total: number; correct: number; accuracy: number }[]
   }
   notice: string
+  /** null = unlimited attempts. */
+  attemptLimit: number | null
+  attemptsUsed: number
+  /** Test still published and inside its availability window. */
+  canStart: boolean
 }
 
 export function useDimCatalog() {
@@ -81,6 +86,8 @@ export function useDimTests(track: DimTrack) {
   return useQuery({
     queryKey: queryKeys.dim.tests(track),
     queryFn: () => api.get<DimTest[]>(`/dim/tests?track=${track}`),
+    // Attempts can end by time on the server while this page is not open; always re-check on visit.
+    staleTime: 0,
   })
 }
 
