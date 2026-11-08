@@ -4,7 +4,7 @@ import { Button } from '../../components/common/Button'
 import { EmptyState } from '../../components/common/EmptyState'
 import { useAdminUsage, useUpdateUsage, type AdminUsage, type UsageLimits } from './api'
 
-const fields = [ ['monthlyUploads', 'Sənəd'], ['monthlyExams', 'İmtahan'], ['monthlyBattles', 'Battle'], ['monthlyAiRequests', 'AI sorğusu'] ] as const
+const fields = [ ['monthlyUploads', 'Sənəd'], ['monthlyExams', 'İmtahan'], ['monthlyBattles', 'Battle'] ] as const
 
 export function UsageAdmin() {
   const [query, setQuery] = useState('')
@@ -24,7 +24,7 @@ export function UsageAdmin() {
       <thead className="bg-slate-50"><tr><th className="p-3">İstifadəçi</th>{fields.map(([key, label]) => <th key={key} className="p-3">{label}</th>)}<th className="p-3">Limitlər</th></tr></thead>
       <tbody>{users.data.items.map(person => <tr key={person.id} className="border-t border-slate-100">
         <td className="p-3"><p className="font-medium">{person.nickname}{person.isAdmin ? ' · Admin' : ''}</p><p className="text-xs text-slate-500">{person.email}</p></td>
-        {person.usage.items.map(item => <td key={item.kind} className="whitespace-nowrap p-3">{item.used} / {item.limit ?? '∞'}</td>)}
+        {person.usage.items.filter(item => item.kind !== 'AiRequest').map(item => <td key={item.kind} className="whitespace-nowrap p-3">{item.used} / {item.limit ?? '∞'}</td>)}
         <td className="p-3"><Button variant="secondary" onClick={() => setSelected(person)}>Redaktə et</Button></td>
       </tr>)}</tbody>
     </table></div>}

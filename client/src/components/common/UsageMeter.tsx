@@ -1,4 +1,4 @@
-import { useUsage, useUsageLimit, type UsageKind } from '../../features/usage/api'
+import { useUsageLimit, type UsageKind } from '../../features/usage/api'
 import { Alert } from './Alert'
 
 const labels: Record<UsageKind, string> = { Upload: 'sənəd', Exam: 'imtahan', Battle: 'battle', AiRequest: 'AI sorğusu' }
@@ -24,9 +24,9 @@ export function UsageMeter({ kind }: { kind: UsageKind }) {
 }
 
 export function UsageCard() {
-  const usage = useUsage()
+  const kinds: UsageKind[] = ['Upload', 'Exam', 'Battle']
   return <section aria-label="Bu ayın limitləri" className="my-6 rounded-xl border border-slate-200 bg-white p-5">
     <h2 className="mb-3 font-semibold">Bu ayın limitləri</h2>
-    <div className="grid gap-4 sm:grid-cols-2">{(usage.data?.items.map(x => x.kind) ?? ['Upload', 'Exam', 'Battle', 'AiRequest'] as UsageKind[]).map(kind => <UsageMeter key={kind} kind={kind} />)}</div>
+    <div className="grid gap-4 sm:grid-cols-2">{kinds.map(kind => <UsageMeter key={kind} kind={kind} />)}</div>
   </section>
 }

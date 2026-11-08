@@ -278,7 +278,7 @@ function TutorWorkspace() {
           <div className="p-6"><Alert title="Söhbət tapılmadı" action={<button type="button" onClick={newChat} className="text-sm font-semibold underline">Yeni söhbət</button>}>Silinmiş ola bilər və ya sizə aid deyil.</Alert></div>
         ) : session && tab !== 'learn' ? (
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-            <UsageMeter kind="AiRequest" />
+            {usage.data?.enabled && <UsageMeter kind="AiRequest" />}
             {tab === 'quiz' && <TutorQuiz key={chatId} chatId={chatId} disabled={monthly.blocked || usage.data?.enabled === false} />}
             {tab === 'shared' && <TutorShared key={chatId} chatId={chatId} disabled={monthly.blocked || usage.data?.enabled === false} />}
             {tab === 'last' && <TutorLastMinute key={chatId} chatId={chatId} disabled={monthly.blocked || usage.data?.enabled === false} />}
@@ -312,7 +312,7 @@ function TutorWorkspace() {
                 </div>
               </div>
             )}
-            <UsageMeter kind="AiRequest" />
+            {usage.data?.enabled && <UsageMeter kind="AiRequest" />}
             <Composer key={chatId} disabled={monthly.blocked || !session || usage.data?.enabled === false} streaming={streaming} onSend={text => send(text)} onStop={stop} />
           </>
         )}
