@@ -117,6 +117,8 @@ body { background: var(--app-background); overflow-wrap: anywhere; }
 :root[data-theme="dark"] [class~="text-rose-900"] { color: #ffadc0; }
 :root[data-theme="dark"] [class~="text-sky-700"] { color: #9dd3f4; }
 :root[data-theme="dark"] [class~="text-slate-400"] { color: #8e9c95; }
+/* Placeholders use Tailwind's bluish slate by default; in dark mode they follow the theme's muted grey-green. */
+:root[data-theme="dark"] :where(input, textarea)::placeholder { color: #8e9c95; opacity: 1; }
 :root[data-theme="dark"] [class~="text-slate-500"] { color: #a3b0a9; }
 :root[data-theme="dark"] [class~="text-slate-600"] { color: #b5c1bb; }
 :root[data-theme="dark"] [class~="text-slate-700"] { color: #cfd8d3; }

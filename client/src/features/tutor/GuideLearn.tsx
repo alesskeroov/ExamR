@@ -2,7 +2,7 @@ import { Check, Eye, Layers, Play, RotateCcw } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Alert } from '../../components/common/Alert'
 import { cn } from '../../lib/utils'
-import { topicStats, useReviewCard, type CardDeck, type CardGrade, type LearnScope, type StudyCard } from './api'
+import { studyCards, topicStats, useReviewCard, type CardDeck, type CardGrade, type LearnScope, type StudyCard } from './api'
 import { FlipCard } from './FlipCard'
 import { TopicPicker } from './TopicPicker'
 import { Frame } from './TutorShared'
@@ -35,9 +35,10 @@ function shuffle<T>(items: T[]) {
 }
 
 function inScope(deck: CardDeck, scope: LearnScope) {
-  if (scope.kind === 'weak') return deck.cards.filter(c => c.weak)
-  if (scope.kind === 'topic') return deck.cards.filter(c => c.topicKey === scope.key)
-  return deck.cards
+  const cards = studyCards(deck)
+  if (scope.kind === 'weak') return cards.filter(c => c.weak)
+  if (scope.kind === 'topic') return cards.filter(c => c.topicKey === scope.key)
+  return cards
 }
 
 /** "Öyrən": flashcards the student grades themself. No dates: a card is done once it is mastered ("Bilirdim" in a row). */
@@ -80,7 +81,7 @@ export function GuideLearn({ chatId, deck, scope, onScope, onSource }: Props) {
       <div className="flex flex-col gap-2">
         <div role="radiogroup" aria-label="Nəyi öyrənək?" className="grid grid-cols-3 gap-2">
           <ScopeChip active={scope.kind === 'all'} onClick={() => onScope({ kind: 'all' })}>Hamısı</ScopeChip>
-          <ScopeChip active={scope.kind === 'weak'} onClick={() => onScope({ kind: 'weak' })}>Zəif · {deck.cards.filter(c => c.weak).length}</ScopeChip>
+          <ScopeChip active={scope.kind === 'weak'} onClick={() => onScope({ kind: 'weak' })}>Zəif · {studyCards(deck).filter(c => c.weak).length}</ScopeChip>
           <ScopeChip active={scope.kind === 'mixed'} onClick={() => onScope({ kind: 'mixed' })}>Qarışıq</ScopeChip>
         </div>
         <TopicPicker topics={deck.topics} stats={stats} value={scope.kind === 'topic' ? scope.key : ''} allLabel="Mövzu seç…"

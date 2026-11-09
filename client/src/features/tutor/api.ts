@@ -270,8 +270,11 @@ export function useDeleteMaterial(chatId: string) {
 // ---------- Öyrənmə bələdçisi (no AI) ----------
 
 export type CardGrade = 'Again' | 'Hard' | 'Good'
-/** Question = open question; Term = "X — definition" from an answer; List = "…:" with items; Test = test question and its correct option. */
-export type CardKind = 'Question' | 'Term' | 'List' | 'Test' | 'Table'
+/**
+ * Question = open question; Term = "X — definition" from an answer; List = "…:" with items; Test = test question and its
+ * correct option; Table = a table row or comparison; Custom = a card the student wrote.
+ */
+export type CardKind = 'Question' | 'Term' | 'List' | 'Test' | 'Table' | 'Custom'
 /**
  * One flashcard and the student's state. items: list items (List), terms explained in the answer (Question) or the
  * explanation (Test); others: wrong test options; source: the document's question number. weak: last answered "Bilmirdim"/"Qismən".
@@ -279,6 +282,10 @@ export type CardKind = 'Question' | 'Term' | 'List' | 'Test' | 'Table'
 export interface StudyCard {
   id: string; kind: CardKind; topicKey: string; front: string; back: string; items: string[]; others: string[]
   source: number; page: number | null; chunkOrdinal: number; isSection: boolean; section: string | null; seen: boolean; streak: number; mastered: boolean; weak: boolean
+  /** The extraction is unsure of this card ("Yoxlanmalı"). */
+  needsReview: boolean
+  /** own: written by the student; edited: a document card the student rewrote; hidden: kept out of study by the student. */
+  own: boolean; edited: boolean; hidden: boolean
 }
 export interface CardTopic { key: string; title: string; notes: string | null }
 /** The student's private deck: topics in document order and all cards. required = "Bilirdim" in a row to master a card. */
@@ -303,11 +310,56 @@ export function useReviewCard(chatId: string) {
   })
 }
 
+export interface CardInput { front: string; back: string; topicKey?: string | null }
+
+/** Replaces one card in the cached deck (or adds it), so every tab shows the change without a refetch. */
+function patchCard(card: StudyCard) {
+  return (deck: CardDeck | undefined) => deck && {
+    ...deck,
+    topics: deck.topics.some(t => t.key === card.topicKey) ? deck.topics : [...deck.topics, { key: card.topicKey, title: 'Mənim kartlarım', notes: null }],
+    cards: deck.cards.some(c => c.id === card.id) ? deck.cards.map(c => c.id === card.id ? card : c) : [...deck.cards, card],
+  }
+}
+
+/** Creates an own card (no id) or rewrites a card (own or from the document). */
+export function useSaveCard(chatId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...input }: CardInput & { id?: string }) => id
+      ? api.put<StudyCard>(`/learning/chats/${chatId}/cards/${encodeURIComponent(id)}`, input)
+      : api.post<StudyCard>(`/learning/chats/${chatId}/cards`, input),
+    onSuccess: card => client.setQueryData<CardDeck>(queryKeys.tutor.deck(chatId), patchCard(card)),
+  })
+}
+
+export function useHideCard(chatId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, hidden }: { id: string; hidden: boolean }) =>
+      api.put<StudyCard>(`/learning/chats/${chatId}/cards/${encodeURIComponent(id)}/hidden`, { hidden }),
+    onSuccess: card => client.setQueryData<CardDeck>(queryKeys.tutor.deck(chatId), patchCard(card)),
+  })
+}
+
+/** Deletes for good: an own card is removed, a document card leaves this student's deck. */
+export function useDeleteCard(chatId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/learning/chats/${chatId}/cards/${encodeURIComponent(id)}`),
+    onSuccess: (_, id) => client.setQueryData<CardDeck>(queryKeys.tutor.deck(chatId), deck => deck && { ...deck, cards: deck.cards.filter(c => c.id !== id) }),
+  })
+}
+
+/** Cards the student studies: hidden ones are left out of Öyrən and the progress counts. */
+export function studyCards(deck: CardDeck) {
+  return deck.cards.filter(c => !c.hidden)
+}
+
 export interface TopicStats { total: number; mastered: number; weak: number; seen: number }
 /** Card counts per topic key, for progress bars and the topic picker. */
 export function topicStats(deck: CardDeck) {
   const stats = new Map<string, TopicStats>(deck.topics.map(t => [t.key, { total: 0, mastered: 0, weak: 0, seen: 0 }]))
-  for (const card of deck.cards) {
+  for (const card of studyCards(deck)) {
     const s = stats.get(card.topicKey)
     if (!s) continue
     s.total += 1

@@ -63,8 +63,9 @@ public static class CardMastery
     private static string Sha(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
 }
 
-/// <summary>Question = open question and its answer; Term = "X — definition" inside an answer; List = "…:" and its items; Test = test question and its correct option.</summary>
-public enum CardKind { Question, Term, List, Test, Table }
+/// <summary>Question = open question and its answer; Term = "X — definition" inside an answer; List = "…:" and its items; Test = test question and its correct option;
+/// Table = one row (or a two-column comparison) of a table; Custom = a card the student wrote.</summary>
+public enum CardKind { Question, Term, List, Test, Table, Custom }
 
 /// <summary>
 /// One flashcard. Front/Back are the two sides; Items = list items (List) or the terms explained in the answer (Question);
@@ -72,7 +73,7 @@ public enum CardKind { Question, Term, List, Test, Table }
 /// Section = the subsection heading the card was taken from, when it is narrower than the topic.
 /// </summary>
 public sealed record StudyCardItem(string Id, CardKind Kind, string TopicKey, string Front, string Back, IReadOnlyList<string> Items,
-    IReadOnlyList<string> Others, int Source, int? Page, int ChunkOrdinal, bool IsSection = false, string? Section = null);
+    IReadOnlyList<string> Others, int Source, int? Page, int ChunkOrdinal, bool IsSection = false, string? Section = null, bool NeedsReview = false);
 
 public sealed record CardTopic(string Key, string Title, string? Notes = null);
 
@@ -87,7 +88,7 @@ public sealed record TestQuestion(int Number, string Text, string Correct, IRead
 /// </summary>
 public static partial class CardDeckBuilder
 {
-    public const string Version = "cards5";
+    public const string Version = "cards6";
     public const int MaxCards = 2000;
     private const int MaxTermWords = 6;
     private const int MaxTermLength = 70;
@@ -110,7 +111,7 @@ public static partial class CardDeckBuilder
         }
         var cards = new List<StudyCardItem>();
         var seen = new HashSet<string>();
-        void Add(StudyCardItem card) { if (cards.Count < MaxCards && seen.Add(card.Id)) cards.Add(card); }
+        void Add(StudyCardItem card) { if (cards.Count < MaxCards && seen.Add(card.Id)) cards.Add(NotesCardBuilder.Review(card)); }
 
         foreach (var q in questions)
         {
@@ -143,6 +144,8 @@ public static partial class CardDeckBuilder
         var term = m.Groups["term"].Value.Trim().TrimEnd('.', ',');
         var definition = m.Groups["def"].Value.Trim();
         if (term.Length < 2 || term.Length > MaxTermLength || definition.Length < MinDefinitionLength) return null;
+        // ", burada …" (a formula the text extraction lost) and "Bəli, amma …" (an answer) are not definitions.
+        if (!char.IsLetterOrDigit(definition[0]) || NotDefinitionStart().IsMatch(definition)) return null;
         if (term.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length > MaxTermWords) return null;
         // "Beləliklə – …", "Məsələn – …" are connectives, not terms.
         if (Connectives.Contains(term.ToLowerInvariant())) return null;
@@ -273,6 +276,9 @@ public static partial class CardDeckBuilder
     [GeneratedRegex(@"(?:ir|ır|ur|ür|(?<!l)ar|(?<!l)ər)$")]
     private static partial Regex VerbEnding();
 
+    [GeneratedRegex(@"^(?:bəli|xeyr|yox|hə|yes|no|да|нет)(?![\p{L}\d])", RegexOptions.IgnoreCase)]
+    private static partial Regex NotDefinitionStart();
+
     [GeneratedRegex(@"^\s*(?:[-•▪●◦*]|\d{1,2}[.)]|[a-zA-Z][.)])\s*")]
     private static partial Regex ItemMark();
 
@@ -311,8 +317,7 @@ public sealed class CardDeckService(AppDbContext db, OpenQuestionIndexer indexer
             // Question-and-answer files give question cards. Lecture notes (and files whose few "questions" are really
             // section headings) give section, term, list and table cards; with few questions the richer deck wins.
             // Only explicit source questions use the Q&A path. Never choose a deck because it contains more cards.
-            var questions = index.Questions.Where(q => NotesCardBuilder.ExplicitQuestion(q.Text)).ToList();
-            if (index.Supported && questions.Count >= QaQuestions && questions.Count >= index.Questions.Count * 0.8)
+            if (QuestionAnswer(index) is { } questions)
                 deck = CardDeckBuilder.FromOpenQuestions(questions);
             else
                 deck = NotesCardBuilder.Build(await ParagraphsAsync(learningId, learning.StoredFileName, learning.Format, ct));
@@ -324,6 +329,44 @@ public sealed class CardDeckService(AppDbContext db, OpenQuestionIndexer indexer
         return (deck, null);
     }
 
+    /// <summary>The questions of a question-and-answer file, or null when the document is read as lecture notes.</summary>
+    public static List<IndexedQuestion>? QuestionAnswer(OpenQuestionIndex index)
+    {
+        if (!index.Supported) return null;
+        var questions = index.Questions.Where(q => NotesCardBuilder.ExplicitQuestion(q.Text)).ToList();
+        if (questions.Count >= QaQuestions && questions.Count >= index.Questions.Count * 0.8) return questions;
+        // Exam topic lists ("1. Süni intellekt, tərifləri və əsas məqsədləri.") ask without question words. They are
+        // numbered 1, 2, 3 … with a real answer each, unlike section numbers ("1 Annotasiya", "3.1 …") of lecture notes.
+        var all = index.Questions;
+        var numbers = all.Select(q => q.Number).Distinct().Order().ToList();
+        if (all.Count < QaQuestions || numbers[0] > 2) return null;
+        var steps = numbers.Zip(numbers.Skip(1)).Count(p => p.Second == p.First + 1);
+        return steps >= (numbers.Count - 1) * 0.9 && all.Average(q => q.Answer.Length) >= MinTopicAnswer ? all.ToList() : null;
+    }
+
+    /// <summary>Average answer length (characters) that makes a numbered list of statements a list of exam questions.</summary>
+    private const int MinTopicAnswer = 150;
+
+    /// <summary>Test cards from the exam parser's result; <paramref name="text"/> is the document text, read only for topic headings.</summary>
+    public static StudyDeck TestDeck(ParseResult result, string text)
+    {
+        var tests = result.Questions.Where(q => q.CorrectIndex is int i && i >= 0 && i < q.Options.Count)
+            .Select(q => new TestQuestion(q.Number, q.Text, q.Options[q.CorrectIndex!.Value].Text,
+                q.Options.Where((_, i) => i != q.CorrectIndex).Select(o => o.Text).ToList(), q.Explanation, q.Anchor?.PageNumber))
+            .ToList();
+        return CardDeckBuilder.FromTests(tests, text);
+    }
+
+    /// <summary>The document's paragraphs in reading order, each with the chunk it was stored in.</summary>
+    public static IReadOnlyList<DocParagraph> Paragraphs(ExtractedText text, ChunkingOptions chunking)
+    {
+        var ordinals = new Dictionary<int, int>();
+        foreach (var chunk in LearningChunker.Chunk(text.Blocks, chunking))
+            for (var paragraph = chunk.ParagraphFrom; paragraph <= chunk.ParagraphTo; paragraph++)
+                ordinals.TryAdd(paragraph, chunk.Ordinal);
+        return text.Blocks.Select(b => new DocParagraph(b.Text, b.Page, ordinals.GetValueOrDefault(b.Paragraph)) { HeadingLevel = b.HeadingLevel }).ToList();
+    }
+
     private async Task<StudyDeck?> TestsAsync(Guid learningId, string storedFileName, string format, CancellationToken ct)
     {
         try
@@ -331,13 +374,9 @@ public sealed class CardDeckService(AppDbContext db, OpenQuestionIndexer indexer
             var docx = string.Equals(format, "docx", StringComparison.OrdinalIgnoreCase);
             var result = await ReadFileAsync(storedFileName,
                 (file, token) => docx ? docxParser.Parse(file, token) : parser.Parse(file, token), ct);
-            var tests = result.Questions.Where(q => q.CorrectIndex is int i && i >= 0 && i < q.Options.Count)
-                .Select(q => new TestQuestion(q.Number, q.Text, q.Options[q.CorrectIndex!.Value].Text,
-                    q.Options.Where((_, i) => i != q.CorrectIndex).Select(o => o.Text).ToList(), q.Explanation, q.Anchor?.PageNumber))
-                .ToList();
             var chunks = await db.Set<LearningDocumentChunk>().AsNoTracking().Where(c => c.LearningDocumentId == learningId)
                 .OrderBy(c => c.Ordinal).Select(c => c.Text).ToListAsync(ct);
-            return CardDeckBuilder.FromTests(tests, string.Join("\n", chunks));
+            return TestDeck(result, string.Join("\n", chunks));
         }
         catch (Exception ex) when (ex is IOException or OperationCanceledException && !ct.IsCancellationRequested)
         {
@@ -355,13 +394,7 @@ public sealed class CardDeckService(AppDbContext db, OpenQuestionIndexer indexer
                 var text = LearningTextExtractor.Extract(file, "." + format.TrimStart('.'), options.Value.Limits, token);
                 if (text.Failure != TextExtractionFailure.None || text.Blocks.Count == 0)
                     throw new InvalidDataException("Document text extraction failed.");
-                var chunks = LearningChunker.Chunk(text.Blocks, options.Value.Chunking);
-                var ordinals = new Dictionary<int, int>();
-                foreach (var chunk in chunks)
-                    for (var paragraph = chunk.ParagraphFrom; paragraph <= chunk.ParagraphTo; paragraph++)
-                        ordinals.TryAdd(paragraph, chunk.Ordinal);
-                return (IReadOnlyList<DocParagraph>)text.Blocks
-                    .Select(b => new DocParagraph(b.Text, b.Page, ordinals.GetValueOrDefault(b.Paragraph))).ToList();
+                return Paragraphs(text, options.Value.Chunking);
             }, ct);
         }
         catch (Exception) when (!ct.IsCancellationRequested)

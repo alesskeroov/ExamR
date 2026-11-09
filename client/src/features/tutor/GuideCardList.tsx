@@ -1,10 +1,11 @@
-import { ChevronLeft, ChevronRight, ListChecks, Search } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ListChecks, Plus, Search } from 'lucide-react'
 import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { EmptyState } from '../../components/common/EmptyState'
 import { cn } from '../../lib/utils'
 import { topicStats, type CardDeck, type CardKind, type StudyCard } from './api'
+import { CardEditor } from './CardEditor'
 import { CardViewer } from './CardViewer'
-import { KindAccent, KindBadge, KindPrompt } from './FlipCard'
+import { KindAccent, KindBadge, KindPrompt, ReviewBadge } from './FlipCard'
 import { TopicPicker } from './TopicPicker'
 import { Frame } from './TutorShared'
 
@@ -16,6 +17,8 @@ const statuses: { id: Status; label: string }[] = [
   { id: 'weak', label: 'Zəif' },
   { id: 'mastered', label: 'Mənimsənilib' },
 ]
+/** Views next to the study status: cards to check, and cards the student hid (shown only here). */
+type View = 'study' | 'review' | 'hidden'
 const kinds: { id: CardKind | 'all'; label: string }[] = [
   { id: 'all', label: 'Bütün növlər' },
   { id: 'Question', label: 'Suallar' },
@@ -23,6 +26,7 @@ const kinds: { id: CardKind | 'all'; label: string }[] = [
   { id: 'List', label: 'Siyahılar' },
   { id: 'Table', label: 'Cədvəllər' },
   { id: 'Test', label: 'Testlər' },
+  { id: 'Custom', label: 'Mənim kartlarım' },
 ]
 const statusDot: Record<Exclude<Status, 'all'>, string> = {
   new: 'bg-slate-300', learning: 'bg-amber-400', weak: 'bg-rose-500', mastered: 'bg-emerald-500',
@@ -38,16 +42,19 @@ function statusOf(card: StudyCard): Exclude<Status, 'all'> {
 const fold = (text: string) => text.toLocaleLowerCase('az')
 
 interface Props {
+  chatId: string
   deck: CardDeck
   onSource: (card: StudyCard) => void
 }
 
 /** "Kartlarım": every card as a tile; a tap opens it large to read and flip. Filters, search and pages. Cards are private. */
-export function GuideCardList({ deck, onSource }: Props) {
+export function GuideCardList({ chatId, deck, onSource }: Props) {
   const [term, setTerm] = useState('')
   const [topic, setTopic] = useState('')
   const [kind, setKind] = useState<CardKind | 'all'>('all')
   const [status, setStatus] = useState<Status>('all')
+  const [view, setView] = useState<View>('study')
+  const [creating, setCreating] = useState(false)
   const [page, setPage] = useState(0)
   const [viewing, setViewing] = useState<number | null>(null)
   const top = useRef<HTMLDivElement>(null)
@@ -55,11 +62,15 @@ export function GuideCardList({ deck, onSource }: Props) {
   const topicTitle = useMemo(() => new Map(deck.topics.map(t => [t.key, t.title])), [deck.topics])
 
   const query = fold(term.trim())
-  const shown = deck.cards.filter(c =>
+  const inView = (c: StudyCard) => view === 'hidden' ? c.hidden : !c.hidden && (view === 'study' || c.needsReview)
+  const visible = deck.cards.filter(inView)
+  const shown = visible.filter(c =>
     (!topic || c.topicKey === topic)
     && (kind === 'all' || c.kind === kind)
     && (status === 'all' || statusOf(c) === status)
     && (!query || fold(c.front).includes(query) || fold(c.back).includes(query) || c.items.some(i => fold(i).includes(query))))
+  const reviewCount = deck.cards.filter(c => !c.hidden && c.needsReview).length
+  const hiddenCount = deck.cards.filter(c => c.hidden).length
   const pages = Math.max(1, Math.ceil(shown.length / pageSize))
   const current = Math.min(page, pages - 1)
   const pageCards = shown.slice(current * pageSize, current * pageSize + pageSize)
@@ -76,7 +87,22 @@ export function GuideCardList({ deck, onSource }: Props) {
           <h2 className="text-base font-semibold">Kartlarım</h2>
           <p className="mt-0.5 text-sm text-slate-600">Karta toxun — böyük açılsın, sonra çevir. Kartlar yalnız sənə görünür.</p>
         </div>
+        <button type="button" onClick={() => setCreating(true)}
+          className="btn-primary ml-auto inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl px-3 text-sm font-semibold sm:px-4">
+          <Plus className="size-4" aria-hidden /><span className="sr-only sm:not-sr-only">Kart əlavə et</span>
+        </button>
       </header>
+
+      {(reviewCount > 0 || hiddenCount > 0 || view !== 'study') && (
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Görünüş">
+          <Chip active={view === 'study'} onClick={() => filter(setView)('study')}>Öyrənilən kartlar</Chip>
+          {(reviewCount > 0 || view === 'review') && <Chip active={view === 'review'} onClick={() => filter(setView)('review')}>Yoxlanmalı · {reviewCount}</Chip>}
+          {(hiddenCount > 0 || view === 'hidden') && <Chip active={view === 'hidden'} onClick={() => filter(setView)('hidden')}>Gizlədilən · {hiddenCount}</Chip>}
+        </div>
+      )}
+      {view === 'review' && (
+        <p className="text-sm text-slate-600">Bu kartlar avtomatik çıxarılıb və səhv ola bilər. Kartı açın: düzəldin, gizlədin və ya silin.</p>
+      )}
 
       <div className="grid gap-2 sm:grid-cols-[1fr_minmax(0,18rem)]">
         <label className="tutor-border flex h-10 min-w-0 items-center gap-2 rounded-xl border bg-white px-3">
@@ -94,7 +120,7 @@ export function GuideCardList({ deck, onSource }: Props) {
         ))}
         {presentKinds.length > 2 && <span className="tutor-border mx-1 w-px shrink-0 self-stretch border-l" aria-hidden />}
         {statuses.map(s => {
-          const count = s.id === 'all' ? deck.cards.length : deck.cards.filter(c => statusOf(c) === s.id).length
+          const count = s.id === 'all' ? visible.length : visible.filter(c => statusOf(c) === s.id).length
           return <Chip key={s.id} active={status === s.id} onClick={() => filter(setStatus)(s.id)}>{s.label} · {count}</Chip>
         })}
       </div>
@@ -116,9 +142,10 @@ export function GuideCardList({ deck, onSource }: Props) {
       )}
 
       {viewing != null && (
-        <CardViewer cards={shown} index={viewing} required={deck.required} topicTitle={key => topicTitle.get(key) ?? ''}
+        <CardViewer chatId={chatId} deck={deck} cards={shown} index={Math.min(viewing, shown.length - 1)} required={deck.required} topicTitle={key => topicTitle.get(key) ?? ''}
           onIndex={next => { setViewing(next); setPage(Math.floor(next / pageSize)) }} onClose={() => setViewing(null)} onSource={onSource} />
       )}
+      {creating && <CardEditor chatId={chatId} deck={deck} topicKey={topic} onClose={() => setCreating(false)} />}
     </Frame>
   )
 }
@@ -133,6 +160,7 @@ function CardTile({ card, topic, onOpen }: { card: StudyCard; topic: string; onO
         <p className="line-clamp-1 min-w-0 flex-1 text-xs font-semibold text-slate-500" title={card.section ? `${topic} › ${card.section}` : topic}>{card.section ?? topic}</p>
         <KindBadge card={card} />
       </div>
+      <div className="mt-1.5 flex justify-end empty:hidden"><ReviewBadge card={card} /></div>
       <p className="mt-3 text-[11px] font-semibold tracking-[.1em] text-slate-400 uppercase"><KindPrompt card={card} /></p>
       <p className="mt-1 line-clamp-4 text-[15px] leading-snug font-semibold text-slate-900">{card.front}</p>
       <span className="mt-auto flex items-center gap-1.5 pt-3 text-xs text-slate-500">

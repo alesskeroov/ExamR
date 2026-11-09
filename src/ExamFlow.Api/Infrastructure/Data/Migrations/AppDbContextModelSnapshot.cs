@@ -1123,6 +1123,50 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.ToTable("LearningAiUsage", (string)null);
                 });
 
+            modelBuilder.Entity("ExamFlow.Api.Features.Learning.LearningCardOverride", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Back")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("CardId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<bool>("Deleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Front")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<bool>("Hidden")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("LearningDocumentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LearningDocumentId");
+
+                    b.HasIndex("UserId", "LearningDocumentId", "CardId")
+                        .IsUnique();
+
+                    b.ToTable("LearningCardOverrides", (string)null);
+                });
+
             modelBuilder.Entity("ExamFlow.Api.Features.Learning.LearningCardState", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1609,6 +1653,47 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("LearningTopicProgress", (string)null);
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Learning.LearningUserCard", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Back")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Front")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("LearningDocumentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TopicKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LearningDocumentId");
+
+                    b.HasIndex("UserId", "LearningDocumentId");
+
+                    b.ToTable("LearningUserCards", (string)null);
                 });
 
             modelBuilder.Entity("ExamFlow.Api.Features.Questions.AnswerOption", b =>
@@ -2530,6 +2615,21 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("ExamFlow.Api.Features.Learning.LearningCardOverride", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Learning.LearningDocument", null)
+                        .WithMany()
+                        .HasForeignKey("LearningDocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ExamFlow.Api.Features.Auth.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ExamFlow.Api.Features.Learning.LearningCardState", b =>
                 {
                     b.HasOne("ExamFlow.Api.Features.Learning.LearningDocument", null)
@@ -2618,6 +2718,21 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.HasOne("ExamFlow.Api.Features.Learning.LearningDocument", null)
                         .WithMany()
                         .HasForeignKey("LearningDocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Learning.LearningUserCard", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Learning.LearningDocument", null)
+                        .WithMany()
+                        .HasForeignKey("LearningDocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ExamFlow.Api.Features.Auth.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

@@ -9,7 +9,11 @@ using UglyToad.PdfPig.DocumentLayoutAnalysis.TextExtractor;
 namespace ExamFlow.Parsing;
 
 /// <summary>One paragraph of source text with its position: page for PDF, section heading for DOCX/TXT.</summary>
-public sealed record TextBlock(int Paragraph, int? Page, string? Section, string Text);
+public sealed record TextBlock(int Paragraph, int? Page, string? Section, string Text)
+{
+    /// <summary>DOCX: the outline level of a heading paragraph (1 = top, 0 = the document title), from its Word style; null for body text and PDF.</summary>
+    public int? HeadingLevel { get; init; }
+}
 
 public enum TextExtractionFailure { None, Unreadable, Encrypted, NoText, TooLarge }
 
@@ -81,6 +85,7 @@ public static partial class LearningTextExtractor
     public static ExtractedText FromDocx(Stream docx, TextExtractionLimits limits, CancellationToken ct = default)
     {
         XDocument xml;
+        XDocument? styles = null;
         try
         {
             using var archive = new ZipArchive(docx, ZipArchiveMode.Read, leaveOpen: true);
@@ -89,8 +94,14 @@ public static partial class LearningTextExtractor
             if (archive.Entries.Sum(e => e.Length) > limits.MaxDocxExpandedBytes) return ExtractedText.Failed(TextExtractionFailure.TooLarge);
             var entry = archive.GetEntry("word/document.xml");
             if (entry is null) return ExtractedText.Failed(TextExtractionFailure.Unreadable);
-            using var bounded = new BoundedStream(entry.Open(), limits.MaxDocxExpandedBytes);
-            xml = XDocument.Load(XmlReader.Create(bounded, new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null }));
+            var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
+            using (var bounded = new BoundedStream(entry.Open(), limits.MaxDocxExpandedBytes))
+                xml = XDocument.Load(XmlReader.Create(bounded, settings));
+            if (archive.GetEntry("word/styles.xml") is { } stylesEntry)
+            {
+                using var bounded = new BoundedStream(stylesEntry.Open(), limits.MaxDocxExpandedBytes);
+                styles = XDocument.Load(XmlReader.Create(bounded, settings));
+            }
         }
         catch (InvalidDataException ex) when (ex.Message == BoundedStream.LimitMessage) { return ExtractedText.Failed(TextExtractionFailure.TooLarge); }
         catch { return ExtractedText.Failed(TextExtractionFailure.Unreadable); }
@@ -98,16 +109,17 @@ public static partial class LearningTextExtractor
         var body = xml.Root?.Element(W + "body");
         if (body is null) return ExtractedText.Failed(TextExtractionFailure.Unreadable);
         var blocks = new List<TextBlock>();
+        var styleInfo = StyleInfo(styles);
         string? section = null;
         long characters = 0;
         var tooLarge = false;
-        void Add(string text, bool heading)
+        void Add(string text, int? headingLevel)
         {
             if (text.Length == 0 || tooLarge) return;
-            if (heading) section = text.Length > 200 ? text[..200] : text;
+            if (headingLevel is not null) section = text.Length > 200 ? text[..200] : text;
             characters += text.Length;
             if (characters > limits.MaxCharacters) { tooLarge = true; return; }
-            blocks.Add(new TextBlock(blocks.Count + 1, null, section, text));
+            blocks.Add(new TextBlock(blocks.Count + 1, null, section, text) { HeadingLevel = headingLevel });
         }
 
         // Body order: paragraphs, tables (one block per row) and content controls; a table of contents is skipped.
@@ -118,9 +130,14 @@ public static partial class LearningTextExtractor
                 ct.ThrowIfCancellationRequested();
                 if (element.Name == W + "p")
                 {
-                    var style = element.Element(W + "pPr")?.Element(W + "pStyle")?.Attribute(W + "val")?.Value ?? "";
-                    if (style.StartsWith("TOC", StringComparison.OrdinalIgnoreCase)) continue;
-                    Add(ParagraphText(element), style.StartsWith("Heading", StringComparison.OrdinalIgnoreCase) || style.Equals("Title", StringComparison.OrdinalIgnoreCase));
+                    var properties = element.Element(W + "pPr");
+                    var style = properties?.Element(W + "pStyle")?.Attribute(W + "val")?.Value ?? "";
+                    var info = styleInfo.GetValueOrDefault(style, DefaultStyle(style));
+                    if (info.Toc) continue;
+                    // A paragraph's own outline level wins over its style's.
+                    var level = int.TryParse(properties?.Element(W + "outlineLvl")?.Attribute(W + "val")?.Value, out var outline) && outline < 9
+                        ? outline + 1 : info.HeadingLevel;
+                    Add(ParagraphText(element), level);
                 }
                 else if (element.Name == W + "tbl") Table(element);
                 else if (element.Name == W + "sdt")
@@ -143,16 +160,50 @@ public static partial class LearningTextExtractor
             if (rows.Count == 0) return;
             if (rows.Max(r => r.Count) < 2)
             {
-                foreach (var cell in rows.SelectMany(r => r)) Add(cell, false);
+                foreach (var cell in rows.SelectMany(r => r)) Add(cell, null);
                 return;
             }
-            for (var i = 0; i < rows.Count; i++) Add((i == 0 ? TableStartMark : TableRowMark) + string.Join(" | ", rows[i]), false);
+            for (var i = 0; i < rows.Count; i++) Add((i == 0 ? TableStartMark : TableRowMark) + string.Join(" | ", rows[i]), null);
         }
 
         Walk(body);
         if (tooLarge) return ExtractedText.Failed(TextExtractionFailure.TooLarge);
         return blocks.Count == 0 ? ExtractedText.Failed(TextExtractionFailure.NoText) : new ExtractedText { Blocks = blocks, Characters = characters };
     }
+
+    private readonly record struct ParagraphStyle(int? HeadingLevel, bool Toc);
+
+    /// <summary>
+    /// Heading level and table-of-contents flag per paragraph style id. Localized Word files use ids such as "2" or "21",
+    /// so the style's name ("heading 2", "toc 2", "Title") and outline level decide, not the id.
+    /// </summary>
+    private static Dictionary<string, ParagraphStyle> StyleInfo(XDocument? styles)
+    {
+        var map = new Dictionary<string, ParagraphStyle>(StringComparer.Ordinal);
+        if (styles?.Root is null) return map;
+        foreach (var style in styles.Root.Elements(W + "style").Where(s => (string?)s.Attribute(W + "type") == "paragraph"))
+        {
+            var id = (string?)style.Attribute(W + "styleId");
+            if (id is null) continue;
+            var name = ((string?)style.Element(W + "name")?.Attribute(W + "val") ?? "").Trim().ToLowerInvariant();
+            int? level = name == "title" ? 0
+                : HeadingName().Match(name) is { Success: true } m ? int.Parse(m.Groups[1].Value)
+                : int.TryParse((string?)style.Element(W + "pPr")?.Element(W + "outlineLvl")?.Attribute(W + "val"), out var outline) && outline < 9 ? outline + 1
+                : null;
+            map[id] = new(level, name.StartsWith("toc", StringComparison.Ordinal));
+        }
+        return map;
+    }
+
+    /// <summary>Without styles.xml: the English built-in ids.</summary>
+    private static ParagraphStyle DefaultStyle(string id) =>
+        id.StartsWith("TOC", StringComparison.OrdinalIgnoreCase) ? new(null, true)
+        : id.Equals("Title", StringComparison.OrdinalIgnoreCase) ? new(0, false)
+        : HeadingId().Match(id) is { Success: true } m ? new(int.Parse(m.Groups[1].Value), false)
+        : new(null, false);
+
+    [GeneratedRegex(@"^heading\s*([1-9])$")] private static partial Regex HeadingName();
+    [GeneratedRegex(@"^Heading([1-9])$", RegexOptions.IgnoreCase)] private static partial Regex HeadingId();
 
     /// <summary>Starts a block that is one row of a Word table; cells are separated by " | ".</summary>
     public const string TableRowMark = "▦ ";

@@ -4,13 +4,14 @@ import { cn } from '../../lib/utils'
 import type { CardKind, StudyCard } from './api'
 
 // Shared with the card grid (kept here: this file is the card's look).
-const kindLabel: Record<CardKind, string> = { Question: 'Sual', Term: 'Anlayış', List: 'Siyahı', Test: 'Test', Table: 'Cədvəl' }
+const kindLabel: Record<CardKind, string> = { Question: 'Sual', Term: 'Anlayış', List: 'Siyahı', Test: 'Test', Table: 'Cədvəl', Custom: 'Mənim kartım' }
 const prompt: Record<CardKind, string> = {
   Question: 'Cavabı yadına sal',
   Term: 'Bu anlayış nədir?',
   List: 'Bəndləri sadala',
   Test: 'Düzgün cavab hansıdır?',
   Table: 'Bu sətir üzrə məlumatları xatırla',
+  Custom: 'Cavabı yadına sal',
 }
 const kindTone: Record<CardKind, string> = {
   Question: 'bg-indigo-50 text-indigo-700',
@@ -18,6 +19,7 @@ const kindTone: Record<CardKind, string> = {
   List: 'bg-amber-50 text-amber-800',
   Test: 'bg-sky-50 text-sky-700',
   Table: 'bg-rose-50 text-rose-700',
+  Custom: 'bg-slate-100 text-slate-700',
 }
 const kindAccent: Record<CardKind, string> = {
   Question: 'bg-indigo-500',
@@ -25,6 +27,7 @@ const kindAccent: Record<CardKind, string> = {
   List: 'bg-amber-500',
   Test: 'bg-sky-500',
   Table: 'bg-rose-500',
+  Custom: 'bg-slate-500',
 }
 
 interface Props {
@@ -84,7 +87,7 @@ export function FlipCard({ card, topic, flipped, onFlip, onSource, required, aut
           <div className="guide-scroll guide-scroll-fade mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-3">
             <Back card={card} />
           </div>
-          {onSource && (
+          {onSource && !card.own && (
             <button type="button" onClick={source} className="mt-3 inline-flex min-h-9 shrink-0 items-center gap-1.5 self-start rounded-lg text-sm font-semibold text-indigo-700 hover:underline">
               <FileText className="size-4" aria-hidden />Sənəddə göstər{card.page != null ? ` · səh. ${card.page}` : ''}
             </button>
@@ -103,8 +106,21 @@ function Header({ card, topic }: { card: StudyCard; topic: string }) {
         <p className={cn('text-sm leading-snug font-semibold text-slate-600', card.section ? 'line-clamp-1' : 'line-clamp-2')}>{topic}</p>
         {card.section && <p className="mt-0.5 line-clamp-1 text-xs leading-snug font-medium text-slate-500">{card.section}</p>}
       </div>
-      <KindBadge card={card} />
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        <KindBadge card={card} />
+        <ReviewBadge card={card} />
+      </div>
     </div>
+  )
+}
+
+/** "Yoxlanmalı": the extraction is unsure of the card; "Düzəldilib": the student rewrote it. */
+export function ReviewBadge({ card }: { card: StudyCard }) {
+  if (card.edited) return <span className="text-[11px] font-medium text-slate-500">Düzəldilib</span>
+  if (!card.needsReview) return null
+  return (
+    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800"
+      title="Bu kart avtomatik çıxarılıb və səhv ola bilər. Yoxlayın: redaktə edin, gizlədin və ya silin.">Yoxlanmalı</span>
   )
 }
 
@@ -128,6 +144,10 @@ export function KindAccent({ card }: { card: StudyCard }) {
 }
 
 function Back({ card }: { card: StudyCard }) {
+  // A card the student wrote or rewrote is plain text, whatever kind it was built as.
+  if (card.edited || card.kind === 'Custom') {
+    return <p className="text-[15px] leading-relaxed whitespace-pre-line text-slate-800 sm:text-base">{card.back}</p>
+  }
   if (card.kind === 'Table') {
     return (
       <>

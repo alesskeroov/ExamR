@@ -1,5 +1,4 @@
 /**
- * AI Tutor is still in development: on in the local dev server, off in production builds
- * unless the build sets VITE_TUTOR_ENABLED=true.
+ * Öyrənmə bələdçisi (AI-free) is live as a demo; a build can still switch it off with VITE_TUTOR_ENABLED=false.
  */
-export const tutorEnabled = import.meta.env.DEV || import.meta.env.VITE_TUTOR_ENABLED === 'true'
+export const tutorEnabled = import.meta.env.VITE_TUTOR_ENABLED !== 'false'

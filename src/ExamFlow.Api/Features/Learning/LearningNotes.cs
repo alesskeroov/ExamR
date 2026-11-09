@@ -8,6 +8,8 @@ public sealed record DocParagraph(string Text, int? Page, int ChunkOrdinal)
 {
     /// <summary>On the first row of a table: its caption ("Cədvəl 3. …"), when the document gives one.</summary>
     public string? Caption { get; init; }
+    /// <summary>Word heading level from the paragraph's style (1 = top, 0 = document title); null for body text and PDF.</summary>
+    public int? HeadingLevel { get; init; }
     public bool IsTableStart => Text.StartsWith(LearningTextExtractor.TableStartMark, StringComparison.Ordinal);
     public bool IsTableRow => IsTableStart || Text.StartsWith(LearningTextExtractor.TableRowMark, StringComparison.Ordinal);
     public string TableText => Text[(IsTableStart ? LearningTextExtractor.TableStartMark.Length : LearningTextExtractor.TableRowMark.Length)..];
@@ -136,7 +138,7 @@ public static partial class DocumentCleaner
     /// <summary>Five or more one-to-four-word fragments in a row (not after a "…:" lead): the cells of a table a PDF flattened.</summary>
     private static List<DocParagraph> DropFragmentRuns(List<DocParagraph> list)
     {
-        static bool Fragment(DocParagraph p) => !p.IsTableRow && p.Text.Length <= 45 && p.Text.Split(' ').Length <= 4
+        static bool Fragment(DocParagraph p) => !p.IsTableRow && p.HeadingLevel is null && p.Text.Length <= 45 && p.Text.Split(' ').Length <= 4
             && !ListMark().IsMatch(p.Text) && !".:;?!".Contains(p.Text[^1]);
         var keep = new bool[list.Count];
         Array.Fill(keep, true);
@@ -168,6 +170,8 @@ public static partial class DocumentCleaner
 public static partial class NotesCardBuilder
 {
     private const int TopicBlock = 8;
+    /// <summary>From this many Word heading-styled paragraphs on, the styles alone decide the headings.</summary>
+    private const int MinStyledHeadings = 3;
 
     /// <param name="Major">"3" of a "3.2 …" heading: the numbered chapter the section belongs to, when the document numbers them.</param>
     private sealed record Section(string Heading, int Level, List<DocParagraph> Body, int Index, int? Major = null);
@@ -181,7 +185,7 @@ public static partial class NotesCardBuilder
         var topics = new List<CardTopic>();
         var cards = new List<StudyCardItem>();
         var seen = new HashSet<string>();
-        void AddCard(StudyCardItem card) { if (cards.Count < CardDeckBuilder.MaxCards && seen.Add(card.Id)) cards.Add(card); }
+        void AddCard(StudyCardItem card) { if (cards.Count < CardDeckBuilder.MaxCards && seen.Add(card.Id)) cards.Add(Review(card)); }
 
         CardTopic? topic = null;
         int? topicMajor = null;
@@ -241,6 +245,36 @@ public static partial class NotesCardBuilder
             .Select(g => g.First()).ToList();
         return new(topics.Where(t => withBody.Contains(t.Key)).ToList(), unambiguous);
     }
+
+    // ---------- review ----------
+
+    /// <summary>
+    /// Marks a card the extraction is unsure of as "yoxlanmalı": it stays in the deck, the student sees the mark and can hide
+    /// the card. Formula-bearing definitions, phrases taken for terms and lists whose title needs its context are such cards.
+    /// </summary>
+    public static StudyCardItem Review(StudyCardItem card)
+    {
+        var unsure = card.Kind switch
+        {
+            CardKind.Term => UnsureTerm(TermOf(card.Front)) || card.Back.Contains(@"\(", StringComparison.Ordinal) || card.Back.Contains('�'),
+            // "Üstünlükləri: hansılardır?": whose advantages is clear only from the document around it.
+            CardKind.List => card.Front.Split(' ').Length <= 2 || card.Items.Any(i => i.Length > 200),
+            _ => false,
+        };
+        return unsure ? card with { NeedsReview = true } : card;
+    }
+
+    /// <summary>Five or more words outside brackets, a lowercase start or "X və Y": a phrase, not one named thing.</summary>
+    private static bool UnsureTerm(string term)
+    {
+        var bare = Regex.Replace(term, @"\([^)]*\)", " ");
+        var words = bare.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+        return words >= 5 || (char.IsLower(term[0]) && words >= 3)
+            || Regex.IsMatch(bare, @"\s(?:və|and|и)\s", RegexOptions.IgnoreCase);
+    }
+
+    private static string TermOf(string front) =>
+        front.EndsWith(" nədir?", StringComparison.Ordinal) ? front[..^7] : front.EndsWith(" nə edir?", StringComparison.Ordinal) ? front[..^9] : front;
 
     // ---------- terms ----------
 
@@ -328,11 +362,25 @@ public static partial class NotesCardBuilder
     {
         var sections = new List<Section>();
         Section? current = null;
+        // A Word file that marks its headings with heading styles is read by those styles only: guessing from the text
+        // would add false headings (short lines) and miss real ones (long titles, titles with ":").
+        var styled = paragraphs.Where(p => p.HeadingLevel > 0 && !p.IsTableRow).Select(p => p.HeadingLevel!.Value).ToList();
+        var topLevel = styled.Count >= MinStyledHeadings ? styled.Min() : (int?)null;
         for (var i = 0; i < paragraphs.Count; i++)
         {
-            if (i >= planRange.From && i < planRange.To) continue;
+            if (i >= planRange.From && i < planRange.To && paragraphs[i].HeadingLevel is null) continue;
             var p = paragraphs[i];
-            if (!p.IsTableRow && Heading(paragraphs, i, plan) is { } heading)
+            if (topLevel is int top && !p.IsTableRow)
+            {
+                if (p.HeadingLevel == 0) continue; // the document title is not a topic
+                if (StyledHeading(p, top) is { } styledHeading)
+                {
+                    current = new Section(styledHeading.Title, styledHeading.Level, [], i, styledHeading.Major);
+                    sections.Add(current);
+                    continue;
+                }
+            }
+            else if (!p.IsTableRow && Heading(paragraphs, i, plan) is { } heading)
             {
                 current = new Section(heading.Title, heading.Level, [], i, heading.Major);
                 sections.Add(current);
@@ -347,6 +395,19 @@ public static partial class NotesCardBuilder
         }
         // A heading without body text is kept: "7 …" directly followed by "7.1 …" still opens chapter 7.
         return sections.Where(s => s.Body.Count > 0 || s.Heading.Length > 0).ToList();
+    }
+
+    /// <summary>A paragraph with a Word heading style, its level counted from the document's top heading level.</summary>
+    private static (string Title, int Level, int? Major)? StyledHeading(DocParagraph p, int topLevel)
+    {
+        if (p.HeadingLevel is not int styleLevel || styleLevel < topLevel) return null;
+        var text = p.Text.Trim();
+        var title = StripNumber(text).Trim().TrimEnd('.', ':', ' ');
+        // A whole paragraph styled as a heading is body text in a heading's clothes.
+        if (title.Length is < 2 or > 150 || title.Count(char.IsLetter) < 2) return null;
+        var numbered = NumberedHeading().Match(text);
+        int? major = numbered.Success && int.TryParse(numbered.Groups["n"].Value.Split('.')[0], out var n) ? n : null;
+        return (Shouting(title) ? Calm(title) : title, styleLevel - topLevel + 1, major);
     }
 
     /// <summary>Numbered ("3.2 Marşrutlaşdırma"), listed in the plan, ALL CAPS, or a short line followed by real text.</summary>
@@ -408,29 +469,53 @@ public static partial class NotesCardBuilder
         var header = rows[0];
         var width = header.Count;
         if (width < 2 || rows.Any(r => r.Count != width)) yield break;
-        var labelColumn = rows.Skip(1).All(r => int.TryParse(r[0].TrimEnd('.'), out _)) && width > 2 ? 1 : 0;
+        var body = rows.Skip(1).ToList();
+        // Measurements and datasets ("Aşağı | 0", "10.20.0.0/16 | local") are looked up, not recalled.
+        var cells = body.SelectMany(r => r).ToList();
+        if (cells.Count(c => c.Length <= 3 || NumberLike().IsMatch(c)) * 2 > cells.Count) yield break;
+        var labelColumn = body.All(r => int.TryParse(r[0].TrimEnd('.'), out _)) && width > 2 ? 1 : 0;
         if (header.Skip(labelColumn).Any(h => h.Length is < 2 or > 100 || DocumentCleaner.IsNoise(h))
             || header.Distinct(StringComparer.OrdinalIgnoreCase).Count() != width) yield break;
-        var repeatedLabels = rows.Skip(1).GroupBy(r => r[labelColumn], StringComparer.OrdinalIgnoreCase)
+        string? context = string.IsNullOrWhiteSpace(caption) ? null : caption.Length <= 120 ? caption : caption.Split('(')[0].Trim();
+        if (context?.Length > 120) context = null;
+        bool Usable(string value, string label, string column) => !(value.TrimEnd().EndsWith(',') || value.TrimEnd().EndsWith(':') || value.Length is < 1 or > 350
+            || value == label || value == column || value is "—" or "-" or "..." || DocumentCleaner.IsCode(value) || DependentStart().IsMatch(value));
+
+        // "Word2Vec | GloVe", "RNN | Transformer": both columns name the things compared, so the table is one comparison card.
+        if (width == 2 && !LabelHeader().IsMatch(header[0]) && !AttributeHeader().IsMatch(header[1]))
+        {
+            var pairs = body.Where(r => Usable(r[0], r[1], header[0]) && Usable(r[1], r[0], header[1]))
+                .Select(r => $"{header[0]}: {r[0]} — {header[1]}: {r[1]}").Take(12).ToList();
+            if (pairs.Count < 2) yield break;
+            var front = $"{header[0]} və {header[1]}: fərqləri nələrdir?";
+            yield return new(CardMastery.Hash(CardKind.Table, front + "\u001f" + string.Join("\u001f", pairs)), CardKind.Table, topicKey,
+                front, context ?? $"{header[0]} / {header[1]}", pairs, [], number, at.Page, at.ChunkOrdinal);
+            yield break;
+        }
+
+        // Otherwise one card per row: the row's name in front, every column of that row behind.
+        var repeatedLabels = body.GroupBy(r => r[labelColumn], StringComparer.OrdinalIgnoreCase)
             .Where(g => g.Count() > 1).Select(g => g.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var row in rows.Skip(1))
+        foreach (var row in body)
         {
             var label = row[labelColumn];
             if (repeatedLabels.Contains(label) || label.Length is < 2 or > 100 || DocumentCleaner.IsNoise(label) || DependentStart().IsMatch(label)) continue;
-            for (var c = labelColumn + 1; c < width; c++)
-            {
-                var value = row[c];
-                if (value.TrimEnd().EndsWith(',') || value.TrimEnd().EndsWith(':') || value.Length is < 1 or > 350 || value == label || value == header[c]
-                    || value is "—" or "-" or "..." || DocumentCleaner.IsCode(value) || DependentStart().IsMatch(value)) continue;
-                var context = string.IsNullOrWhiteSpace(caption) ? header[labelColumn] : caption;
-                if (context.Length > 120) context = context.Split('(')[0].Trim();
-                if (context.Length > 120) continue;
-                var front = $"{context}: «{label}» üçün «{header[c]}» nədir?";
-                yield return new(CardMastery.Hash(CardKind.Table, front + "\u001f" + value), CardKind.Table, topicKey,
-                    front, context, [$"{header[c]}: {value}"], [], number, at.Page, at.ChunkOrdinal);
-            }
+            var values = Enumerable.Range(labelColumn + 1, width - labelColumn - 1)
+                .Where(c => Usable(row[c], label, header[c])).Select(c => $"{header[c]}: {row[c]}").ToList();
+            if (values.Count == 0) continue;
+            // "Termin | Mənası": a glossary row asks for the meaning; wider rows ask for the row as a whole.
+            var column = header[labelColumn + 1];
+            // "BFS (Breadth-First Search)" → "BFS": the columns named shortly, "«Məqsəd» — BFS / DFS".
+            var columns = string.Join(" / ", header.Skip(labelColumn + 1).Select(h => Regex.Replace(h, @"\s*\([^)]*\)", "").Trim()));
+            var front = width - labelColumn == 2 && column.Length <= 25 && !column.Contains(':') ? $"«{label}»: {Lower(column)} nədir?"
+                : columns.Length <= 60 ? $"«{label}» — {columns}"
+                : $"{context ?? header[labelColumn]}: «{label}»";
+            yield return new(CardMastery.Hash(CardKind.Table, front + "\u001f" + string.Join("\u001f", values)), CardKind.Table, topicKey,
+                front, context ?? header[labelColumn], values, [], number, at.Page, at.ChunkOrdinal);
         }
     }
+
+    private static string Lower(string text) => text.Length > 1 && char.IsUpper(text[0]) && !char.IsUpper(text[1]) ? char.ToLowerInvariant(text[0]) + text[1..] : text;
 
     // ---------- helpers ----------
 
@@ -458,6 +543,13 @@ public static partial class NotesCardBuilder
     [GeneratedRegex(@"^(?<term>[\p{Lu}][\p{Lu}\d]{1,11})\s+(?<rest>[^.!?]{15,}\b(?:çevirir|ötürür|saxlayır|yoxlayır|idarə edir|təmin edir))\.$")]
     private static partial Regex FunctionStatement();
     [GeneratedRegex(@"^(?<n>\d{1,2}(?:\.\d{1,2}){0,3})\.?\s+(?<title>\S.*)$")] private static partial Regex NumberedHeading();
+    [GeneratedRegex(@"^[\d\s.,:/%+\-–×x≤≥<>()]+$")] private static partial Regex NumberLike();
+    /// <summary>First-column headers that name the rows' subject, not one of two compared things.</summary>
+    [GeneratedRegex(@"^(?:termin|anlayış|xüsusiyyət|meyar|kriteriya|parametr|ad|adı|komponent|element|növ|növü|sahə|mərhələ|addım|xidmət|model|qat|səviyyə|simptom|yanlış anlaşılma|ehtiyac|yoxlama|miqyas|term|concept|feature|criterion|property|component|name|type|step|layer|термин|понятие|характеристика|критерий|параметр|название)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex LabelHeader();
+    /// <summary>Second-column headers that describe the first column ("Termin | Mənası").</summary>
+    [GeneratedRegex(@"^(?:mənası|məna|tərif|tərifi|izah|izahı|qısa izah|təsvir|təsviri|açıqlama|nümunə|funksiya|funksiyası|məqsəd|məqsədi|dəyər|qeyd|rolu|vəzifəsi|meaning|definition|description|explanation|example|purpose|value|role|значение|определение|описание|пример)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex AttributeHeader();
     /// <summary>"3 Title" or "3.2 Title": a chapter number without the "." or ")" that numbered list items carry.</summary>
     [GeneratedRegex(@"^\d{1,2}(?:\.\d{1,2}){0,3}\s+\p{L}")] private static partial Regex ChapterNumber();
     [GeneratedRegex(@"^(?:plan|mövzunun planı|mühazirənin planı|mündəricat|məzmun|содержание|план|contents)$", RegexOptions.IgnoreCase)] private static partial Regex PlanTitle();
