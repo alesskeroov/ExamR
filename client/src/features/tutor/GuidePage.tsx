@@ -1,10 +1,11 @@
-import { FileText, Layers, LibraryBig, ListChecks, Menu, PanelLeftClose, PanelLeftOpen, PanelRight, Plus, Trash2, X, type LucideIcon } from 'lucide-react'
+import { FileText, Layers, LibraryBig, ListChecks, Menu, MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRight, Plus, Trash2, X, type LucideIcon } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
 import { useConfirm } from '../../lib/use-confirm'
 import { cn } from '../../lib/utils'
 import { useChat, useChats, useCreateChat, useDeck, useDeleteChat, useTutorDocuments, type ChatSession, type ChatSource, type LearnScope, type StudyCard } from './api'
+import { FeedbackDialog } from './FeedbackDialog'
 import { GuideCardList } from './GuideCardList'
 import { GuideLearn } from './GuideLearn'
 import { GuideTopics } from './GuideTopics'
@@ -56,6 +57,7 @@ export function GuidePage() {
   const [sidebarOpen, setSidebarOpen] = useState(() => readStored(sidebarKey) !== 'closed')
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [preview, setPreview] = useState<{ open: boolean; source: ChatSource | null }>({ open: false, source: null })
+  const [feedback, setFeedback] = useState(false)
   const workspace = useRef<HTMLDivElement>(null)
 
   const session = chat.data?.session
@@ -141,6 +143,10 @@ export function GuidePage() {
           ) : (
             <p className="flex-1 truncate px-1 text-sm font-semibold">{chatId ? '' : 'Öyrənmə bələdçisi'}</p>
           )}
+          <button type="button" onClick={() => setFeedback(true)} aria-label="Təklif və iradlar"
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100">
+            <MessageSquareText className="size-[18px]" aria-hidden /><span className="hidden md:inline">Təklif və iradlar</span>
+          </button>
           {session && (
             <button type="button" onClick={() => setPreview(p => ({ ...p, open: !p.open }))} aria-pressed={preview.open}
               className={cn('inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium hover:bg-slate-100', preview.open ? 'text-indigo-700' : 'text-slate-600')}>
@@ -148,6 +154,14 @@ export function GuidePage() {
             </button>
           )}
         </header>
+
+        <p role="note" className="tutor-border flex shrink-0 items-center gap-2 border-b bg-amber-50 px-3 py-1.5 text-xs text-amber-800 sm:px-4">
+          <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 font-semibold">Demo</span>
+          <span className="min-w-0">
+            Bələdçi sınaq mərhələsindədir, kartlarda səhv ola bilər.{' '}
+            <button type="button" onClick={() => setFeedback(true)} className="font-semibold underline underline-offset-2">Bizə yazın</button>
+          </span>
+        </p>
 
         {session && (
           <nav aria-label="Bələdçi bölmələri" className="tutor-border shrink-0 border-b px-2 sm:px-3">
@@ -183,6 +197,7 @@ export function GuidePage() {
             onClose={() => setPreview(p => ({ ...p, open: false }))} />
         </aside>
       )}
+      {feedback && <FeedbackDialog documentName={session?.documentName} onClose={() => setFeedback(false)} />}
     </div>
   )
 }
