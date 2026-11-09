@@ -24,6 +24,10 @@ public static class LearningEndpoints
     // switched off here, and already indexed TXT rows are kept untouched.
     private static readonly HashSet<string> Formats = [".pdf", ".docx"];
 
+    /// <summary>Readable documents for the study guide: files with closed (multiple-choice) test questions are left out.</summary>
+    internal static IQueryable<UploadedDocument> GuideDocuments(AppDbContext db, Guid userId) =>
+        DocumentAccess.Readable(db, userId).Where(d => !db.Questions.Any(q => q.DocumentId == d.Id && q.Options.Count >= 2));
+
     public static void MapLearningEndpoints(this RouteGroupBuilder api)
     {
         var group = api.MapGroup("/learning").RequireAuthorization();
@@ -126,7 +130,7 @@ public static class LearningEndpoints
     /// <summary>Readable PDF and Word documents with their index state (null status = not indexed yet), for the tutor's document picker.</summary>
     private static async Task<IResult> List(ClaimsPrincipal user, AppDbContext db, CancellationToken ct)
     {
-        var items = await DocumentAccess.Readable(db, user.GetUserId())
+        var items = await GuideDocuments(db, user.GetUserId())
             .Where(d => d.StoredFileName.EndsWith(".pdf") || d.StoredFileName.EndsWith(".docx"))
             .OrderByDescending(d => d.CreatedAt).Take(200)
             .Select(d => new
@@ -145,9 +149,12 @@ public static class LearningEndpoints
     /// <summary>Indexes a readable document once: completed and running indexes are returned as they are; only a failed one is retried.</summary>
     private static async Task<IResult> StartOrReuse(Guid documentId, Guid userId, AppDbContext db, LearningQueue queue, TimeProvider clock, CancellationToken ct)
     {
-        var document = await DocumentAccess.Readable(db, userId).Where(d => d.Id == documentId)
+        var document = await GuideDocuments(db, userId).Where(d => d.Id == documentId)
             .Select(d => new { d.Id, d.StoredFileName }).FirstOrDefaultAsync(ct);
-        if (document is null) return NotFound();
+        if (document is null)
+            return await DocumentAccess.Readable(db, userId).AnyAsync(d => d.Id == documentId, ct)
+                ? Invalid("Qapalı test sualları olan fayllar öyrənmə bələdçisində istifadə olunmur.")
+                : NotFound();
         var extension = Path.GetExtension(document.StoredFileName).ToLowerInvariant();
         if (!Formats.Contains(extension)) return Invalid("Öyrənmə bələdçisi yalnız PDF və Word (.docx) faylları ilə işləyir.");
 
