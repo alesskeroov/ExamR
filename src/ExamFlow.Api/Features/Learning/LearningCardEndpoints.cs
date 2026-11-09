@@ -17,8 +17,8 @@ public sealed class CardReviewRequest
 /// answer (Question) or the explanation (Test); Others: wrong test options. Weak: last answered "Bilmirdim" or "Qismən".
 /// </summary>
 public sealed record CardDto(string Id, string Kind, string TopicKey, string Front, string Back, IReadOnlyList<string> Items, IReadOnlyList<string> Others,
-    int Source, int? Page, int ChunkOrdinal, bool Seen, int Streak, bool Mastered, bool Weak);
-public sealed record CardTopicDto(string Key, string Title);
+    int Source, int? Page, int ChunkOrdinal, bool Seen, int Streak, bool Mastered, bool Weak, bool IsSection, string? Section);
+public sealed record CardTopicDto(string Key, string Title, string? Notes);
 /// <summary>The whole private deck of one document. Required = "Bilirdim" in a row to master a card.</summary>
 public sealed record CardDeckDto(string? Warning, int Required, IReadOnlyList<CardTopicDto> Topics, IReadOnlyList<CardDto> Cards);
 public sealed record CardStateDto(string Id, int Streak, bool Mastered, bool Weak);
@@ -54,10 +54,10 @@ public static partial class LearningStudyEndpoints
         {
             var s = byId.GetValueOrDefault(c.Id);
             return new CardDto(c.Id, c.Kind.ToString(), c.TopicKey, c.Front, c.Back, c.Items, c.Others, c.Source, c.Page, c.ChunkOrdinal,
-                s is not null, s?.Streak ?? 0, s?.Mastered ?? false, s is not null && s.LastGrade != CardGrade.Good);
+                s is not null, s?.Streak ?? 0, s?.Mastered ?? false, s is not null && s.LastGrade != CardGrade.Good, c.IsSection, c.Section);
         }).ToList();
         var warning = (await indexer.GetAsync(doc!.LearningId, ct)) is { Supported: true } index ? index.Warning : null;
-        return TypedResults.Ok(new CardDeckDto(warning, CardMastery.Required, deck.Topics.Select(t => new CardTopicDto(t.Key, t.Title)).ToList(), cards));
+        return TypedResults.Ok(new CardDeckDto(warning, CardMastery.Required, deck.Topics.Select(t => new CardTopicDto(t.Key, t.Title, t.Notes)).ToList(), cards));
     }
 
     private static async Task<IResult> ReviewCard(Guid sessionId, string cardId, CardReviewRequest request, ClaimsPrincipal user, AppDbContext db,

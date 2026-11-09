@@ -191,7 +191,7 @@ function Session({ chatId, cards, required, topics, onSource, onFinish }: Sessio
         <div className="h-full rounded-full bg-emerald-500 transition-[width]" style={{ width: `${(masteredCount / total) * 100}%` }} />
       </div>
 
-      <div key={`${card.id}-${queue.length}`} className="tutor-enter">
+      <div key={`${card.id}-${queue.length}`} className="tutor-enter h-[52dvh] min-h-80 sm:h-[min(60dvh,34rem)]">
         <FlipCard card={card} topic={topics.get(card.topicKey) ?? ''} flipped={flipped} onFlip={() => setFlipped(f => !f)} autoFocus
           onSource={onSource} required={required} />
       </div>

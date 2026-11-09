@@ -21,6 +21,7 @@ const kinds: { id: CardKind | 'all'; label: string }[] = [
   { id: 'Question', label: 'Suallar' },
   { id: 'Term', label: 'Anlayışlar' },
   { id: 'List', label: 'Siyahılar' },
+  { id: 'Table', label: 'Cədvəllər' },
   { id: 'Test', label: 'Testlər' },
 ]
 const statusDot: Record<Exclude<Status, 'all'>, string> = {
@@ -129,7 +130,7 @@ function CardTile({ card, topic, onOpen }: { card: StudyCard; topic: string; onO
       className="tutor-border relative flex h-full min-h-44 w-full flex-col overflow-hidden rounded-2xl border bg-white p-4 pt-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:outline-none">
       <KindAccent card={card} />
       <div className="flex items-start gap-2">
-        <p className="line-clamp-1 min-w-0 flex-1 text-xs font-semibold text-slate-500" title={topic}>{topic}</p>
+        <p className="line-clamp-1 min-w-0 flex-1 text-xs font-semibold text-slate-500" title={card.section ? `${topic} › ${card.section}` : topic}>{card.section ?? topic}</p>
         <KindBadge card={card} />
       </div>
       <p className="mt-3 text-[11px] font-semibold tracking-[.1em] text-slate-400 uppercase"><KindPrompt card={card} /></p>

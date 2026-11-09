@@ -135,7 +135,7 @@ export function GuidePage() {
               <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-indigo-50 text-indigo-700" aria-hidden><FileText className="size-4" /></span>
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold" title={session.documentName}>{session.documentName}</p>
-                <p className="truncate text-xs text-slate-500">Kartlar bu sənədin öz suallarından hazırlanıb</p>
+                <p className="truncate text-xs text-slate-500">Sənəddən çıxarılan kartlar və konspekt</p>
               </div>
             </div>
           ) : (

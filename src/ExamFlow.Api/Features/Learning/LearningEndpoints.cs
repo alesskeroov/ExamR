@@ -149,7 +149,7 @@ public static class LearningEndpoints
             .Select(d => new { d.Id, d.StoredFileName }).FirstOrDefaultAsync(ct);
         if (document is null) return NotFound();
         var extension = Path.GetExtension(document.StoredFileName).ToLowerInvariant();
-        if (!Formats.Contains(extension)) return Invalid("AI Tutor yalnız açıq suallı PDF və Word (.docx) sənədləri ilə işləyir.");
+        if (!Formats.Contains(extension)) return Invalid("Öyrənmə bələdçisi yalnız PDF və Word (.docx) faylları ilə işləyir.");
 
         var learning = await db.Set<LearningDocument>().FirstOrDefaultAsync(l => l.DocumentId == documentId, ct);
         if (learning is { Status: LearningStatus.Completed }) return TypedResults.Ok(await Dto(db, documentId, ct));

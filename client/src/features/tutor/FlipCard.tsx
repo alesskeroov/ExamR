@@ -4,24 +4,27 @@ import { cn } from '../../lib/utils'
 import type { CardKind, StudyCard } from './api'
 
 // Shared with the card grid (kept here: this file is the card's look).
-const kindLabel: Record<CardKind, string> = { Question: 'Sual', Term: 'Anlayış', List: 'Siyahı', Test: 'Test' }
+const kindLabel: Record<CardKind, string> = { Question: 'Sual', Term: 'Anlayış', List: 'Siyahı', Test: 'Test', Table: 'Cədvəl' }
 const prompt: Record<CardKind, string> = {
   Question: 'Cavabı yadına sal',
   Term: 'Bu anlayış nədir?',
   List: 'Bəndləri sadala',
   Test: 'Düzgün cavab hansıdır?',
+  Table: 'Bu sətir üzrə məlumatları xatırla',
 }
 const kindTone: Record<CardKind, string> = {
   Question: 'bg-indigo-50 text-indigo-700',
   Term: 'bg-emerald-50 text-emerald-700',
   List: 'bg-amber-50 text-amber-800',
   Test: 'bg-sky-50 text-sky-700',
+  Table: 'bg-rose-50 text-rose-700',
 }
 const kindAccent: Record<CardKind, string> = {
   Question: 'bg-indigo-500',
   Term: 'bg-emerald-500',
   List: 'bg-amber-500',
   Test: 'bg-sky-500',
+  Table: 'bg-rose-500',
 }
 
 interface Props {
@@ -37,7 +40,10 @@ interface Props {
   autoFocus?: boolean
 }
 
-/** A flashcard that turns over on tap (or Enter/Space): topic and question in front, the document's answer and details behind. */
+/**
+ * A flashcard that turns over on tap (or Enter/Space): topic and question in front, the document's answer and details behind.
+ * It fills the height its parent gives it, so every card has the same frame; long content scrolls inside the card.
+ */
 export function FlipCard({ card, topic, flipped, onFlip, onSource, required, autoFocus = false }: Props) {
   const self = useRef<HTMLDivElement>(null)
   useEffect(() => { if (autoFocus) self.current?.focus({ preventScroll: true }) }, [autoFocus, card.id])
@@ -46,20 +52,23 @@ export function FlipCard({ card, topic, flipped, onFlip, onSource, required, aut
     if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); onFlip() }
   }
   const source = (event: MouseEvent) => { event.stopPropagation(); onSource?.(card) }
-  const face = 'flip-card-face tutor-border relative flex min-h-[20rem] flex-col overflow-hidden rounded-3xl border bg-white px-5 pt-6 pb-5 shadow-sm sm:min-h-[22rem] sm:px-8 sm:pt-8 group-focus-visible:ring-2 group-focus-visible:ring-indigo-400'
+  const face = 'flip-card-face tutor-border relative flex h-full min-h-0 flex-col overflow-hidden rounded-3xl border bg-white px-5 pt-6 pb-5 shadow-sm sm:px-8 sm:pt-8 group-focus-visible:ring-2 group-focus-visible:ring-indigo-400'
 
   return (
     <div ref={self} role="button" tabIndex={0} aria-pressed={flipped} onClick={onFlip} onKeyDown={onKey} data-autofocus={autoFocus || undefined}
       aria-label={flipped ? 'Kartı ön üzə çevir' : 'Kartı çevir və cavabı gör'}
-      className={cn('flip-card group block w-full cursor-pointer text-left outline-none', flipped && 'is-flipped')}>
+      className={cn('flip-card group block h-full w-full cursor-pointer text-left outline-none', flipped && 'is-flipped')}>
       <div className="flip-card-inner">
         {/* Front */}
         <div inert={flipped} aria-hidden={flipped} className={face}>
           <span className={cn('absolute inset-x-0 top-0 h-1.5', kindAccent[card.kind])} aria-hidden />
           <Header card={card} topic={topic} />
-          <div className="flex flex-1 flex-col items-center justify-center py-6 text-center">
-            <p className="text-[11px] font-semibold tracking-[.12em] text-slate-400 uppercase">{prompt[card.kind]}</p>
-            <p className="mt-3 max-w-xl text-xl leading-snug font-semibold text-slate-900 sm:text-2xl">{card.front}</p>
+          <div className="guide-scroll my-4 flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+            {/* my-auto centers short text; long text starts at the top and scrolls. */}
+            <div className="my-auto py-2 text-center">
+              <p className="text-[11px] font-semibold tracking-[.12em] text-slate-400 uppercase">{prompt[card.kind]}</p>
+              <p className="mx-auto mt-3 max-w-xl text-xl leading-snug font-semibold text-slate-900 sm:text-2xl">{card.front}</p>
+            </div>
           </div>
           <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
             <span className="inline-flex items-center gap-1.5"><RotateCw className="size-3.5" aria-hidden />Çevirmək üçün toxun</span>
@@ -71,12 +80,12 @@ export function FlipCard({ card, topic, flipped, onFlip, onSource, required, aut
         <div inert={!flipped} aria-hidden={!flipped} className={cn(face, 'flip-card-back')}>
           <span className={cn('absolute inset-x-0 top-0 h-1.5', kindAccent[card.kind])} aria-hidden />
           <Header card={card} topic={topic} />
-          <p className="mt-3 text-sm leading-snug font-semibold text-slate-500">{card.front}</p>
-          <div className="mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 max-h-[46dvh] sm:max-h-[55vh]">
+          <p className="mt-3 line-clamp-2 shrink-0 text-sm leading-snug font-semibold text-slate-500">{card.front}</p>
+          <div className="guide-scroll guide-scroll-fade mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-3">
             <Back card={card} />
           </div>
           {onSource && (
-            <button type="button" onClick={source} className="mt-4 inline-flex min-h-9 items-center gap-1.5 self-start rounded-lg text-sm font-semibold text-indigo-700 hover:underline">
+            <button type="button" onClick={source} className="mt-3 inline-flex min-h-9 shrink-0 items-center gap-1.5 self-start rounded-lg text-sm font-semibold text-indigo-700 hover:underline">
               <FileText className="size-4" aria-hidden />Sənəddə göstər{card.page != null ? ` · səh. ${card.page}` : ''}
             </button>
           )}
@@ -89,7 +98,11 @@ export function FlipCard({ card, topic, flipped, onFlip, onSource, required, aut
 function Header({ card, topic }: { card: StudyCard; topic: string }) {
   return (
     <div className="flex items-start gap-3">
-      <p className="line-clamp-2 min-w-0 flex-1 text-sm leading-snug font-semibold text-slate-600" title={topic}>{topic}</p>
+      {/* The topic, and the subsection the card was taken from when that is narrower. */}
+      <div className="min-w-0 flex-1" title={card.section ? `${topic} › ${card.section}` : topic}>
+        <p className={cn('text-sm leading-snug font-semibold text-slate-600', card.section ? 'line-clamp-1' : 'line-clamp-2')}>{topic}</p>
+        {card.section && <p className="mt-0.5 line-clamp-1 text-xs leading-snug font-medium text-slate-500">{card.section}</p>}
+      </div>
       <KindBadge card={card} />
     </div>
   )
@@ -99,7 +112,7 @@ function Header({ card, topic }: { card: StudyCard; topic: string }) {
 export function KindBadge({ card }: { card: StudyCard }) {
   return (
     <span className={cn('shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold', kindTone[card.kind])}>
-      {kindLabel[card.kind]}{card.kind === 'Question' || card.kind === 'Test' ? ` ${card.source}` : ''}
+      {card.isSection ? 'Bölmə' : kindLabel[card.kind]}{!card.isSection && (card.kind === 'Question' || card.kind === 'Test') ? ` ${card.source}` : ''}
     </span>
   )
 }
@@ -115,6 +128,19 @@ export function KindAccent({ card }: { card: StudyCard }) {
 }
 
 function Back({ card }: { card: StudyCard }) {
+  if (card.kind === 'Table') {
+    return (
+      <>
+        <p className="text-sm font-semibold text-rose-700">{card.back}</p>
+        <ul className="mt-3 space-y-3 text-[15px] leading-relaxed text-slate-800">
+          {card.items.map((item, i) => {
+            const colon = item.indexOf(':')
+            return <li key={i} className="break-words">{colon > 0 ? <><strong>{item.slice(0, colon)}:</strong>{item.slice(colon + 1)}</> : item}</li>
+          })}
+        </ul>
+      </>
+    )
+  }
   if (card.kind === 'List') {
     return (
       <>

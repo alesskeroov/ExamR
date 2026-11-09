@@ -58,7 +58,7 @@ public static class LearningChatEndpoints
         user.IsInRole(Roles.Admin) ? TypedResults.Ok(await budget.StatusAsync(user.GetUserId(), ct)) : (IResult)TypedResults.Ok(new { enabled = options.Value.Enabled });
 
     private static async Task<IResult> Create(CreateChatRequest request, ClaimsPrincipal user, AppDbContext db,
-        OpenQuestionIndexer indexer, TimeProvider clock, CancellationToken ct)
+        CardDeckService decks, TimeProvider clock, CancellationToken ct)
     {
         // No AI check: a session is also the home of the AI-free "Kartlar"; AI tools check LearningAi:Enabled themselves.
         var userId = user.GetUserId();
@@ -67,9 +67,9 @@ public static class LearningChatEndpoints
             .Select(l => new { l.Id, l.Status, l.Document.OriginalFileName }).FirstOrDefaultAsync(ct);
         if (learning is not { Status: LearningStatus.Completed })
             return TypedResults.Problem("Sənəd hələ söhbət üçün hazır deyil. Əvvəlcə emal olunmalıdır.", statusCode: StatusCodes.Status409Conflict);
-        // Open questions (or the open part of a mixed document) and tests with marked answers give cards.
-        if (await indexer.GetAsync(learning.Id, ct) is { Supported: false, Kind: not OpenDocumentKind.MultipleChoice } rejected)
-            return TypedResults.Problem(rejected.Rejection, statusCode: StatusCodes.Status422UnprocessableEntity);
+        // Any document that gives cards: questions and answers, tests with marked answers, or lecture notes.
+        if (await decks.GetAsync(learning.Id, ct) is { Deck: null } rejected)
+            return TypedResults.Problem(rejected.Error, statusCode: StatusCodes.Status422UnprocessableEntity);
 
         var now = clock.GetUtcNow();
         var session = new LearningChatSession { Id = Guid.NewGuid(), UserId = userId, LearningDocumentId = learning.Id, Title = Shorten(learning.OriginalFileName, 120), CreatedAt = now, UpdatedAt = now };

@@ -45,8 +45,9 @@ export function CardViewer({ cards, index, onIndex, onClose, topicTitle, require
   return (
     <GuideDialog title={`Kart ${index + 1} / ${cards.length}`} variant="full" onClose={onClose}>
       <div className="flex min-h-0 flex-1 flex-col" onKeyDown={onKey} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-6">
-          <div key={card.id} className="tutor-enter">
+        {/* The card takes the whole area, so every card has the same frame; its own content scrolls. */}
+        <div className="min-h-0 flex-1 px-3 py-3 sm:px-6 sm:py-5">
+          <div key={card.id} className="tutor-enter h-full">
             <FlipCard card={card} topic={topicTitle(card.topicKey)} flipped={flipped} onFlip={() => setFlipped(f => !f)}
               required={required} onSource={c => { onClose(); onSource(c) }} autoFocus />
           </div>

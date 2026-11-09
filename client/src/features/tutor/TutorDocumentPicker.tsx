@@ -48,7 +48,7 @@ export function TutorDocumentPicker({ onStart, starting, startError, resumable =
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:py-12">
       <h1 className="text-2xl font-bold tracking-tight sm:text-[28px]">Hansı sənəd üzərində işləyək?</h1>
-      <p className="mt-2 text-slate-600">Kartlar seçdiyiniz sənədin öz suallarından və cavablarından hazırlanır.</p>
+      <p className="mt-2 text-slate-600">Sənəddəki aydın sual–cavab əlaqələrindən kartlar hazırlanır. Digər mətnlər konspekt kimi oxunur.</p>
 
       <UsageMeter kind="Upload" />
       <div className="mt-6 flex flex-col gap-2 sm:flex-row">
@@ -66,7 +66,7 @@ export function TutorDocumentPicker({ onStart, starting, startError, resumable =
           {progress !== null ? `Yüklənir ${progress}%` : 'Yeni sənəd yüklə'}
         </button>
       </div>
-      <p className="mt-2 text-xs text-slate-500">PDF və ya Word (.docx): açıq suallar və cavabları, ya da düzgün cavabı işarələnmiş testlər · ən çox 50 MB. Skan edilmiş PDF-lər dəstəklənmir.</p>
+      <p className="mt-2 text-xs text-slate-500">PDF və ya Word (.docx): konspekt, açıq sual–cavab və ya düzgün cavabı işarələnmiş testlər · ən çox 50 MB. Skan edilmiş PDF-lər dəstəklənmir.</p>
 
       {typeError && <div className="mt-4"><Alert title="Fayl növü dəstəklənmir">{typeError}</Alert></div>}
       {index.isError && <div className="mt-4"><Alert title="Sənəd hazırlana bilmədi">{index.error.message}</Alert></div>}

@@ -34,7 +34,7 @@ export function GuideDialog({ title, onClose, children, variant = 'sheet', actio
       onClick={event => { if (event.target === event.currentTarget) onClose() }}
       className={cn('tutor-surface flex-col overflow-hidden p-0 text-slate-900 shadow-2xl backdrop:bg-slate-950/60 backdrop:backdrop-blur-sm open:flex',
         variant === 'full'
-          ? 'm-0 h-dvh max-h-dvh w-full max-w-none rounded-none sm:m-auto sm:h-auto sm:max-h-[92dvh] sm:w-[calc(100%-3rem)] sm:max-w-3xl sm:rounded-3xl'
+          ? 'm-0 h-dvh max-h-dvh w-full max-w-none rounded-none sm:m-auto sm:h-[min(92dvh,46rem)] sm:max-h-[92dvh] sm:w-[calc(100%-3rem)] sm:max-w-3xl sm:rounded-3xl'
           : 'mx-0 mt-auto mb-0 max-h-[85dvh] w-full max-w-none rounded-t-3xl sm:m-auto sm:w-[calc(100%-3rem)] sm:max-w-xl sm:rounded-3xl',
         tall && variant === 'sheet' && 'h-[85dvh] sm:h-[min(36rem,85dvh)]')}>
       <header className="tutor-border flex shrink-0 items-center gap-2 border-b px-4 py-2.5 sm:px-5">

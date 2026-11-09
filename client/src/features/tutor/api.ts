@@ -271,16 +271,16 @@ export function useDeleteMaterial(chatId: string) {
 
 export type CardGrade = 'Again' | 'Hard' | 'Good'
 /** Question = open question; Term = "X — definition" from an answer; List = "…:" with items; Test = test question and its correct option. */
-export type CardKind = 'Question' | 'Term' | 'List' | 'Test'
+export type CardKind = 'Question' | 'Term' | 'List' | 'Test' | 'Table'
 /**
  * One flashcard and the student's state. items: list items (List), terms explained in the answer (Question) or the
  * explanation (Test); others: wrong test options; source: the document's question number. weak: last answered "Bilmirdim"/"Qismən".
  */
 export interface StudyCard {
   id: string; kind: CardKind; topicKey: string; front: string; back: string; items: string[]; others: string[]
-  source: number; page: number | null; chunkOrdinal: number; seen: boolean; streak: number; mastered: boolean; weak: boolean
+  source: number; page: number | null; chunkOrdinal: number; isSection: boolean; section: string | null; seen: boolean; streak: number; mastered: boolean; weak: boolean
 }
-export interface CardTopic { key: string; title: string }
+export interface CardTopic { key: string; title: string; notes: string | null }
 /** The student's private deck: topics in document order and all cards. required = "Bilirdim" in a row to master a card. */
 export interface CardDeck { warning: string | null; required: number; topics: CardTopic[]; cards: StudyCard[] }
 /** What Öyrən studies: every card, weak cards, all mixed, or one topic. */
