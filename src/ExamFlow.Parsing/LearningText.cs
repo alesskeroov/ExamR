@@ -95,23 +95,93 @@ public static partial class LearningTextExtractor
         catch (InvalidDataException ex) when (ex.Message == BoundedStream.LimitMessage) { return ExtractedText.Failed(TextExtractionFailure.TooLarge); }
         catch { return ExtractedText.Failed(TextExtractionFailure.Unreadable); }
 
-        XNamespace w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        var body = xml.Root?.Element(W + "body");
+        if (body is null) return ExtractedText.Failed(TextExtractionFailure.Unreadable);
         var blocks = new List<TextBlock>();
         string? section = null;
         long characters = 0;
-        foreach (var p in xml.Descendants(w + "p"))
+        var tooLarge = false;
+        void Add(string text, bool heading)
         {
-            ct.ThrowIfCancellationRequested();
-            var text = Normalize(string.Concat(p.Descendants().Select(e => e.Name == w + "t" ? e.Value : e.Name == w + "tab" ? "\t" : e.Name == w + "br" ? "\n" : "")));
-            if (text.Length == 0) continue;
-            var style = p.Element(w + "pPr")?.Element(w + "pStyle")?.Attribute(w + "val")?.Value ?? "";
-            if (style.StartsWith("Heading", StringComparison.OrdinalIgnoreCase) || style.Equals("Title", StringComparison.OrdinalIgnoreCase))
-                section = text.Length > 200 ? text[..200] : text;
+            if (text.Length == 0 || tooLarge) return;
+            if (heading) section = text.Length > 200 ? text[..200] : text;
             characters += text.Length;
-            if (characters > limits.MaxCharacters) return ExtractedText.Failed(TextExtractionFailure.TooLarge);
+            if (characters > limits.MaxCharacters) { tooLarge = true; return; }
             blocks.Add(new TextBlock(blocks.Count + 1, null, section, text));
         }
+
+        // Body order: paragraphs, tables (one block per row) and content controls; a table of contents is skipped.
+        void Walk(XElement container)
+        {
+            foreach (var element in container.Elements())
+            {
+                ct.ThrowIfCancellationRequested();
+                if (element.Name == W + "p")
+                {
+                    var style = element.Element(W + "pPr")?.Element(W + "pStyle")?.Attribute(W + "val")?.Value ?? "";
+                    if (style.StartsWith("TOC", StringComparison.OrdinalIgnoreCase)) continue;
+                    Add(ParagraphText(element), style.StartsWith("Heading", StringComparison.OrdinalIgnoreCase) || style.Equals("Title", StringComparison.OrdinalIgnoreCase));
+                }
+                else if (element.Name == W + "tbl") Table(element);
+                else if (element.Name == W + "sdt")
+                {
+                    var gallery = element.Element(W + "sdtPr")?.Descendants(W + "docPartGallery").FirstOrDefault()?.Attribute(W + "val")?.Value;
+                    if (gallery?.Contains("Table of Contents", StringComparison.OrdinalIgnoreCase) == true) continue;
+                    if (element.Element(W + "sdtContent") is { } content) Walk(content);
+                }
+                else if (element.Name == W + "customXml" || element.Name == W + "smartTag") Walk(element);
+            }
+        }
+
+        // A table with two or more columns becomes "▦ cell | cell | …" rows, so cards can rebuild it; a one-column
+        // (layout) table is ordinary text.
+        void Table(XElement table)
+        {
+            var rows = table.Elements(W + "tr")
+                .Select(tr => tr.Elements(W + "tc").Select(tc => Normalize(string.Join(' ', tc.Descendants(W + "p").Select(ParagraphText))).Replace('|', '/')).ToList())
+                .Where(cells => cells.Any(c => c.Length > 0)).ToList();
+            if (rows.Count == 0) return;
+            if (rows.Max(r => r.Count) < 2)
+            {
+                foreach (var cell in rows.SelectMany(r => r)) Add(cell, false);
+                return;
+            }
+            for (var i = 0; i < rows.Count; i++) Add((i == 0 ? TableStartMark : TableRowMark) + string.Join(" | ", rows[i]), false);
+        }
+
+        Walk(body);
+        if (tooLarge) return ExtractedText.Failed(TextExtractionFailure.TooLarge);
         return blocks.Count == 0 ? ExtractedText.Failed(TextExtractionFailure.NoText) : new ExtractedText { Blocks = blocks, Characters = characters };
+    }
+
+    /// <summary>Starts a block that is one row of a Word table; cells are separated by " | ".</summary>
+    public const string TableRowMark = "▦ ";
+    public const string TableStartMark = "▦▦ ";
+
+    private static readonly XNamespace W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    private static readonly XNamespace Mc = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+
+    /// <summary>
+    /// Visible paragraph text. Text inside drawings, text boxes and shapes (diagram labels, often stored twice through
+    /// mc:AlternateContent) is left out: on its own it is a list of fragments without meaning.
+    /// </summary>
+    private static string ParagraphText(XElement paragraph)
+    {
+        var text = new StringBuilder();
+        void Collect(XElement element)
+        {
+            foreach (var child in element.Elements())
+            {
+                var name = child.Name;
+                if (name == W + "drawing" || name == W + "pict" || name == W + "txbxContent" || name == W + "object" || name.Namespace == Mc) continue;
+                if (name == W + "t") text.Append(child.Value);
+                else if (name == W + "tab") text.Append('\t');
+                else if (name == W + "br" || name == W + "cr") text.Append('\n');
+                else Collect(child);
+            }
+        }
+        Collect(paragraph);
+        return Normalize(text.ToString());
     }
 
     public static ExtractedText FromTxt(Stream txt, TextExtractionLimits limits, CancellationToken ct = default)

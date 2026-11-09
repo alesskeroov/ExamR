@@ -1,0 +1,471 @@
+using System.Text.RegularExpressions;
+using ExamFlow.Parsing;
+
+namespace ExamFlow.Api.Features.Learning;
+
+/// <summary>One paragraph of a document in reading order. Table rows keep their <see cref="LearningTextExtractor.TableRowMark"/>.</summary>
+public sealed record DocParagraph(string Text, int? Page, int ChunkOrdinal)
+{
+    /// <summary>On the first row of a table: its caption ("Cədvəl 3. …"), when the document gives one.</summary>
+    public string? Caption { get; init; }
+    public bool IsTableStart => Text.StartsWith(LearningTextExtractor.TableStartMark, StringComparison.Ordinal);
+    public bool IsTableRow => IsTableStart || Text.StartsWith(LearningTextExtractor.TableRowMark, StringComparison.Ordinal);
+    public string TableText => Text[(IsTableStart ? LearningTextExtractor.TableStartMark.Length : LearningTextExtractor.TableRowMark.Length)..];
+}
+
+/// <summary>
+/// Removes what makes cards meaningless, for any PDF or Word file: table of contents, title-page details, figure and table
+/// captions, citation markers, page headers, references and end-of-chapter question lists, code, symbol noise and the
+/// one-word fragments a flattened PDF table leaves behind. Word tables arrive as marked rows and are kept for table cards.
+/// </summary>
+public static partial class DocumentCleaner
+{
+    /// <summary>Paragraphs of the stored chunks in reading order, without the overlap consecutive chunks share.</summary>
+    public static List<DocParagraph> Paragraphs(IEnumerable<LearningDocumentChunk> chunks)
+    {
+        var list = new List<DocParagraph>();
+        foreach (var chunk in chunks.OrderBy(c => c.Ordinal))
+        {
+            var previousTail = list.TakeLast(8).ToList();
+            var inOverlap = true;
+            foreach (var part in chunk.Text.Split("\n\n"))
+            {
+                var text = part.Trim();
+                if (text.Length == 0) continue;
+                if (inOverlap && previousTail.Any(p => p.Text == text || (text.Length > 30 && p.Text.Contains(text, StringComparison.Ordinal)))) continue;
+                inOverlap = false;
+                list.Add(new DocParagraph(text, chunk.PageFrom, chunk.Ordinal));
+            }
+        }
+        return list;
+    }
+
+    /// <param name="dropTail">Cut references and end-of-chapter questions (whole documents; not one answer of a Q&amp;A file).</param>
+    public static List<DocParagraph> Clean(IReadOnlyList<DocParagraph> input, bool dropTail = true)
+    {
+        var pages = Repeated(input);
+        var tailFrom = dropTail ? TailStart(input) : input.Count;
+        var output = new List<DocParagraph>();
+        string? pendingCaption = null;
+        for (var i = 0; i < input.Count && i < tailFrom; i++)
+        {
+            var p = input[i];
+            if (p.IsTableRow)
+            {
+                var cells = p.TableText.Split('|').Select(c => Tidy(c)).ToList();
+                if (cells.All(c => c.Length == 0)) continue;
+                var first = p.IsTableStart || output.Count == 0 || !output[^1].IsTableRow;
+                output.Add(p with { Text = (p.IsTableStart ? LearningTextExtractor.TableStartMark : LearningTextExtractor.TableRowMark) + string.Join(" | ", cells), Caption = first ? pendingCaption : null });
+                if (first) pendingCaption = null;
+                continue;
+            }
+
+            var text = Tidy(p.Text);
+            if (text.Length == 0 || pages.Contains(text)) continue;
+            if (Caption().Match(text) is { Success: true } caption)
+            {
+                // "Cədvəl 3. …" names the table that follows; figure captions describe a picture the card cannot show.
+                if (caption.Groups["kind"].Value.StartsWith("C", StringComparison.OrdinalIgnoreCase) || caption.Groups["kind"].Value.StartsWith("T", StringComparison.OrdinalIgnoreCase)
+                    || caption.Groups["kind"].Value.StartsWith("Т", StringComparison.Ordinal))
+                    pendingCaption = Tidy(text[caption.Length..]).TrimEnd('.');
+                continue;
+            }
+            if (IsMetadata(text) || IsNoise(text) || IsCode(text) || IsTocLine(input, i)) continue;
+            output.Add(p with { Text = text });
+        }
+        return DropFragmentRuns(output);
+    }
+
+    /// <summary>Citation markers, page labels and doubled spaces removed.</summary>
+    public static string Tidy(string text)
+    {
+        text = Citation().Replace(text, "");
+        text = PageLabel().Replace(text, " ");
+        return Spaces().Replace(text, " ").Trim();
+    }
+
+    /// <summary>Text the reader cannot learn from: few letters (formulas, diagram labels), lone numbers, broken characters.</summary>
+    public static bool IsNoise(string text)
+    {
+        var visible = text.Count(c => !char.IsWhiteSpace(c));
+        if (visible == 0) return true;
+        var letters = text.Count(char.IsLetter);
+        if (letters < 2 || letters < visible * 0.45) return true;
+        if (text.Count(c => c == '�') > 2) return true;
+        var tokens = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return tokens.Length >= 5 && tokens.Average(t => t.Length) < 2.3;
+    }
+
+    /// <summary>Source code, commands and configuration lines.</summary>
+    public static bool IsCode(string text)
+    {
+        if (CodeShape().IsMatch(text)) return true;
+        var symbols = text.Count(c => "{}[]=;<>_\\$`|".Contains(c));
+        return text.Length >= 8 && symbols >= Math.Max(3, text.Length * 0.08);
+    }
+
+    /// <summary>Title-page lines: teacher, department, e-mail, links, check dates.</summary>
+    public static bool IsMetadata(string text) =>
+        text.Length < 220 && (Url().IsMatch(text) || Metadata().IsMatch(text) || (text.Length < 90 && text.Contains("universitet", StringComparison.OrdinalIgnoreCase)));
+
+    /// <summary>"Annotasiya 2", "3.1 Marşrutlaşdırma ........ 7": a line ending in a page number among other such lines.</summary>
+    private static bool IsTocLine(IReadOnlyList<DocParagraph> all, int index)
+    {
+        static bool Toc(string t) => t.Length <= 140 && TocLine().IsMatch(t);
+        if (!Toc(all[index].Text)) return false;
+        var near = 0;
+        for (var j = Math.Max(0, index - 3); j <= Math.Min(all.Count - 1, index + 3); j++)
+            if (j != index && Toc(all[j].Text)) near++;
+        return near >= 2;
+    }
+
+    /// <summary>Short lines that repeat on three or more pages: running headers and footers.</summary>
+    private static HashSet<string> Repeated(IReadOnlyList<DocParagraph> input) =>
+        input.Where(p => !p.IsTableRow && p.Text.Length is > 0 and < 120 && p.Page is not null)
+            .GroupBy(p => p.Text).Where(g => g.Select(p => p.Page).Distinct().Count() >= 3).Select(g => g.Key).ToHashSet();
+
+    /// <summary>Index where references / literature / end-of-chapter questions start (only in the second half), or the end.</summary>
+    private static int TailStart(IReadOnlyList<DocParagraph> input)
+    {
+        for (var i = input.Count / 2; i < input.Count; i++)
+            if (input[i].Text.Length < 60 && TailHeading().IsMatch(input[i].Text.Trim().TrimEnd(':', '.')))
+                return i;
+        return input.Count;
+    }
+
+    /// <summary>Five or more one-to-four-word fragments in a row (not after a "…:" lead): the cells of a table a PDF flattened.</summary>
+    private static List<DocParagraph> DropFragmentRuns(List<DocParagraph> list)
+    {
+        static bool Fragment(DocParagraph p) => !p.IsTableRow && p.Text.Length <= 45 && p.Text.Split(' ').Length <= 4
+            && !ListMark().IsMatch(p.Text) && !".:;?!".Contains(p.Text[^1]);
+        var keep = new bool[list.Count];
+        Array.Fill(keep, true);
+        for (var i = 0; i < list.Count;)
+        {
+            if (!Fragment(list[i])) { i++; continue; }
+            var j = i;
+            while (j < list.Count && Fragment(list[j])) j++;
+            var afterLead = i > 0 && list[i - 1].Text.EndsWith(':');
+            if (j - i >= 5 && !afterLead) for (var k = i; k < j; k++) keep[k] = false;
+            i = j;
+        }
+        return list.Where((_, i) => keep[i]).ToList();
+    }
+
+    [GeneratedRegex(@"\s?\[\d{1,3}(?:\s*[,–-]\s*\d{1,3})*\]")] private static partial Regex Citation();
+    [GeneratedRegex(@"(?:Səhifə|Səh\.|Page|Стр\.|Страница)\s*\d{1,4}(?:\s*(?:/|of|из)\s*\d{1,4})?", RegexOptions.IgnoreCase)] private static partial Regex PageLabel();
+    [GeneratedRegex(@"[  \t]{2,}")] private static partial Regex Spaces();
+    [GeneratedRegex(@"^(?<kind>Şəkil|Şək\.|Cədvəl|Diaqram|Sxem|Rəsm|Qrafik|Figure|Fig\.|Table|Рис\.|Рисунок|Таблица|Схема)\s*\d{1,3}(?:\.\d{1,3})?\s*[.:)–-]?\s*", RegexOptions.IgnoreCase)] private static partial Regex Caption();
+    [GeneratedRegex(@"https?://|www\.|[\w.+-]+@[\w-]+\.[\w.]+", RegexOptions.IgnoreCase)] private static partial Regex Url();
+    [GeneratedRegex(@"^(?:müəllim|kafedra|fakültə|fənn|tələbə|qrup|hazırladı|hazırlayan|mühazirəçi|yoxlama tarixi|prof\.|dos\.|baş müəllim)\b|kafedrası", RegexOptions.IgnoreCase)] private static partial Regex Metadata();
+    [GeneratedRegex(@"^[\p{L}\d][^\n]{1,120}?(?:\s|\.{2,}|…)\s*\d{1,3}$")] private static partial Regex TocLine();
+    [GeneratedRegex(@"^(?:ədəbiyyat(?: siyahısı)?|istifadə olunmuş ədəbiyyat|istinadlar|mənbələr|əlavə oxu|references|bibliography|литература|список литературы|источники|suallar|nəzarət sualları|özünü yoxlama sualları|yoxlama sualları|test sualları|tapşırıqlar|ev tapşırığı)$", RegexOptions.IgnoreCase)] private static partial Regex TailHeading();
+    [GeneratedRegex(@"^\s*(?:[-•▪●◦*]|\d{1,2}[.)])\s")] private static partial Regex ListMark();
+    [GeneratedRegex(@"^\s*(?:[.\[~/$#>]|export\s|ixrac\s|sudo\s|npm\s|pip\s|git\s|docker\s|kubectl\s|aws\s)|[{}]\s*$|\);\s*$|\w\.\w+\(.*\)|^\w+\s*=\s*\S+$|=>|::", RegexOptions.IgnoreCase)] private static partial Regex CodeShape();
+}
+
+/// <summary>Cards from lecture notes and other documents without numbered questions: sections, terms, lists and tables.</summary>
+public static partial class NotesCardBuilder
+{
+    private const int TopicBlock = 8;
+
+    /// <param name="Major">"3" of a "3.2 …" heading: the numbered chapter the section belongs to, when the document numbers them.</param>
+    private sealed record Section(string Heading, int Level, List<DocParagraph> Body, int Index, int? Major = null);
+
+    public static StudyDeck Build(IReadOnlyList<DocParagraph> raw)
+    {
+        var paragraphs = DocumentCleaner.Clean(raw);
+        var plan = PlanHeadings(paragraphs, out var planRange);
+        var sections = Sections(paragraphs, plan, planRange);
+
+        var topics = new List<CardTopic>();
+        var cards = new List<StudyCardItem>();
+        var seen = new HashSet<string>();
+        void AddCard(StudyCardItem card) { if (cards.Count < CardDeckBuilder.MaxCards && seen.Add(card.Id)) cards.Add(card); }
+
+        CardTopic? topic = null;
+        int? topicMajor = null;
+        var withBody = new HashSet<string>();
+        var number = 0;
+        foreach (var section in sections)
+        {
+            // A top-level heading opens a topic; its subsections stay in it. Without headings, blocks of paragraphs do.
+            // "4.1 …" after chapter 3 starts chapter 4 even when the "4 …" heading itself was not recognised, so its
+            // cards never sit under the previous chapter's title.
+            if (topic is null || section.Level <= 1 || (section.Major is int major && major != topicMajor))
+            {
+                // Text before the first heading is the introduction; a document without headings is read in parts.
+                var title = section.Heading.Length > 0 ? section.Heading
+                    : topics.Count == 0 && sections.Any(s => s.Heading.Length > 0) ? "Giriş" : $"Hissə {topics.Count + 1}";
+                topic = new CardTopic(Key($"{title}|{topics.Count}"), title);
+                topics.Add(topic);
+                topicMajor = section.Major;
+            }
+            number++;
+            if (section.Body.Count == 0) continue; // a chapter heading followed directly by its first subsection
+            withBody.Add(topic.Key);
+            // The card names the subsection it comes from when that is narrower than the topic.
+            var label = section.Heading.Length > 0 && !string.Equals(section.Heading, topic.Title, StringComparison.OrdinalIgnoreCase) ? section.Heading : null;
+            void Add(StudyCardItem card) => AddCard(card with { Section = label });
+            var lines = section.Body.Where(p => !p.IsTableRow).Select(p => p.Text).ToList();
+            // Reading material is not a flashcard: keep it accessible even when no reliable card can be extracted.
+            var reading = string.Join("\n\n", section.Body.Select(p => p.IsTableRow
+                ? p.TableText : p.Text));
+            var previous = topics[^1];
+            topics[^1] = previous with { Notes = string.Join("\n\n", new[] { previous.Notes, section.Heading, reading }.Where(t => !string.IsNullOrWhiteSpace(t))) };
+            foreach (var paragraph in section.Body.Where(p => !p.IsTableRow))
+            {
+                foreach (var (term, definition) in Terms(paragraph.Text))
+                {
+                    var front = $"{term} nədir?";
+                    Add(new(CardMastery.Hash(CardKind.Term, front + "\u001f" + definition), CardKind.Term, topic.Key,
+                        front, definition, [], [], number, paragraph.Page, paragraph.ChunkOrdinal));
+                }
+                if (FunctionStatement().Match(paragraph.Text) is { Success: true } function
+                    && paragraph.Text.Length is >= 30 and <= 250 && !DocumentCleaner.IsCode(paragraph.Text)
+                    && !DependentStart().IsMatch(function.Groups["rest"].Value))
+                {
+                    var front = $"{function.Groups["term"].Value} nə edir?";
+                    Add(new(CardMastery.Hash(CardKind.Term, front + "\u001f" + paragraph.Text), CardKind.Term, topic.Key,
+                        front, paragraph.Text, [], [], number, paragraph.Page, paragraph.ChunkOrdinal));
+                }
+            }
+            foreach (var (title, items) in CardDeckBuilder.Lists(lines))
+                Add(new(CardMastery.Hash(CardKind.List, title), CardKind.List, topic.Key, $"{title}: hansılardır?", "", items, [],
+                    number, section.Body[0].Page, section.Body[0].ChunkOrdinal));
+            foreach (var card in TableCards(section.Body, topic.Key, number)) Add(card);
+        }
+        // A prompt with conflicting answers needs context we cannot safely infer.
+        var unambiguous = cards.GroupBy(c => c.Front, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Select(c => c.Back + "\u001f" + string.Join("\u001f", c.Items)).Distinct().Count() == 1)
+            .Select(g => g.First()).ToList();
+        return new(topics.Where(t => withBody.Contains(t.Key)).ToList(), unambiguous);
+    }
+
+    // ---------- terms ----------
+
+    /// <summary>Definitions written in the usual ways: "X — …", "X: …", "X (english) … bildirir", "X dedikdə …", "… X adlanır".</summary>
+    public static IEnumerable<(string Term, string Definition)> Terms(string line)
+    {
+        // A delimiter is evidence of a definition; parenthetical expansions and guessed last words are not.
+        if (CardDeckBuilder.Definition(line) is { } dash) { yield return dash; yield break; }
+        if (Labelled().Match(line) is { Success: true } labelled && Term(labelled.Groups["term"].Value) is { } term
+            && ReliableDefinition(labelled.Groups["def"].Value))
+            yield return (term, labelled.Groups["def"].Value.Trim());
+        else if (Meaning().Match(line) is { Success: true } meaning && Term(meaning.Groups["term"].Value) is { } named
+            && ReliableDefinition(meaning.Groups["def"].Value))
+            yield return (named, line.Trim());
+    }
+
+    /// <summary>Reject fragments, dangling references and multi-paragraph answers rather than inventing an explanation.</summary>
+    public static bool ReliableDefinition(string text) => text.Length is >= 25 and <= 350
+        && !DocumentCleaner.IsNoise(text) && !DocumentCleaner.IsCode(text)
+        && !DependentStart().IsMatch(text.Trim()) && !text.Contains('\n')
+        && text.TrimEnd().EndsWith('.') && Predicate().IsMatch(FirstSentence(text))
+        && !Regex.IsMatch(FirstSentence(text), @"\b(?:yoxdur|vardır|bağlıdır|əlçatandır)\.$", RegexOptions.IgnoreCase);
+
+    public static bool ExplicitQuestion(string text) => text.Length is >= 8 and <= 400
+        && !DocumentCleaner.IsNoise(text) && QuestionCue().IsMatch(text);
+
+    /// <summary>The term when <paramref name="raw"/> names something (not a clause, adverb or location phrase), else null.</summary>
+    public static string? CleanTerm(string raw) => Term(raw);
+
+    private static string? Term(string raw)
+    {
+        var term = raw.Trim().Trim('"', '“', '”', '«', '»', '*', '-', '•').TrimEnd('.', ',');
+        if (term.Length is < 2 or > 70 || term.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length > 6) return null;
+        if (!char.IsLetter(term[0]) || DocumentCleaner.IsNoise(term) || term.IndexOfAny(['.', ':', ';', '?', '!']) >= 0
+            || Regex.IsMatch(term, @"\s-\s|\d|\b(?:birinci|ikinci|üçüncü|dördüncü|əvvəlki|əsas mesaj|tipik təkamül)\b", RegexOptions.IgnoreCase)) return null;
+        if (term.Count(c => c == '(') != term.Count(c => c == ')')) return null;
+        var words = term.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        // "Bu iki hadisə … gətirir", "Əgər …": a clause, not the name of something.
+        if (NotTermStart().IsMatch(words[0]) || (words.Length > 1 && VerbEnding().IsMatch(words[^1]))) return null;
+        // "Normal yayılma şəraitində RRS1": a word in the locative case makes it a circumstance, not a term.
+        if (words.Length > 1 && words.Any(w => Locative().IsMatch(w))) return null;
+        return term;
+    }
+
+    private static string FirstSentence(string text)
+    {
+        var m = SentenceEnd().Match(text);
+        return m.Success ? text[..(m.Index + 1)] : text;
+    }
+
+    private static string Capital(string text) => text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];
+
+    // ---------- sections ----------
+
+    /// <summary>A "PLAN" / "Mündəricat" list: its lines name the headings that follow.</summary>
+    private static HashSet<string> PlanHeadings(IReadOnlyList<DocParagraph> paragraphs, out (int From, int To) range)
+    {
+        range = (-1, -1);
+        for (var i = 0; i < Math.Min(paragraphs.Count, 60); i++)
+        {
+            if (!PlanTitle().IsMatch(paragraphs[i].Text.Trim().TrimEnd(':', '.'))) continue;
+            var lines = new List<string>();
+            var j = i + 1;
+            for (; j < paragraphs.Count && paragraphs[j].Text.Length <= 120 && !paragraphs[j].IsTableRow; j++) lines.Add(Fold(StripNumber(paragraphs[j].Text)));
+            if (lines.Count >= 3) { range = (i, j); return lines.ToHashSet(); }
+        }
+
+        // No "PLAN" title: a run of short lines near the start whose lines come back later as headings is the plan.
+        for (var i = 0; i < Math.Min(paragraphs.Count, 40); i++)
+        {
+            var j = i;
+            while (j < paragraphs.Count && paragraphs[j].Text.Length <= 120 && !paragraphs[j].IsTableRow && !paragraphs[j].Text.EndsWith(':')) j++;
+            if (j - i >= 3)
+            {
+                var lines = paragraphs.Skip(i).Take(j - i).Select(p => Fold(StripNumber(p.Text))).ToList();
+                var later = paragraphs.Skip(j).Where(p => p.Text.Length <= 120).Select(p => Fold(StripNumber(p.Text))).ToHashSet();
+                if (lines.Count(later.Contains) >= Math.Max(2, lines.Count / 2)) { range = (i, j); return lines.ToHashSet(); }
+            }
+            i = Math.Max(i, j);
+        }
+        return [];
+    }
+
+    private static List<Section> Sections(IReadOnlyList<DocParagraph> paragraphs, HashSet<string> plan, (int From, int To) planRange)
+    {
+        var sections = new List<Section>();
+        Section? current = null;
+        for (var i = 0; i < paragraphs.Count; i++)
+        {
+            if (i >= planRange.From && i < planRange.To) continue;
+            var p = paragraphs[i];
+            if (!p.IsTableRow && Heading(paragraphs, i, plan) is { } heading)
+            {
+                current = new Section(heading.Title, heading.Level, [], i, heading.Major);
+                sections.Add(current);
+                continue;
+            }
+            if (current is null || (current.Heading.Length == 0 && current.Body.Count >= TopicBlock))
+            {
+                current = new Section("", 1, [], i);
+                sections.Add(current);
+            }
+            current.Body.Add(p);
+        }
+        // A heading without body text is kept: "7 …" directly followed by "7.1 …" still opens chapter 7.
+        return sections.Where(s => s.Body.Count > 0 || s.Heading.Length > 0).ToList();
+    }
+
+    /// <summary>Numbered ("3.2 Marşrutlaşdırma"), listed in the plan, ALL CAPS, or a short line followed by real text.</summary>
+    private static (string Title, int Level, int? Major)? Heading(IReadOnlyList<DocParagraph> paragraphs, int i, HashSet<string> plan)
+    {
+        var text = paragraphs[i].Text.Trim();
+        // Arrows and dashes between names ("Anlayış → AWS → Azure") are not words.
+        var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Count(w => w.Any(char.IsLetterOrDigit));
+        // "3 İş mexanizmi: komponentlər…" / "3.2 Marşrutlaşdırma: …" are chapter titles; "1. Brauzer: …" stays a list item.
+        var chapterNumber = ChapterNumber().IsMatch(text);
+        if (text.EndsWith('.') || text.Contains('—') || (text.Contains(": ") && !chapterNumber) || Meaning().IsMatch(text)) return null;
+        if (text.Length > 120 || words > 14 || text.EndsWith(':') || text.EndsWith(',') || text.EndsWith(';')) return null;
+        var next = i + 1 < paragraphs.Count ? paragraphs[i + 1] : null;
+        var numbered = NumberedHeading().Match(text);
+        // "4 …" directly followed by "4.1 …" opens chapter 4 even after a "…:" line (e.g. code dropped by cleaning).
+        var opensChapter = chapterNumber && next is not null && NumberedHeading().Match(next.Text) is { Success: true } sub
+            && sub.Groups["n"].Value.StartsWith(numbered.Groups["n"].Value + ".", StringComparison.Ordinal);
+        if (i > 0 && paragraphs[i - 1].Text.EndsWith(':') && !opensChapter) return null; // an item of a list
+        // A chapter-numbered title is also a heading before a short complete sentence ("3.11 Requests və limits").
+        var followedByText = next is not null && (next.IsTableRow || next.Text.Length >= 100 || next.Text.EndsWith(':')
+            || (chapterNumber && next.Text.Length >= 40 && next.Text.EndsWith('.')));
+        var title = StripNumber(text).Trim().TrimEnd('.');
+        if (title.Length < 3 || !char.IsLetter(title[0])) return null;
+
+        var level = numbered.Success ? numbered.Groups["n"].Value.Count(c => c == '.') + 1 : 1;
+        int? major = numbered.Success && int.TryParse(numbered.Groups["n"].Value.Split('.')[0], out var n) ? n : null;
+        if (plan.Contains(Fold(StripNumber(text)))) return (Shouting(title) ? Calm(title) : title, level, major);
+        if (numbered.Success && words <= 12 && (followedByText || (next is not null && NumberedHeading().IsMatch(next.Text)))) return (title, level, major);
+        if (text.Contains(": ")) return null;
+        if (words <= 10 && text.Length >= 4 && Shouting(text) && followedByText) return (Calm(title), 1, null);
+        if (!numbered.Success && words <= 9 && char.IsUpper(text[0]) && followedByText && !text.Contains(". ")) return (title, 1, null);
+        return null;
+    }
+
+    // ---------- tables ----------
+
+    /// <summary>One card per table row: the row's name in front, "column: value" pairs behind, the caption as context.</summary>
+    public static IEnumerable<StudyCardItem> TableCards(IReadOnlyList<DocParagraph> body, string topicKey, int number)
+    {
+        for (var i = 0; i < body.Count; i++)
+        {
+            if (!body[i].IsTableRow) continue;
+            var start = i;
+            var rows = new List<List<string>>();
+            while (i < body.Count && body[i].IsTableRow && (i == start || !body[i].IsTableStart))
+            {
+                rows.Add(body[i].TableText.Split('|').Select(c => c.Trim()).ToList());
+                i++;
+            }
+            i--;
+            foreach (var card in TableRows(rows, body[start].Caption, topicKey, number, body[start]))
+                yield return card;
+        }
+    }
+
+    public static IEnumerable<StudyCardItem> TableRows(List<List<string>> rows, string? caption, string topicKey, int number, DocParagraph at)
+    {
+        if (rows.Count < 2) yield break;
+        var header = rows[0];
+        var width = header.Count;
+        if (width < 2 || rows.Any(r => r.Count != width)) yield break;
+        var labelColumn = rows.Skip(1).All(r => int.TryParse(r[0].TrimEnd('.'), out _)) && width > 2 ? 1 : 0;
+        if (header.Skip(labelColumn).Any(h => h.Length is < 2 or > 100 || DocumentCleaner.IsNoise(h))
+            || header.Distinct(StringComparer.OrdinalIgnoreCase).Count() != width) yield break;
+        var repeatedLabels = rows.Skip(1).GroupBy(r => r[labelColumn], StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1).Select(g => g.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows.Skip(1))
+        {
+            var label = row[labelColumn];
+            if (repeatedLabels.Contains(label) || label.Length is < 2 or > 100 || DocumentCleaner.IsNoise(label) || DependentStart().IsMatch(label)) continue;
+            for (var c = labelColumn + 1; c < width; c++)
+            {
+                var value = row[c];
+                if (value.TrimEnd().EndsWith(',') || value.TrimEnd().EndsWith(':') || value.Length is < 1 or > 350 || value == label || value == header[c]
+                    || value is "—" or "-" or "..." || DocumentCleaner.IsCode(value) || DependentStart().IsMatch(value)) continue;
+                var context = string.IsNullOrWhiteSpace(caption) ? header[labelColumn] : caption;
+                if (context.Length > 120) context = context.Split('(')[0].Trim();
+                if (context.Length > 120) continue;
+                var front = $"{context}: «{label}» üçün «{header[c]}» nədir?";
+                yield return new(CardMastery.Hash(CardKind.Table, front + "\u001f" + value), CardKind.Table, topicKey,
+                    front, context, [$"{header[c]}: {value}"], [], number, at.Page, at.ChunkOrdinal);
+            }
+        }
+    }
+
+    // ---------- helpers ----------
+
+    /// <summary>Mostly capital letters ("İoT QURĞULARININ TƏHLÜKƏSİZLİYİ").</summary>
+    private static bool Shouting(string text)
+    {
+        var letters = text.Where(char.IsLetter).ToList();
+        return letters.Count > 3 && letters.Count(char.IsUpper) >= letters.Count * 0.8;
+    }
+
+    /// <summary>
+    /// A shouted heading in sentence case. Capital "I" is lowered to "i": documents typed in capitals often use the Latin
+    /// "I" for "İ" ("TƏHLÜKƏSIZLIK"), and "ı" there would misspell most words.
+    /// </summary>
+    private static string Calm(string text) => Capital(string.Concat(text.Select(c => c is 'İ' or 'I' ? 'i' : char.ToLowerInvariant(c))));
+
+    private static string StripNumber(string text) => NumberedHeading().Match(text) is { Success: true } m ? m.Groups["title"].Value : text;
+    private static string Fold(string text) => TextNormalizer.FoldedPhrase(text.Trim().TrimEnd('.', ':')).Trim();
+    private static string Key(string text) =>
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)))[..12].ToLowerInvariant();
+
+    [GeneratedRegex(@"^(?:məsələn|misal|nümunə|bu|bunlar|həmin|onun|onlar|belə|yuxarıda|aşağıda|şəkildə|cədvəldə|it|this|these|those)\b", RegexOptions.IgnoreCase)] private static partial Regex DependentStart();
+    [GeneratedRegex(@"(?:dır|dir|dur|dür|deyilir|adlanır)[.!]$", RegexOptions.IgnoreCase)] private static partial Regex Predicate();
+    [GeneratedRegex(@"\b(?:nədir|nə|necə|niyə|hansı|hansılardır|izah edin|izahı|tərifi|haqqında|mahiyyəti|what|why|how|define|explain)\b", RegexOptions.IgnoreCase)] private static partial Regex QuestionCue();
+    [GeneratedRegex(@"^(?<term>[\p{Lu}][\p{Lu}\d]{1,11})\s+(?<rest>[^.!?]{15,}\b(?:çevirir|ötürür|saxlayır|yoxlayır|idarə edir|təmin edir))\.$")]
+    private static partial Regex FunctionStatement();
+    [GeneratedRegex(@"^(?<n>\d{1,2}(?:\.\d{1,2}){0,3})\.?\s+(?<title>\S.*)$")] private static partial Regex NumberedHeading();
+    /// <summary>"3 Title" or "3.2 Title": a chapter number without the "." or ")" that numbered list items carry.</summary>
+    [GeneratedRegex(@"^\d{1,2}(?:\.\d{1,2}){0,3}\s+\p{L}")] private static partial Regex ChapterNumber();
+    [GeneratedRegex(@"^(?:plan|mövzunun planı|mühazirənin planı|mündəricat|məzmun|содержание|план|contents)$", RegexOptions.IgnoreCase)] private static partial Regex PlanTitle();
+    [GeneratedRegex(@"^\s*(?:[-•▪●◦*]\s*)?(?<term>[^:()\n]{2,60}?)\s*:\s+(?<def>\S.{20,})$")] private static partial Regex Labelled();
+    [GeneratedRegex(@"^(?<term>[\p{Lu}][^,.:;\n]{1,60}?)\s+dedikdə\s+(?<def>.+)$")] private static partial Regex Meaning();
+    [GeneratedRegex(@"[.!?](?=\s+[\p{Lu}\d])")] private static partial Regex SentenceEnd();
+    [GeneratedRegex(@"(?:ir|ır|ur|ür|(?<!l)ar|(?<!l)ər)$")] private static partial Regex VerbEnding();
+    [GeneratedRegex(@"^(?:bu|bunlar|həmin|onun|onlar|belə|əgər|məsələn|lakin|amma|beləliklə|burada|sonra|əvvəl|hər|bütün|bəzi|biz|siz|mən|nəticədə|yəni|misal|adətən|praktikada|qeyd|diqqət|nümunə|əsasən|xüsusilə|əksər|bir|iki|üç|çox|daha|ən)$", RegexOptions.IgnoreCase)]
+    private static partial Regex NotTermStart();
+    [GeneratedRegex(@"\p{L}(?:nda|ndə|ında|ində|unda|ündə|də|da|dən|dan)$", RegexOptions.IgnoreCase)] private static partial Regex Locative();
+}

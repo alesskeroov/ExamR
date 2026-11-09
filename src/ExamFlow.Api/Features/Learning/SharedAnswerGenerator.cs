@@ -13,17 +13,19 @@ public sealed record SharedAnswerGeneration(SharedAnswerPayload? Payload, int St
 /// <summary>Whole-document synthesis for Ortaq cavab only; other study prompts and caches keep their versions.</summary>
 public static partial class SharedAnswerGenerator
 {
-    public const string Version = "shared-v3";
+    public const string Version = "shared-v4";
     public const int BatchCharacters = 24000;
     private const string Insufficient = "Sənəddə əsas mövzu üzrə 8–13 cümləlik cavab hazırlamaq üçün kifayət qədər məlumat yoxdur.";
     private const string Invalid = "AI cavabı yoxlana bilmədi. Yenidən cəhd edin.";
     private static readonly JsonSerializerOptions NoteJson = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     public const string SystemPrompt = """
-        You generate ONE exam answer in simple Azerbaijani from ONE document.
-        Analyse ALL supplied content, not the filename. Identify the dominant main topic by its representation
-        across the document and recurring concepts. Related subtopics may support it; never combine unrelated
-        topics or mechanically concatenate answers to separate questions. Do not use outside knowledge.
+        You generate ONE exam answer in simple Azerbaijani from ONE document of open exam questions.
+        Each source block is one exam question of the document with the answer the document gives for it.
+        Analyse ALL supplied questions, not the filename. Identify the main topic shared by the most questions and
+        cover every important concept that recurs across many questions, in proportion to how many questions need it.
+        Leave out one-off details of single questions; never mechanically concatenate answers to separate questions
+        and never join unrelated topics into one sentence. Do not use outside knowledge.
         Write 8–13 logically connected, non-repetitive sentences explaining that one topic, ready to write in an exam.
         Include definitions, purpose, mechanisms, components, uses, advantages or limitations ONLY when supported.
         No artificial introductions, conclusions or filler to meet the sentence count.
@@ -56,14 +58,16 @@ public static partial class SharedAnswerGenerator
           "required":["text","chunkOrdinal","quote"],"properties":{"text":{"type":"string"},"chunkOrdinal":{"type":"integer"},"quote":{"type":"string"}}}}}}
         """);
 
-    public static string CacheKey(Guid userId, Guid documentId, byte[] hash, IReadOnlyList<LearningDocumentChunk> chunks)
-    {
-        // Include the indexed text as well: re-indexing/editing must invalidate even if the upload hash did not change.
-        using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        foreach (var c in chunks.OrderBy(c => c.Ordinal))
-            sha.AppendData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { c.Ordinal, c.Text, c.PageFrom, c.PageTo })));
-        return StudyPrompts.CacheKey(Version, userId, documentId, hash, sha.GetHashAndReset());
-    }
+    /// <summary>Per document version and question set, not per user: every reader of the same file shares one result.</summary>
+    public static string CacheKey(Guid documentId, byte[] hash, string questionFingerprint) =>
+        StudyPrompts.CacheKey(Version, documentId, hash, questionFingerprint);
+
+    /// <summary>One source block per open question ("chunk" = question number), so quotes are checked against that question's text.</summary>
+    public static IReadOnlyList<LearningDocumentChunk> QuestionUnits(IReadOnlyList<IndexedQuestion> questions) =>
+        questions.Select(q => new LearningDocumentChunk
+        {
+            Ordinal = q.Number, Text = $"Sual {q.Number}: {q.Text}\nCavab: {q.Answer}", PageFrom = q.Page, PageTo = q.Page,
+        }).ToList();
 
     public static IReadOnlyList<string> SourceBatches(IReadOnlyList<LearningDocumentChunk> chunks)
     {
@@ -145,7 +149,7 @@ public static partial class SharedAnswerGenerator
         foreach (var sentence in sentences)
         {
             var text = RequiredText(sentence, "text", 800);
-            if (SentenceBreak().Split(text).Length != 1 || !SentenceEnd().IsMatch(text) || !texts.Add(Normalize(text)))
+            if (!IsOneSentence(text) || !texts.Add(Normalize(text)))
                 throw new JsonException("Incomplete, repeated or multiple sentences");
             var chunk = Evidence(sentence, chunks);
             if (chunk.PageFrom is { } from)
@@ -159,11 +163,18 @@ public static partial class SharedAnswerGenerator
     {
         var ordinal = fact.GetProperty("chunkOrdinal").GetInt32();
         var chunk = chunks.FirstOrDefault(c => c.Ordinal == ordinal) ?? throw new JsonException("Unknown source chunk");
-        var quote = RequiredText(fact, "quote", 800);
-        if (quote.Length < 15 || !Normalize(chunk.Text).Contains(Normalize(quote), StringComparison.OrdinalIgnoreCase))
-            throw new JsonException("Quote not found in source");
+        if (!Supports(chunk, RequiredText(fact, "quote", 800))) throw new JsonException("Quote not found in source");
         return chunk;
     }
+
+    /// <summary>One complete sentence (shared with the Hazırlaş generators).</summary>
+    public static bool IsOneSentence(string text) => SentenceBreak().Split(text).Length == 1 && SentenceEnd().IsMatch(text);
+
+    /// <summary>The quote is long enough and appears (whitespace-insensitive) in the source text.</summary>
+    public static bool Supports(LearningDocumentChunk source, string? quote) =>
+        quote is { Length: >= 15 } && Normalize(source.Text).Contains(Normalize(quote), StringComparison.OrdinalIgnoreCase);
+
+    public static string NormalizedKey(string text) => Normalize(text).ToLowerInvariant();
 
     private static string RequiredText(JsonElement json, string key, int max)
     {

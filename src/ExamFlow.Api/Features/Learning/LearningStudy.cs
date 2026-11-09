@@ -9,8 +9,10 @@ using Microsoft.Extensions.Options;
 
 namespace ExamFlow.Api.Features.Learning;
 
-public enum QuizStatus { Pending, Correct, Partial, Incorrect }
-public enum MaterialKind { SharedAnswer, LastMinute, QuestionGroups }
+/// <summary>Partial is no longer produced (kept for older answers, which count as wrong); Unchecked = "Yoxlanılmadı".</summary>
+public enum QuizStatus { Pending, Correct, Partial, Incorrect, Unchecked }
+/// <summary>Stored as a string (max 16 characters). QuestionIndex, TopicExplanation and GroupAnswer are document-level rows (UserId = Guid.Empty).</summary>
+public enum MaterialKind { SharedAnswer, LastMinute, QuestionGroups, QuestionIndex, TopicExplanation, GroupAnswer, RevisionCard }
 public enum AnswerLength { Short, Long }
 
 /// <summary>One "Məni yoxla" question with its document-grounded reference answer, kept for grading and later review.</summary>
@@ -116,7 +118,9 @@ public static class RefusalDetector
 public sealed record OpenQuestion(int Number, string Text, int ChunkOrdinal, int? Page, bool HasAnswer);
 
 /// <summary>Answers (by question number) are the document text written under each question; empty when the document has none.</summary>
-public sealed record OpenQuestionScan(IReadOnlyList<OpenQuestion> Questions, bool LooksMultipleChoice, IReadOnlyDictionary<int, string> Answers)
+/// <summary>SharedAnswers: questions written as a group of headings that the document answers together, under the last heading.</summary>
+public sealed record OpenQuestionScan(IReadOnlyList<OpenQuestion> Questions, bool LooksMultipleChoice, IReadOnlyDictionary<int, string> Answers,
+    IReadOnlyCollection<int>? SharedAnswers = null)
 {
     /// <summary>At least half of the questions have answer text under them.</summary>
     public bool HasAnswers => Questions.Count > 0 && Questions.Count(q => q.HasAnswer) * 2 >= Questions.Count;
@@ -129,6 +133,8 @@ public sealed record OpenQuestionScan(IReadOnlyList<OpenQuestion> Questions, boo
 public static partial class OpenQuestionExtractor
 {
     public const int MaxQuestions = 300;
+    /// <summary>Most consecutive question headings that may share the one answer written under them.</summary>
+    public const int MaxSharedHeadings = 5;
 
     private sealed record Paragraph(string Text, int Ordinal, int? Page);
 
@@ -181,15 +187,36 @@ public static partial class OpenQuestionExtractor
 
         var questions = new List<OpenQuestion>();
         var answers = new Dictionary<int, string>();
+        var shared = new List<int>();
         if (main.Count >= 3)
         {
-            for (var i = 0; i < main.Count && questions.Count < MaxQuestions; i++)
+            var found = new List<(int Index, int Number, string Text, string Answer)>();
+            for (var i = 0; i < main.Count && found.Count < MaxQuestions; i++)
             {
                 var (index, number, text) = main[i];
                 var end = i + 1 < main.Count ? main[i + 1].Index : paragraphs.Count;
                 // Everything up to the next question is this question's answer (sub-lists included).
                 var answer = string.Join('\n', paragraphs.Skip(index + 1).Take(end - index - 1).Select(p => p.Text));
-                if (answer.Length > 2400) answer = answer[..2400];
+                // PDFs without paragraph spacing give "12. Question? Answer…" as one paragraph: the answer follows the question.
+                if (answer.Length == 0 && SplitInline(text) is { } split) (text, answer) = split;
+                if (answer.Length > 6000) answer = answer[..6000];
+                found.Add((index, number, text, answer));
+            }
+
+            // "8. …", "9. …", "10. …" written one under another and then ONE answer for all of them: the empty headings share the
+            // answer written under the last one. Longer runs are a bare question list (e.g. followed by notes), never shared.
+            for (var i = 0; i < found.Count; i++)
+            {
+                if (found[i].Answer.Length > 0) continue;
+                var j = i;
+                while (j + 1 < found.Count && found[j].Answer.Length == 0 && found[j + 1].Index == found[j].Index + 1) j++;
+                if (j > i && found[j].Answer.Length > 0 && j - i + 1 <= MaxSharedHeadings)
+                    for (var k = i; k < j; k++) { found[k] = found[k] with { Answer = found[j].Answer }; shared.Add(found[k].Number); }
+                i = j;
+            }
+
+            foreach (var (index, number, text, answer) in found)
+            {
                 answers[number] = answer;
                 questions.Add(new OpenQuestion(number, Shorten(text, 500), paragraphs[index].Ordinal, paragraphs[index].Page, answer.Length >= 60));
             }
@@ -210,7 +237,7 @@ public static partial class OpenQuestionExtractor
         // Test documents put the options in or right after the question ("276. … ? • a √ b • c", "A) …").
         var optionMarks = main.Sum(q => OptionMarker().Matches(q.Text).Count)
                           + paragraphs.Sum(p => LetterOption().Matches(p.Text).Count);
-        return new OpenQuestionScan(questions, questions.Count >= 3 && optionMarks >= questions.Count * 2, answers);
+        return new OpenQuestionScan(questions, questions.Count >= 3 && optionMarks >= questions.Count * 2, answers, shared);
     }
 
     /// <summary>Paragraphs in reading order without the overlap that consecutive chunks share.</summary>
@@ -238,6 +265,25 @@ public static partial class OpenQuestionExtractor
 
     private static string Shorten(string text, int max) => text.Length <= max ? text : text[..(max - 1)].TrimEnd() + "…";
 
+    /// <summary>
+    /// Question and answer in one paragraph: split after the first "?" (or, for "Explain …." style questions, after the first
+    /// sentence) when real text follows. Null when no such split is safe.
+    /// </summary>
+    public static (string Question, string Answer)? SplitInline(string text)
+    {
+        var mark = text.IndexOf('?');
+        if (mark < 0 || mark > 600)
+        {
+            var end = SentenceEnd().Match(text);
+            if (!end.Success || end.Index > 400) return null;
+            mark = end.Index;
+        }
+        var question = text[..(mark + 1)].Trim();
+        var answer = text[(mark + 1)..].Trim();
+        return question.Length >= 5 && answer.Length >= 20 ? (question, answer) : null;
+    }
+
+    [GeneratedRegex(@"[.!:](?=\s+[\p{Lu}\d])")] private static partial Regex SentenceEnd();
     [GeneratedRegex(@"^\(?(\d{1,3})\s*[.)]\s*(\S[\s\S]*)$")] private static partial Regex Numbered();
     [GeneratedRegex(@"(?<=[?.!:;])\s+(?=\(?\d{1,3}\s*[.)]\s*\p{L})")] private static partial Regex InlineNumber();
     [GeneratedRegex(@"[^.!?\n]{10,}\?")] private static partial Regex QuestionSentence();
@@ -248,7 +294,7 @@ public static partial class OpenQuestionExtractor
 /// <summary>Prompts and JSON schemas for the study tools. Bump <see cref="Version"/> when output changes, so cached results are not reused.</summary>
 public static class StudyPrompts
 {
-    public const string Version = "s2";
+    public const string Version = "s4";
 
     public static string System(ReplyLanguage language) => $"""
         You are ExamR's exam-preparation assistant for ONE document.
@@ -274,19 +320,28 @@ public static class StudyPrompts
         """;
 
     public const string GradeTask = """
-        Grade the student's answer to the question against the reference answer and the sources.
-        - CORRECT: the main content is right. Accept synonyms and different wording; do not require exact words.
-        - PARTIAL: part of the main content is right but important key points are missing.
-        - INCORRECT: wrong, irrelevant, or it only says the student does not know.
-        - Length alone never earns a better grade. Judge only by what the sources support.
-        feedback: one short sentence. missingPoints: the important points that are missing (empty when CORRECT).
-        correctAnswer: the short correct answer (1-2 sentences) from the sources.
+        The <source> block is the document's own answer to the question. It may answer several related questions together:
+        then judge only the part that this question asks about. Grade the MEANING of the student's answer against it,
+        like a fair examiner. Do not count keywords: synonyms, paraphrases, a different order, a different language or a shorter
+        wording of the same ideas are correct; using the source's words without its meaning is not.
+        - CORRECT: the student's answer states the main idea(s) of the source answer correctly. Missing minor details is fine.
+        - INCORRECT: a main idea is missing or wrong, the answer is irrelevant, contradicts the source, or only says the student does not know.
+        - UNCHECKABLE: only when a reliable verdict is impossible, e.g. the source answer is too fragmentary to judge, or the student's
+          answer is unreadable. Never use it just because the answer is short, unusual or partly right.
+        - Length alone never earns a better grade. Claims the source does not support earn nothing.
+        feedback: one short, concrete sentence for the student (what is right, or which main idea is missing or wrong).
+        missingPoints: for INCORRECT, up to 4 short main ideas of the source that are missing or wrong; otherwise empty.
         """;
 
     public const string GroupTask = """
-        Group the exam questions by topic so that each group can be learned with one shared explanation.
-        Put questions together only when they really need the same knowledge; an unrelated question stays alone in its own group.
-        Use every question number exactly once. title: a short, plain topic name (2-6 words).
+        Group the exam questions by MEANING so that each group can be learned with one shared explanation. Each question is shown
+        with the start of the answer the document gives (after "↳"); use it to see what the question is really about.
+        - Put questions together only when answering them needs the same knowledge. Shared words alone are not enough
+          ("search" in a search algorithm and in data search are different topics). An unrelated question stays alone.
+        - There is no target number of groups: as many as the content needs.
+        - section: the broad main topic the group belongs to (2-5 words); groups of the same main topic use exactly the same section.
+        - title: the specific subtopic of the group (2-6 words), different from the other titles.
+        Use every question number exactly once.
         """;
 
     private static string LengthRule(AnswerLength length) => length == AnswerLength.Short
@@ -342,8 +397,8 @@ public static class StudyPrompts
     private static JsonObject Bool() => new() { ["type"] = "boolean" };
 
     public static JsonObject QuizSchema() => Obj(("question", Str()), ("answer", Str()), ("keyPoints", Arr(Str())));
-    public static JsonObject GradeSchema() => Obj(("status", Enum("CORRECT", "PARTIAL", "INCORRECT")), ("feedback", Str()), ("missingPoints", Arr(Str())), ("correctAnswer", Str()));
-    public static JsonObject GroupSchema() => Obj(("groups", Arr(Obj(("title", Str()), ("questionNumbers", Arr(Int()))))));
+    public static JsonObject GradeSchema() => Obj(("status", Enum("CORRECT", "INCORRECT", "UNCHECKABLE")), ("feedback", Str()), ("missingPoints", Arr(Str())));
+    public static JsonObject GroupSchema() => Obj(("groups", Arr(Obj(("section", Str()), ("title", Str()), ("questionNumbers", Arr(Int()))))));
     public static JsonObject GroupAnswerSchema() => Obj(("groups", Arr(Obj(
         ("groupId", Int()), ("title", Str()), ("answer", Str()), ("keywords", Arr(Str())),
         ("questions", Arr(Obj(("number", Int()), ("addition", Str()), ("needsLonger", Bool()), ("supported", Bool()))))))));
@@ -378,18 +433,38 @@ public static class StudyJson
         e.GetProperty(name).EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Number).Select(x => x.GetInt32()).ToList();
 
     /// <summary>Every allowed number exactly once: unknown and repeated numbers are dropped, forgotten ones become their own group.</summary>
-    public static List<(string Title, List<int> Numbers)> NormalizeGroups(IEnumerable<(string Title, IReadOnlyList<int> Numbers)> groups, IReadOnlyCollection<int> allowed,
-        Func<int, string> singleTitle)
+    public static List<(string Section, string Title, List<int> Numbers)> NormalizeGroups(IEnumerable<(string Section, string Title, IReadOnlyList<int> Numbers)> groups,
+        IReadOnlyCollection<int> allowed, Func<int, string> singleTitle)
     {
         var used = new HashSet<int>();
-        var result = new List<(string, List<int>)>();
-        foreach (var (title, numbers) in groups)
+        var result = new List<(string, string, List<int>)>();
+        foreach (var (section, title, numbers) in groups)
         {
             var kept = numbers.Where(n => allowed.Contains(n) && used.Add(n)).ToList();
-            if (kept.Count > 0) result.Add((title, kept));
+            if (kept.Count > 0) result.Add((section, title, kept));
         }
-        result.AddRange(allowed.Where(n => !used.Contains(n)).Select(n => (singleTitle(n), new List<int> { n })));
+        result.AddRange(allowed.Where(n => !used.Contains(n)).Select(n => ("", singleTitle(n), new List<int> { n })));
         return result;
+    }
+
+    /// <summary>
+    /// Merges topics the model (or two grouping slices) produced twice: same section and the same or nearly the same title.
+    /// Questions are only moved, never dropped; the first group keeps its title.
+    /// </summary>
+    public static List<(string Section, string Title, List<int> Numbers)> MergeSimilar(IEnumerable<(string Section, string Title, List<int> Numbers)> groups)
+    {
+        static string Folded(string text) => TextNormalizer.FoldedPhrase(text);
+        var merged = new List<(string Section, string Title, List<int> Numbers, HashSet<string> Terms)>();
+        foreach (var (section, title, numbers) in groups)
+        {
+            var terms = TextNormalizer.Terms(title).ToHashSet();
+            var same = merged.FindIndex(m => Folded(m.Section) == Folded(section)
+                && (Folded(m.Title) == Folded(title)
+                    || terms.Count >= 2 && m.Terms.Count >= 2 && m.Terms.Intersect(terms).Count() / (double)m.Terms.Union(terms).Count() >= 0.8));
+            if (same >= 0) merged[same].Numbers.AddRange(numbers.Where(n => !merged[same].Numbers.Contains(n)));
+            else merged.Add((section, title, numbers.ToList(), terms));
+        }
+        return merged.Select(m => (m.Section, m.Title, m.Numbers)).ToList();
     }
 }
 

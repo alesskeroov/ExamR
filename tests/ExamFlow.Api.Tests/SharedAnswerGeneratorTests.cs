@@ -149,16 +149,28 @@ public class SharedAnswerGeneratorTests
     }
 
     [Fact]
-    public void Cache_is_scoped_to_user_document_content_and_indexed_text()
+    public void Cache_is_shared_per_document_version_and_question_set()
     {
-        var user = Guid.NewGuid(); var doc = Guid.NewGuid();
-        var original = SharedAnswerGenerator.CacheKey(user, doc, [1, 2], [Chunk()]);
-        Assert.Equal(original, SharedAnswerGenerator.CacheKey(user, doc, [1, 2], [Chunk()]));
-        Assert.NotEqual(original, SharedAnswerGenerator.CacheKey(Guid.NewGuid(), doc, [1, 2], [Chunk()]));
-        Assert.NotEqual(original, SharedAnswerGenerator.CacheKey(user, Guid.NewGuid(), [1, 2], [Chunk()]));
-        Assert.NotEqual(original, SharedAnswerGenerator.CacheKey(user, doc, [3, 4], [Chunk()]));
-        Assert.NotEqual(original, SharedAnswerGenerator.CacheKey(user, doc, [1, 2], [Chunk(text: "Changed")]));
+        var doc = Guid.NewGuid();
+        var original = SharedAnswerGenerator.CacheKey(doc, [1, 2], "Q1");
+        Assert.Equal(original, SharedAnswerGenerator.CacheKey(doc, [1, 2], "Q1"));
+        Assert.NotEqual(original, SharedAnswerGenerator.CacheKey(Guid.NewGuid(), [1, 2], "Q1"));
+        Assert.NotEqual(original, SharedAnswerGenerator.CacheKey(doc, [3, 4], "Q1"));
+        Assert.NotEqual(original, SharedAnswerGenerator.CacheKey(doc, [1, 2], "Q2"));
         Assert.NotEqual(StudyPrompts.Version, SharedAnswerGenerator.Version);
+    }
+
+    [Fact]
+    public void Question_units_keep_question_answer_and_page_together()
+    {
+        var units = SharedAnswerGenerator.QuestionUnits([new IndexedQuestion(4, "Bulud nədir?", Sentences[0], 2, 9)]);
+        var unit = Assert.Single(units);
+        Assert.Equal(4, unit.Ordinal);
+        Assert.Equal(9, unit.PageFrom);
+        Assert.Contains("Bulud nədir?", unit.Text);
+        Assert.Contains(Sentences[0], unit.Text);
+        // A quote from the question's own answer validates against its unit.
+        Assert.Equal(200, SharedAnswerGenerator.Validate(Output(ordinal: 4), [Chunk(4, string.Join(' ', Sentences), 9)]).Status);
     }
 
     [Theory]

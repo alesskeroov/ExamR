@@ -1123,6 +1123,56 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.ToTable("LearningAiUsage", (string)null);
                 });
 
+            modelBuilder.Entity("ExamFlow.Api.Features.Learning.LearningCardState", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Lapses")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("LastGrade")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)");
+
+                    b.Property<DateTimeOffset>("LastReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("LearningDocumentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Mastered")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("QuestionHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("Reviews")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Streak")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LearningDocumentId");
+
+                    b.HasIndex("UserId", "LearningDocumentId", "QuestionHash")
+                        .IsUnique();
+
+                    b.ToTable("LearningCardStates", (string)null);
+                });
+
             modelBuilder.Entity("ExamFlow.Api.Features.Learning.LearningChatMessage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2478,6 +2528,15 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.Navigation("Group");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Learning.LearningCardState", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Learning.LearningDocument", null)
+                        .WithMany()
+                        .HasForeignKey("LearningDocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("ExamFlow.Api.Features.Learning.LearningChatMessage", b =>

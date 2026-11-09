@@ -355,7 +355,8 @@ function QuestionPanel({ question, visualSrc, number, immediate, revealed, canRe
                 'exam-option flex min-h-12 w-full min-w-0 items-start gap-3 rounded-xl border px-3 py-2.5 text-left sm:py-3 text-sm text-slate-700 sm:px-4 sm:text-[15px]',
                 isCorrect && 'border-emerald-300 bg-emerald-50/60',
                 isWrongPick && 'border-rose-300 bg-rose-50/60',
-                !reveal && selected && 'border-indigo-500 bg-indigo-50 text-slate-900',
+                // The pick is sky blue, never green: green is reserved for the correct answer.
+                !reveal && selected && 'border-sky-500 bg-sky-50 text-slate-900',
                 !reveal && !selected && 'border-slate-200',
                 !reveal && !selected && !question.locked && 'hover:border-slate-300 hover:bg-slate-50',
                 question.locked && 'cursor-default',
@@ -367,7 +368,7 @@ function QuestionPanel({ question, visualSrc, number, immediate, revealed, canRe
                   'flex size-6 shrink-0 items-center justify-center rounded-md border text-xs font-semibold transition-colors duration-150',
                   isCorrect ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
                     : isWrongPick ? 'border-rose-200 bg-rose-50 text-rose-800'
-                      : selected ? 'border-indigo-600 bg-indigo-600 text-white'
+                      : selected ? 'border-sky-600 bg-sky-600 text-white'
                         : 'border-slate-200 bg-slate-50 text-slate-500',
                 )}
                 aria-hidden
@@ -382,7 +383,12 @@ function QuestionPanel({ question, visualSrc, number, immediate, revealed, canRe
               </span>
               {isCorrect && <Check className="mt-1 size-4 shrink-0 text-emerald-700" aria-hidden />}
               {isWrongPick && <X className="mt-1 size-4 shrink-0 text-rose-700" aria-hidden />}
-              <Check className={cn('mt-1 size-4 shrink-0 text-indigo-600', !(selected && !reveal) && 'invisible')} aria-hidden />
+              <span
+                className={cn('mt-1 flex size-4 shrink-0 items-center justify-center rounded-full border-2 border-sky-600', !(selected && !reveal) && 'invisible')}
+                aria-hidden
+              >
+                <span className="size-1.5 rounded-full bg-sky-600" />
+              </span>
             </button>
           )
         })}
@@ -509,7 +515,7 @@ function QuestionNavigator({ questions, current, immediate, isShown, flagged, on
                   className={cn(
                     'relative flex h-11 w-full items-center justify-center rounded-md border text-xs font-semibold tabular-nums transition-colors duration-150 min-[900px]:h-9',
                     state === 'empty' && 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50',
-                    state === 'answered' && 'border-indigo-600 bg-indigo-600 text-white',
+                    state === 'answered' && 'border-sky-600 bg-sky-600 text-white',
                     state === 'correct' && 'border-emerald-600 bg-emerald-600 text-white',
                     state === 'wrong' && 'border-rose-600 bg-rose-600 text-white',
                     state === 'ungraded' && 'border-amber-400 bg-amber-100 text-amber-900',
@@ -525,7 +531,7 @@ function QuestionNavigator({ questions, current, immediate, isShown, flagged, on
         </ol>
         <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-slate-500">
           <Legend className="border-slate-300 bg-white" label="Boş" />
-          <Legend className="border-indigo-600 bg-indigo-600" label="Cavablanıb" />
+          <Legend className="border-sky-600 bg-sky-600" label="Cavablanıb" />
           {immediate && (
             <>
               <Legend className="border-emerald-600 bg-emerald-600" label="Düzgün" />

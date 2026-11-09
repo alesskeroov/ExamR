@@ -1,4 +1,4 @@
-import { GraduationCap, MessagesSquare, ShieldCheck, DoorOpen, FileUp, History, LayoutDashboard, Library, ListChecks, LogOut, Menu, School, Swords, Users, X, type LucideIcon } from 'lucide-react'
+import { GraduationCap, Layers, ShieldCheck, DoorOpen, FileUp, History, LayoutDashboard, Library, ListChecks, LogOut, Menu, School, Swords, Users, X, type LucideIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useSearchParams } from 'react-router'
 import { useCurrentUser, useLogout } from '../features/auth/api'
@@ -12,7 +12,7 @@ const navItems: { to: string; label: string; icon: LucideIcon; group: string; en
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, group: '', end: true },
   { to: '/upload', label: 'Sənəd yüklə', icon: FileUp, group: 'Hazırlıq' },
   { to: '/questions', label: 'Sual bankı', icon: Library, group: 'Hazırlıq' },
-  { to: '/tutor', label: 'AI Tutor', icon: MessagesSquare, group: 'Hazırlıq', badge: tutorEnabled ? 'Demo' : 'Tezliklə' },
+  { to: '/tutor', label: 'Öyrənmə bələdçisi', icon: Layers, group: 'Hazırlıq', badge: tutorEnabled ? 'Demo' : 'Tezliklə' },
   { to: '/exams/new', label: 'İmtahana başla', icon: ListChecks, group: 'İmtahan' },
   { to: '/exams', label: 'Tarixçə', icon: History, group: 'İmtahan', end: true },
   { to: '/dim/buraxilis', label: 'Buraxılış imtahanı', icon: School, group: 'DİM sınaqları' },
