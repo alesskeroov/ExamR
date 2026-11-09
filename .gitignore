@@ -438,6 +438,8 @@ App_Data/
 
 # Real exam PDFs used as local parser samples are not published
 samples/*.pdf
+# Real study documents and their deck snapshots (course material) for the card regression set
+samples/learning/
 
 # Internal notes and docs stay local (may contain project details)
 *.md

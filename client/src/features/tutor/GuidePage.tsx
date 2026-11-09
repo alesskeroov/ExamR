@@ -203,7 +203,7 @@ function DeckView({ chatId, tab, scope, onLearn, onSource }: {
   }
   const data = deck.data!
   if (tab === 'learn') return <GuideLearn chatId={chatId} deck={data} scope={scope} onScope={onLearn} onSource={onSource} />
-  if (tab === 'cards') return <GuideCardList deck={data} onSource={onSource} />
+  if (tab === 'cards') return <GuideCardList chatId={chatId} deck={data} onSource={onSource} />
   return <GuideTopics deck={data} onLearn={onLearn} />
 }
 

@@ -2,7 +2,7 @@ import { Check, ChevronRight, Flame, Play, Search, Shuffle } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Alert } from '../../components/common/Alert'
 import { cn } from '../../lib/utils'
-import { topicStats, type CardDeck, type LearnScope } from './api'
+import { studyCards, topicStats, type CardDeck, type LearnScope } from './api'
 import { Frame } from './TutorShared'
 
 interface Props {
@@ -16,10 +16,11 @@ const fold = (text: string) => text.toLocaleLowerCase('az')
 export function GuideTopics({ deck, onLearn }: Props) {
   const [term, setTerm] = useState('')
   const stats = useMemo(() => topicStats(deck), [deck])
-  const mastered = deck.cards.filter(c => c.mastered).length
-  const weak = deck.cards.filter(c => c.weak).length
-  const seen = deck.cards.filter(c => c.seen).length
-  const total = deck.cards.length
+  const cards = studyCards(deck)
+  const mastered = cards.filter(c => c.mastered).length
+  const weak = cards.filter(c => c.weak).length
+  const seen = cards.filter(c => c.seen).length
+  const total = cards.length
   const percent = total ? Math.round((mastered / total) * 100) : 0
   const query = fold(term.trim())
   const numbered = deck.topics.map((topic, i) => ({ topic, number: i + 1 }))
