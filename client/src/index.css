@@ -1,6 +1,15 @@
 @import '@fontsource-variable/inter';
 @import 'tailwindcss';
 
+@keyframes server-startup-progress {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(300%); }
+}
+.server-startup-progress { animation: server-startup-progress 1.8s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .server-startup-progress { animation: none; margin-inline: auto; }
+}
+
 @theme {
   --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
   --color-slate-50: #f1f3ee;

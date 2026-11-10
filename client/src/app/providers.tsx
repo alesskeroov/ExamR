@@ -1,6 +1,7 @@
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ConfirmProvider } from '../components/common/ConfirmProvider'
 import { ErrorBoundary } from '../components/common/ErrorBoundary'
+import { ServerStartup } from '../components/common/ServerStartup'
 import { RouterProvider } from 'react-router'
 import { ApiError } from '../lib/api-client'
 import { clearToken } from '../lib/auth-token'
@@ -35,7 +36,7 @@ export function Providers() {
   useTheme()
   return (
     <QueryClientProvider client={queryClient}>
-      <ErrorBoundary><ConfirmProvider><RouterProvider router={router} /></ConfirmProvider></ErrorBoundary>
+      <ErrorBoundary><ServerStartup><ConfirmProvider><RouterProvider router={router} /></ConfirmProvider></ServerStartup></ErrorBoundary>
     </QueryClientProvider>
   )
 }
