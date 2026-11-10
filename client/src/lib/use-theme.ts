@@ -9,6 +9,11 @@ try {
   if (saved === 'light' || saved === 'dark') selected = saved
 } catch { /* Use the system preference when storage is unavailable. */ }
 
+/** The site theme the user chose (or the system one); screens that force a mode restore this on exit. */
+export function currentTheme(): Theme {
+  return snapshot()
+}
+
 function snapshot(): Theme {
   return selected ?? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
 }
