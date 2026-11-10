@@ -166,7 +166,7 @@ body { background: var(--app-background); overflow-wrap: anywhere; }
 /* Notched phones (viewport-fit=cover): keep the last card and the drawer footer clear of the home indicator. */
 .app-safe-bottom { padding-bottom: calc(1.5rem + env(safe-area-inset-bottom)); }
 @media (min-width: 1024px) { .app-safe-bottom { padding-bottom: 2rem; } }
-.app-sidebar-footer { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+.app-sidebar-footer { padding: 6px 6px max(6px, env(safe-area-inset-bottom)); }
 
 /* ---- "Desk" system: ledger rows instead of cards, mono labels and numerals, colour only where it means something. ---- */
 .ds-label { font-size: 12.5px; font-weight: 600; letter-spacing: 0; color: var(--app-muted); }
@@ -191,7 +191,17 @@ body { background: var(--app-background); overflow-wrap: anywhere; }
 .app-nav-link[aria-current='page'] { color: var(--app-ink); background: var(--app-sunken); font-weight: 600; }
 .app-nav-link[aria-current='page'] svg { color: var(--app-ink); }
 .app-nav-link[aria-current='page']::before { content: ''; position: absolute; left: -12px; top: 9px; bottom: 9px; width: 2px; border-radius: 2px; background: var(--app-accent); }
-.app-navigation { scrollbar-width: thin; }
+/* Thin, arrow-less scrollbar that only shows while the sidebar is hovered or focused. */
+.app-navigation::-webkit-scrollbar { width: 6px; }
+.app-navigation::-webkit-scrollbar-button { display: none; }
+.app-navigation::-webkit-scrollbar-track { background: transparent; }
+.app-navigation::-webkit-scrollbar-thumb { border-radius: 999px; background: transparent; }
+.app-sidebar:is(:hover, :focus-within) .app-navigation::-webkit-scrollbar-thumb { background: var(--app-border); }
+.app-navigation::-webkit-scrollbar-thumb:hover { background: var(--app-faint); }
+@supports not selector(::-webkit-scrollbar) {
+  .app-navigation { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+  .app-sidebar:is(:hover, :focus-within) .app-navigation { scrollbar-color: var(--app-border) transparent; }
+}
 @media (max-width: 1023px) { .app-nav-link { min-height: 44px; } }
 @media (min-width: 1024px) { .ds-ledger > * + * { border-top: 1px solid var(--app-border); } }
 

@@ -10,12 +10,14 @@ interface Props {
   verified?: boolean
   action?: ReactNode
   profileLink?: ReactNode
+  /** Short sidebar variant: the art is scaled down instead of cropped. */
+  compact?: boolean
 }
 
-export function Nameplate({ effect, nickname, avatarUrl, verified, action, profileLink }: Props) {
+export function Nameplate({ effect, nickname, avatarUrl, verified, action, profileLink, compact }: Props) {
   const [brokenAvatar, setBrokenAvatar] = useState<string | null>(null)
-  return <div className={`nameplate ${effect ?? 'nameplate-plain'}`}>
-    <NameplateArt effect={effect} />
+  return <div className={`nameplate ${effect ?? 'nameplate-plain'}${compact ? ' nameplate-compact' : ''}`}>
+    <div className="nameplate-art"><NameplateArt effect={effect} /></div>
     <div className="nameplate-content">
       <span className="nameplate-avatar" aria-hidden>
         {avatarUrl && brokenAvatar !== avatarUrl

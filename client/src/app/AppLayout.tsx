@@ -122,8 +122,8 @@ function UserMenu() {
   const nickname = user.nickname || user.displayName || 'İstifadəçi'
 
   return (
-    <div className="app-sidebar-footer shrink-0 border-t border-slate-200 p-2 lg:mt-auto">
-      <Nameplate effect={nameplate.isError ? null : nameplate.data?.selected ?? null} nickname={nickname} avatarUrl={user.avatarUrl}
+    <div className="app-sidebar-footer shrink-0 lg:mt-auto">
+      <Nameplate compact effect={nameplate.isError ? null : nameplate.data?.selected ?? null} nickname={nickname} avatarUrl={user.avatarUrl}
         verified={user.emailConfirmed || user.googleLinked}
         profileLink={<NavLink to="/profile" title={nickname} aria-label={`${nickname} — profili redaktə et`} className="nameplate-nickname">{nickname}</NavLink>}
         action={<button type="button" onClick={() => logout.mutate()} disabled={logout.isPending} aria-label="Çıxış" title="Çıxış"><LogOut className="size-4" /></button>} />
