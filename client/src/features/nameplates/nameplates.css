@@ -165,16 +165,23 @@
 .nameplate-art { position:absolute; inset:0; pointer-events:none; container-type:inline-size; }
 /* Compact (sidebar): Discord-like user panel; the 72px scene is scaled to 54px so nothing is cropped. */
 .nameplate-compact .nameplate-art { inset:0 0 auto auto; width:calc(100% / .75); height:calc(100% / .75); transform:scale(.75); transform-origin:top right; }
-.nameplate-compact .nameplate-content { min-height:54px; gap:10px; padding:8px 6px 8px 8px; }
+.nameplate-compact .nameplate-content { min-height:56px; gap:10px; padding:8px 10px 8px 14px; }
 .nameplate-compact .nameplate-avatar { width:32px; height:32px; font-size:13px; }
 .nameplate-compact .nameplate-nickname { font-size:14px; }
 .nameplate-compact .nameplate-action button { width:32px; height:32px; }
-.nameplate-compact .np09-sun { left:63%; }
+/* The short sidebar plate has no room beside the nickname: keep the waving flag and "10" only. */
+.nameplate-compact :is(.np09-sun,.np09-ballwrap) { display:none; }
 .nameplate :is(a,button):focus-visible { outline:2px solid #5eead4; outline-offset:2px; }
 .nameplate.nameplate-plain { background:var(--app-surface); border:1px solid var(--app-border); }
 .nameplate-plain .nameplate-nickname { color:var(--app-ink); text-shadow:none; }
 .nameplate-plain .nameplate-action button { color:var(--app-muted); background:transparent; }
 .nameplate-plain .nameplate-avatar { background:var(--color-indigo-100); color:var(--color-indigo-700); }
+/* Compact sidebar panel: no frame, softly rounded corners, icon-only action. */
+.nameplate.nameplate-compact { border:0; border-radius:10px; }
+.nameplate-compact .nameplate-action button { background:transparent; }
+.nameplate-compact:not(.nameplate-plain) .nameplate-action svg { filter:drop-shadow(0 1px 2px #000) drop-shadow(0 0 4px #000a); }
+.nameplate-compact .nameplate-action button:hover { background:#ffffff26; }
+.nameplate-compact.nameplate-plain .nameplate-action button:hover { background:var(--app-sunken); color:var(--app-ink); }
 /* Fit the original 360px scene to narrow sidebars as well as wide preview cards. */
 .np09-sl { width:1.3%; }
 .np09-num { font-family:Impact,'Arial Narrow',sans-serif !important; }
