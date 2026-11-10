@@ -169,8 +169,9 @@
 .nameplate-compact .nameplate-avatar { width:32px; height:32px; font-size:13px; }
 .nameplate-compact .nameplate-nickname { font-size:14px; }
 .nameplate-compact .nameplate-action button { width:32px; height:32px; }
-/* The short sidebar plate has no room beside the nickname: keep the waving flag and "10" only. */
-.nameplate-compact :is(.np09-sun,.np09-ballwrap) { display:none; }
+/* Short sidebar plate: the centred sun would sit on the nickname, so sun and ball line up, smaller, left of the "10". */
+.nameplate-compact .np09-sun { left:auto; right:100px; width:26px; height:26px; margin:-13px 0 0; }
+.nameplate-compact .np09-ballwrap { right:132px; bottom:10px; transform:scale(.75); transform-origin:50% 100%; }
 .nameplate :is(a,button):focus-visible { outline:2px solid #5eead4; outline-offset:2px; }
 .nameplate.nameplate-plain { background:var(--app-surface); border:1px solid var(--app-border); }
 .nameplate-plain .nameplate-nickname { color:var(--app-ink); text-shadow:none; }
