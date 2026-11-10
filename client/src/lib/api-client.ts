@@ -30,6 +30,24 @@ const CSRF_HEADER = 'X-ExamR-Request'
 
 type RequestOptions = Omit<RequestInit, 'body'> & { body?: unknown }
 
+/** Public startup probe, isolated from authentication and its error handlers. */
+export async function checkServerLiveness(signal: AbortSignal): Promise<void> {
+  const response = await fetch('/api/health/live', {
+    signal,
+    cache: 'no-store',
+    credentials: 'omit',
+    headers: { Accept: 'application/json' },
+  })
+  if (response.headers.get('cf-mitigated') === 'challenge') {
+    throw new Error('Bağlantı təhlükəsizlik yoxlaması tərəfindən bloklanıb. Bu, serverin oyanmasını gözləməklə bağlı deyil.')
+  }
+  if (!response.ok) throw new ApiError(response.status)
+  const data: unknown = await response.json().catch(() => null)
+  if (!data || typeof data !== 'object' || !('status' in data) || data.status !== 'Healthy') {
+    throw new Error('Serverin sağlamlıq yoxlaması gözlənilməz cavab verdi. API bağlantısını yoxlamaq lazımdır.')
+  }
+}
+
 export async function apiRequest<T>(path: string, { body, headers, ...init }: RequestOptions = {}): Promise<T> {
   const isFormData = body instanceof FormData
 
