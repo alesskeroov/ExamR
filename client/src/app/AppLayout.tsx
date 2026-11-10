@@ -5,7 +5,8 @@ import { useCurrentUser, useLogout } from '../features/auth/api'
 import { tutorEnabled } from '../lib/features'
 import { NotificationBell } from '../features/friends/NotificationBell'
 import { cn } from '../lib/utils'
-import { VerifiedBadge } from '../components/common/VerifiedBadge'
+import { Nameplate } from '../features/nameplates/Nameplate'
+import { useNameplate } from '../features/nameplates/api'
 import { ThemeToggle } from '../components/common/ThemeToggle'
 
 const navItems: { to: string; label: string; icon: LucideIcon; group: string; end?: boolean; adminOnly?: boolean; badge?: string }[] = [
@@ -116,32 +117,16 @@ export function AppLayout() {
 function UserMenu() {
   const { data: user } = useCurrentUser()
   const logout = useLogout()
+  const nameplate = useNameplate()
   if (!user) return null
   const nickname = user.nickname || user.displayName || 'İstifadəçi'
 
   return (
-    <div className="app-sidebar-footer flex shrink-0 items-center gap-3 border-t border-slate-200 p-4 lg:mt-auto">
-      <NavLink to="/profile" aria-label="Profili redaktə et" title="Profili redaktə et" className="-m-1 grid size-10 shrink-0 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-indigo-600">
-        {user.avatarUrl ? <img src={user.avatarUrl} alt="" className="size-8 rounded-full object-cover" /> :
-          <span className="flex size-8 items-center justify-center rounded-full bg-indigo-100 font-semibold text-indigo-700" aria-hidden>{nickname.charAt(0).toUpperCase()}</span>}
-      </NavLink>
-      <span className="min-w-0 flex-1">
-        <span className="flex min-w-0 items-center gap-1">
-          <NavLink to="/profile" className="truncate font-medium hover:text-indigo-700">{nickname}</NavLink>
-          {(user.emailConfirmed || user.googleLinked) && <VerifiedBadge />}
-        </span>
-        <span className="block truncate text-xs text-slate-500">{user.email}</span>
-      </span>
-      <button
-        type="button"
-        onClick={() => logout.mutate()}
-        disabled={logout.isPending}
-        className="grid size-10 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-        aria-label="Çıxış"
-        title="Çıxış"
-      >
-        <LogOut className="size-4" />
-      </button>
+    <div className="app-sidebar-footer shrink-0 border-t border-slate-200 p-2 lg:mt-auto">
+      <Nameplate effect={nameplate.isError ? null : nameplate.data?.selected ?? null} nickname={nickname} avatarUrl={user.avatarUrl}
+        verified={user.emailConfirmed || user.googleLinked}
+        profileLink={<NavLink to="/profile" title={nickname} aria-label={`${nickname} — profili redaktə et`} className="nameplate-nickname">{nickname}</NavLink>}
+        action={<button type="button" onClick={() => logout.mutate()} disabled={logout.isPending} aria-label="Çıxış" title="Çıxış"><LogOut className="size-4" /></button>} />
     </div>
   )
 }
@@ -164,7 +149,7 @@ function Brand() {
 }
 
 const extraPages: Record<string, string> = { '/notifications': 'Bildirişlər', '/profile': 'Profil' }
-const adminSections: Record<string, string> = { documents: 'Sənədlər', groups: 'Qruplar', admins: 'Adminlər', dim: 'DİM sınaqları' }
+const adminSections: Record<string, string> = { documents: 'Sənədlər', groups: 'Qruplar', admins: 'Adminlər', dim: 'DİM sınaqları', nameplates: 'Profil effektləri' }
 
 function Breadcrumb() {
   const { pathname } = useLocation()

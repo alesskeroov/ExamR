@@ -5,6 +5,9 @@ namespace ExamFlow.Api.Features.Auth;
 
 public class AppUser : IdentityUser<Guid>
 {
+    [MaxLength(4)]
+    public string? Nameplate { get; set; }
+    public int NameplateGrants { get; set; }
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }
     public string DisplayName { get; set; } = string.Empty;
