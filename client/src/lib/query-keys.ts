@@ -1,4 +1,8 @@
 export const queryKeys = {
+  nameplates: {
+    mine: ['nameplates', 'mine'] as const,
+    user: (id: string) => ['nameplates', 'admin', id] as const,
+  },
   usage: {
     all: ['usage'] as const,
     mine: ['usage', 'mine'] as const,

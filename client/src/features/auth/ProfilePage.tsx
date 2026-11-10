@@ -1,3 +1,4 @@
+import { NameplatePicker } from '../nameplates/NameplatePicker'
 import { VerifiedBadge } from '../../components/common/VerifiedBadge'
 import './profile.css'
 import { AccountSettings } from './AccountSettings'
@@ -143,7 +144,7 @@ export function ProfilePage() {
         className="profile-tab"><Icon className="size-[18px] shrink-0 md:size-4" aria-hidden /><span className="md:hidden">{short}</span><span className="hidden md:inline">{label}</span></button>)}
     </div>
     <div key={tab} className="profile-panel" role="tabpanel" id="profile-panel" aria-labelledby={`profile-tab-${tab}`} tabIndex={0}>
-      {tab === 4 ? <><AccountSettings /><GoogleLinkSection /></> : <ProfileActivity tab={tab} />}
+      {tab === 4 ? <><NameplatePicker /><div className="mt-6"><AccountSettings /></div><GoogleLinkSection /></> : <ProfileActivity tab={tab} />}
     </div>
   </div>
 }

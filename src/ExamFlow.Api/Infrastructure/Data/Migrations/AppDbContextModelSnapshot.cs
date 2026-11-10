@@ -101,6 +101,13 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.Property<DateTimeOffset?>("LockoutEnd")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Nameplate")
+                        .HasMaxLength(4)
+                        .HasColumnType("character varying(4)");
+
+                    b.Property<int>("NameplateGrants")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Nickname")
                         .IsRequired()
                         .HasMaxLength(24)

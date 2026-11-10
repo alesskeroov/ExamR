@@ -1,4 +1,5 @@
 using ExamFlow.Api.Features.Usage;
+using ExamFlow.Api.Features.Nameplates;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.DataProtection;
@@ -236,6 +237,7 @@ var api = app.MapGroup("/api");
 api.MapHealthEndpoints();
 api.MapAuthEndpoints();
 api.MapProfileEndpoints();
+api.MapNameplateEndpoints();
 api.MapAccountEndpoints();
 api.MapDocumentEndpoints();
 api.MapDocumentSharingEndpoints();
