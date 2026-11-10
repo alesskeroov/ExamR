@@ -84,3 +84,51 @@
   .exam-flow .result-reveal, .exam-flow .result-bar-part, .exam-flow .result-cell { animation: none; }
   .exam-flow .result-cell:active { transform: none; }
 }
+
+/* Reading themes (lib/use-exam-theme.ts). The theme's light/dark base comes from the root data-theme (status
+   colors keep their meaning there); a theme only re-tints the neutral surfaces, borders and text of the exam screen. */
+:is(.exam-session, .exam-theme-preview)[data-exam-theme='paper'] { --xt-bg: #f3ead8; --xt-surface: #fbf6ea; --xt-sunken: #f1e7d2; --xt-sunken-2: #e9ddc4; --xt-border: #e0d3b8; --xt-border-strong: #cbbb98; --xt-text: #2b2418; --xt-text-2: #3d3426; --xt-muted: #66583f; --xt-faint: #8a7b62; }
+:is(.exam-session, .exam-theme-preview)[data-exam-theme='calm'] { --xt-bg: linear-gradient(160deg, #e6eef5 0%, #eeeaf6 100%) fixed; --xt-surface: #fff; --xt-sunken: #f2f5f9; --xt-sunken-2: #e8edf3; --xt-border: #d9e1ea; --xt-border-strong: #c3cdd8; --xt-text: #172230; --xt-text-2: #2a3644; --xt-muted: #546273; --xt-faint: #7c8896; }
+:is(.exam-session, .exam-theme-preview)[data-exam-theme='night'] { --xt-bg: #0c0f12; --xt-surface: #14181c; --xt-sunken: #101317; --xt-sunken-2: #1c2127; --xt-border: #232a31; --xt-border-strong: #333c45; --xt-text: #d5dbe0; --xt-text-2: #c4cbd1; --xt-muted: #919ba4; --xt-faint: #6f7881; }
+:is(.exam-session, .exam-theme-preview)[data-exam-theme='contrast'] { --xt-bg: #fff; --xt-surface: #fff; --xt-sunken: #f0f0f0; --xt-sunken-2: #e2e2e2; --xt-border: #3d3d3d; --xt-border-strong: #000; --xt-text: #000; --xt-text-2: #000; --xt-muted: #1f1f1f; --xt-faint: #474747; }
+.exam-flow.exam-session[data-exam-theme]:not([data-exam-theme='auto']) {
+  --app-background: var(--xt-surface); --app-surface: var(--xt-surface); --app-sunken: var(--xt-sunken); --app-border: var(--xt-border);
+  --app-foreground: var(--xt-text); --app-ink: var(--xt-text); --app-muted: var(--xt-muted); --app-faint: var(--xt-faint);
+  background: var(--xt-bg); color: var(--xt-text);
+}
+.exam-flow.exam-session:not([data-exam-theme='auto']) :is([class~='bg-white']) { background-color: var(--xt-surface); }
+.exam-flow.exam-session:not([data-exam-theme='auto']) :is([class~='bg-white/95']) { background-color: color-mix(in srgb, var(--xt-surface) 95%, transparent); }
+.exam-flow.exam-session:not([data-exam-theme='auto']) :is([class~='bg-slate-50']) { background-color: var(--xt-sunken); }
+.exam-flow.exam-session:not([data-exam-theme='auto']) :is([class~='bg-slate-100']) { background-color: var(--xt-sunken-2); }
+.exam-flow.exam-session:not([data-exam-theme='auto']) :is(.border-slate-100, .border-slate-200) { border-color: var(--xt-border); }
+.exam-flow.exam-session:not([data-exam-theme='auto']) :is(.border-slate-300) { border-color: var(--xt-border-strong); }
+.exam-flow.exam-session:not([data-exam-theme='auto']) :is([class~='text-slate-900']) { color: var(--xt-text); }
+.exam-flow.exam-session:not([data-exam-theme='auto']) :is([class~='text-slate-700'], [class~='text-slate-800']) { color: var(--xt-text-2); }
+.exam-flow.exam-session:not([data-exam-theme='auto']) :is([class~='text-slate-500'], [class~='text-slate-600']) { color: var(--xt-muted); }
+.exam-flow.exam-session:not([data-exam-theme='auto']) :is([class~='text-slate-400']) { color: var(--xt-faint); }
+.exam-flow.exam-session:not([data-exam-theme='auto']) :is([class~='disabled:text-slate-400']):disabled { color: var(--xt-faint); }
+@media (hover: hover) {
+  .exam-flow.exam-session:not([data-exam-theme='auto']) :is([class~='hover:bg-slate-50']):hover:not(:disabled) { background-color: var(--xt-sunken); }
+  .exam-flow.exam-session:not([data-exam-theme='auto']) :is([class~='hover:bg-slate-100']):hover:not(:disabled) { background-color: var(--xt-sunken-2); }
+  .exam-flow.exam-session:not([data-exam-theme='auto']) :is([class~='hover:border-slate-300']):hover { border-color: var(--xt-border-strong); }
+  .exam-flow.exam-session:not([data-exam-theme='auto']) :is([class~='hover:text-slate-800'], [class~='hover:text-slate-900']):hover { color: var(--xt-text); }
+}
+/* Transparent PNG figures stay readable on dark themes. */
+.exam-flow.exam-session[data-exam-theme='night'] .exam-question-enter img { background: #f4f4f2; border-radius: 6px; }
+/* Theme picker popover. */
+.exam-session .exam-theme-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 50; width: min(16rem, calc(100vw - 1.5rem)); padding: .375rem;
+  border: 1px solid var(--app-border); border-radius: 12px; background: var(--app-surface); box-shadow: 0 18px 40px -20px rgb(15 23 42 / 45%); }
+.exam-session .exam-theme-option[aria-checked='true'] { background: var(--app-sunken); }
+.exam-theme-swatch { width: 1.5rem; height: 1.5rem; flex-shrink: 0; border-radius: 999px; border: 1px solid rgb(127 127 127 / 45%); }
+/* Settings preview (ExamThemeSettings): uses the theme tokens, falls back to the site tokens for "Sistem". */
+.exam-theme-preview { display: flex; align-items: center; padding: 1rem; border-radius: 12px; border: 1px solid var(--xt-border, var(--app-border));
+  background: var(--xt-bg, var(--app-background)); color: var(--xt-text, var(--app-foreground)); }
+.exam-theme-preview-card { width: 100%; padding: .875rem 1rem 1rem; border-radius: 12px; border: 1px solid var(--xt-border, var(--app-border)); background: var(--xt-surface, var(--app-surface)); }
+.exam-theme-preview-muted { font-size: .75rem; color: var(--xt-muted, var(--app-muted)); }
+.exam-theme-preview-text { margin: .25rem 0 .75rem; font-weight: 600; line-height: 1.5; color: var(--xt-text, var(--app-foreground)); }
+.exam-theme-preview-option { display: flex; align-items: center; gap: .625rem; margin-top: .375rem; padding: .5rem .625rem; border-radius: 10px; font-size: .875rem;
+  border: 1px solid var(--xt-border-strong, var(--app-border)); color: var(--xt-text-2, var(--app-foreground)); }
+.exam-theme-preview-option[data-selected='true'] { border: 2px solid #0284c7; padding: calc(.5rem - 1px) calc(.625rem - 1px); }
+.exam-theme-preview-letter { display: grid; place-items: center; width: 1.5rem; height: 1.5rem; flex-shrink: 0; border-radius: 999px; font-size: .75rem; font-weight: 600;
+  background: var(--xt-sunken-2, var(--app-sunken)); color: var(--xt-muted, var(--app-muted)); }
+.exam-theme-preview-option[data-selected='true'] .exam-theme-preview-letter { background: #0284c7; color: #fff; }

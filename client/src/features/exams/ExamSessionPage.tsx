@@ -1,12 +1,13 @@
 import './exam-flow.css'
 import { answerDisplayText } from './answer-display'
 import { useIsMutating } from '@tanstack/react-query'
-import { AlertTriangle, Bookmark, BookmarkCheck, Check, ChevronLeft, ChevronRight, Clock, Eye, Flag, LayoutGrid, Loader2, Lock, Maximize2, Minimize2, X } from 'lucide-react'
+import { AlertTriangle, Bookmark, BookmarkCheck, Check, ChevronLeft, ChevronRight, Clock, Eye, Flag, LayoutGrid, Loader2, Lock, Maximize2, Minimize2, Palette, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
 import { Button } from '../../components/common/Button'
 import { QuestionVisuals } from '../../components/common/QuestionVisuals'
+import { examThemes, useExamTheme, useExamThemeBase, type ExamTheme } from '../../lib/use-exam-theme'
 import { cn } from '../../lib/utils'
 import { bodyVisuals, optionVisuals, visibleText, visualUrls } from '../../lib/visuals'
 import { NotificationBell } from '../friends/NotificationBell'
@@ -58,6 +59,8 @@ export function ExamSessionPage() {
 function ExamRunner({ session }: { session: ExamSession }) {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const examTheme = useExamTheme()
+  useExamThemeBase(examTheme.theme)
   const total = session.questions.length
   const index = Math.min(Math.max(Number(searchParams.get('q') ?? 1) - 1 || 0, 0), total - 1)
   const question = session.questions[index]
@@ -183,7 +186,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
   }, [saving])
 
   return (
-    <div className="exam-flow exam-session min-h-dvh bg-slate-50">
+    <div data-exam-theme={examTheme.theme} className="exam-flow exam-session min-h-dvh bg-slate-50">
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="exam-shell exam-header-bar mx-auto flex min-h-14 items-center gap-2 px-3 py-2 sm:min-h-16 sm:gap-3 sm:px-4 min-[900px]:px-6">
           <Link to="/" className="hidden items-center gap-2 font-semibold sm:flex" aria-label="ExamR ana səhifə">
@@ -197,6 +200,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
             </p>
           </div>
           <ExamTimer expiresAt={session.expiresAt} serverNow={session.serverNow} onExpire={submit} />
+          <ThemePicker theme={examTheme.theme} onChange={examTheme.setTheme} />
           <FullscreenToggle />
           <div className="hidden sm:block"><NotificationBell safe poll={false} /></div>
           <Button variant="secondary" onClick={() => setConfirmOpen(true)} loading={finish.isPending} className="h-10 shrink-0 px-3 text-sm sm:px-4">
@@ -654,6 +658,48 @@ function FinishDialog({ open, answered, unanswered, flagged, onReviewUnanswered,
         <Button onClick={onConfirm}>Bəli, bitir</Button>
       </div>
     </dialog>
+  )
+}
+
+/** Reading theme menu; the choice applies at once and is remembered for later exams on this device. */
+function ThemePicker({ theme, onChange }: { theme: ExamTheme; onChange: (theme: ExamTheme) => void }) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const outside = (event: PointerEvent) => { if (!rootRef.current?.contains(event.target as Node)) setOpen(false) }
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.stopPropagation(); setOpen(false) } }
+    document.addEventListener('pointerdown', outside)
+    document.addEventListener('keydown', escape, true)
+    return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape, true) }
+  }, [open])
+  return (
+    <div ref={rootRef} className="relative shrink-0">
+      <button type="button" onClick={() => setOpen(value => !value)} aria-expanded={open} aria-haspopup="true"
+        aria-label="Oxuma teması" title="Oxuma teması"
+        className="grid size-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900">
+        <Palette className="size-4" aria-hidden />
+      </button>
+      {open && (
+        <div className="exam-theme-menu">
+          <p className="px-2 pt-1 pb-1.5 text-xs font-semibold text-slate-500">Oxuma teması</p>
+          <div role="radiogroup" aria-label="Oxuma teması" className="flex flex-col">
+            {examThemes.map(option => (
+              <button key={option.id} type="button" role="radio" aria-checked={theme === option.id}
+                onClick={() => { onChange(option.id); setOpen(false) }}
+                className="exam-theme-option flex items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-slate-50">
+                <span aria-hidden className="exam-theme-swatch" style={{ background: option.swatch }} />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-slate-900">{option.label}</span>
+                  <span className="block text-xs text-slate-500">{option.hint}</span>
+                </span>
+                {theme === option.id && <Check className="size-4 shrink-0 text-slate-700" aria-hidden />}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
