@@ -3,6 +3,14 @@ import { api, uploadFile } from '../../lib/api-client'
 import { queryKeys } from '../../lib/query-keys'
 import type { PagedResult } from '../documents/api'
 
+export function useSendFeedback() {
+  return useMutation({
+    mutationFn: (body: { requestId: string; kind: 'problem' | 'idea'; text: string; documentName?: string; pagePath: string }) =>
+      api.post<{ id: string }>('/feedback', body),
+    retry: false,
+  })
+}
+
 export type TutorMode = 'Free' | 'StepByStep'
 export type IndexStatus = 'Pending' | 'Processing' | 'Completed' | 'Failed'
 

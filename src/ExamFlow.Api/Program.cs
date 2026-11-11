@@ -1,4 +1,5 @@
 using ExamFlow.Api.Features.Usage;
+using ExamFlow.Api.Features.Feedback;
 using ExamFlow.Api.Features.Nameplates;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.SignalR;
@@ -29,6 +30,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddJwtIdentity(builder.Configuration);
+builder.Services.AddFeedback(builder.Configuration);
 
 // Behind a reverse proxy (nginx, IIS, a cloud load balancer) the API must see the public scheme, host and client IP:
 // OAuth redirect URIs, Secure cookies and per-IP rate limits depend on them. Loopback proxies are trusted by default;
@@ -234,6 +236,7 @@ if (app.Environment.IsDevelopment())
 }
 
 var api = app.MapGroup("/api");
+api.MapFeedbackEndpoints();
 api.MapHealthEndpoints();
 api.MapAuthEndpoints();
 api.MapProfileEndpoints();
