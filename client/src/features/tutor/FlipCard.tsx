@@ -2,6 +2,7 @@ import { Check, FileText, RotateCw, X } from 'lucide-react'
 import { useEffect, useRef, type KeyboardEvent, type MouseEvent } from 'react'
 import { cn } from '../../lib/utils'
 import type { CardKind, StudyCard } from './api'
+import { splitCardAnswer } from './card-answer'
 
 // Shared with the card grid (kept here: this file is the card's look).
 const kindLabel: Record<CardKind, string> = { Question: 'Sual', Term: 'Anlayış', List: 'Siyahı', Test: 'Test', Table: 'Cədvəl', Custom: 'Mənim kartım' }
@@ -70,7 +71,7 @@ export function FlipCard({ card, topic, flipped, onFlip, onSource, required, aut
             {/* my-auto centers short text; long text starts at the top and scrolls. */}
             <div className="my-auto py-2 text-center">
               <p className="text-[11px] font-semibold tracking-[.12em] text-slate-400 uppercase">{prompt[card.kind]}</p>
-              <p className="mx-auto mt-3 max-w-xl text-xl leading-snug font-semibold text-slate-900 sm:text-2xl">{card.front}</p>
+              <p className="mx-auto mt-3 max-w-xl text-xl leading-snug font-semibold whitespace-pre-line text-slate-900 sm:text-2xl">{card.front}</p>
             </div>
           </div>
           <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
@@ -198,7 +199,8 @@ function Back({ card }: { card: StudyCard }) {
   }
   return (
     <>
-      <p className="text-[15px] leading-relaxed whitespace-pre-line text-slate-800 sm:text-base">{card.back}</p>
+      {card.kind === 'Question' ? <QuestionAnswer key={`${card.id}:${card.back}`} text={card.back} />
+        : <p className="text-[15px] leading-relaxed whitespace-pre-line text-slate-800 sm:text-base">{card.back}</p>}
       {card.kind === 'Question' && card.items.length > 0 && (
         <>
           <p className="mt-4 text-xs font-semibold text-slate-500">Bu cavabdakı anlayışlar</p>
@@ -208,6 +210,21 @@ function Back({ card }: { card: StudyCard }) {
         </>
       )}
     </>
+  )
+}
+
+function QuestionAnswer({ text }: { text: string }) {
+  const { preview, rest } = splitCardAnswer(text)
+  return (
+    <div className="text-[15px] leading-relaxed text-slate-800 sm:text-base">
+      <p className="whitespace-pre-line">{preview}</p>
+      {rest && (
+        <details className="mt-4" onClick={event => event.stopPropagation()}>
+          <summary className="cursor-pointer text-sm font-semibold text-indigo-700">Tam cavabı göstər</summary>
+          <p className="mt-3 whitespace-pre-line">{rest}</p>
+        </details>
+      )}
+    </div>
   )
 }
 

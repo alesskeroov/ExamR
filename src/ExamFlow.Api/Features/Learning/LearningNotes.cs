@@ -101,10 +101,15 @@ public static partial class DocumentCleaner
     /// <summary>Source code, commands and configuration lines.</summary>
     public static bool IsCode(string text)
     {
-        if (CodeShape().IsMatch(text)) return true;
+        if (CodeShape().IsMatch(text) || MarkupLine().IsMatch(text)) return true;
         var symbols = text.Count(c => "{}[]=;<>_\\$`|".Contains(c));
         return text.Length >= 8 && symbols >= Math.Max(3, text.Length * 0.08);
     }
+
+    // Standalone HTML tags are code even when too short for the symbol-density heuristic.
+    // Prose such as "<head> teqi metadatanı saxlayır" must remain an explanation.
+    [GeneratedRegex(@"^\s*</?[a-zA-Z][\w:-]*(?:\s+[^<>]*)?\s*/?>\s*$")]
+    private static partial Regex MarkupLine();
 
     /// <summary>Title-page lines: teacher, department, e-mail, links, check dates.</summary>
     public static bool IsMetadata(string text) =>
@@ -181,6 +186,9 @@ public static partial class NotesCardBuilder
         var paragraphs = DocumentCleaner.Clean(raw);
         var plan = PlanHeadings(paragraphs, out var planRange);
         var sections = Sections(paragraphs, plan, planRange);
+        // A heading typed in capitals loses acronyms and "ı" when lowered; the body text shows how its words are really written.
+        var spellings = Spellings(paragraphs);
+        sections = sections.Select(s => s.Heading.Length > 0 && Shouting(paragraphs[s.Index].Text) ? s with { Heading = Respell(s.Heading, spellings) } : s).ToList();
 
         var topics = new List<CardTopic>();
         var cards = new List<StudyCardItem>();
@@ -217,9 +225,13 @@ public static partial class NotesCardBuilder
                 ? p.TableText : p.Text));
             var previous = topics[^1];
             topics[^1] = previous with { Notes = string.Join("\n\n", new[] { previous.Notes, section.Heading, reading }.Where(t => !string.IsNullOrWhiteSpace(t))) };
+            // Lecture notes rarely write "X — definition"; every titled section still has an explanation to recall.
+            if (section.Heading.Length > 0 && char.IsUpper(section.Heading[0]) && !GenericHeading().IsMatch(section.Heading) && Summary(section.Body) is { } summary)
+                AddCard(new(CardMastery.Hash(CardKind.Question, "section\u001f" + section.Heading), CardKind.Question, topic.Key, section.Heading,
+                    summary, [], [], number, section.Body[0].Page, section.Body[0].ChunkOrdinal, IsSection: true));
             foreach (var paragraph in section.Body.Where(p => !p.IsTableRow))
             {
-                foreach (var (term, definition) in Terms(paragraph.Text))
+                foreach (var (term, definition) in Terms(paragraph.Text).Concat(Namings(paragraph.Text)))
                 {
                     var front = $"{term} nədir?";
                     Add(new(CardMastery.Hash(CardKind.Term, front + "\u001f" + definition), CardKind.Term, topic.Key,
@@ -244,6 +256,49 @@ public static partial class NotesCardBuilder
             .Where(g => g.Select(c => c.Back + "\u001f" + string.Join("\u001f", c.Items)).Distinct().Count() == 1)
             .Select(g => g.First()).ToList();
         return new(topics.Where(t => withBody.Contains(t.Key)).ToList(), unambiguous);
+    }
+
+    // ---------- sections ----------
+
+    private const int MinSummary = 60;
+    private const int MaxSummary = 1800;
+    private const int SummarySentences = 6;
+    /// <summary>Prose paragraphs of a section looked at for its summary.</summary>
+    private const int SummaryCandidates = 3;
+    /// <summary>A first "sentence" shorter than this is a run-in label ("Site-to-site VPN.").</summary>
+    private const int RunInLabel = 25;
+
+    /// <summary>
+    /// The opening of a section's explanation: its first real prose paragraph, up to six sentences. Null when the section
+    /// is only lists, tables, examples or fragments, so no card asks for something the back cannot answer.
+    /// </summary>
+    public static string? Summary(IReadOnlyList<DocParagraph> body)
+    {
+        var tried = 0;
+        foreach (var p in body)
+        {
+            if (p.IsTableRow) continue;
+            var text = p.Text.Trim();
+            if (text.Length < MinSummary || text.EndsWith(':') || ItemStart().IsMatch(text)) continue;
+            if (++tried > SummaryCandidates) break;
+            // "burada - …" (a formula's legend), examples and "Bu bölmədə …" need what the card cannot show.
+            if (!char.IsUpper(text[0]) || DocumentCleaner.IsNoise(text) || DocumentCleaner.IsCode(text) || ExampleStart().IsMatch(text) || OpenQuestionExtractor.IsPromptOnly(text) || text.Contains('�')) continue;
+            if (!text.EndsWith('.') && !text.EndsWith('!')) continue;
+            var ends = SentenceEnd().Matches(text).Select(m => m.Index + 1).Append(text.Length).ToList();
+            // "Site-to-site VPN. VPN …": a run-in label is not part of the explanation.
+            var from = ends[0] < RunInLabel ? ends[0] : 0;
+            var summary = "";
+            foreach (var end in ends.Where(e => e > from).Take(SummarySentences))
+            {
+                if (end - from > MaxSummary) break;
+                summary = text[from..end].Trim();
+            }
+            // "(Cədvəl 4)" points at a picture or table the card does not show; "…mı?" is a question, not an explanation.
+            // "Təqribən ." / "kəmiyyəti , uyğun …": a formula the text extraction lost.
+            if (summary.Length >= MinSummary && !summary.Contains('?') && !Reference().IsMatch(summary)
+                && !summary.Contains(" .", StringComparison.Ordinal) && !summary.Contains(" ,", StringComparison.Ordinal)) return summary;
+        }
+        return null;
     }
 
     // ---------- review ----------
@@ -291,6 +346,38 @@ public static partial class NotesCardBuilder
             yield return (named, line.Trim());
     }
 
+    /// <summary>
+    /// "… çıxarır. Bu prosesə render etmək deyilir." / "… azaldılır - bu xüsusiyyətə “auto-scaling” deyilir.": the term is named right
+    /// after "bu …", so its bounds are certain; the explanation is the sentence before (or the clause before the dash).
+    /// "… kompleksi radiorele sistemi adlanır" is not read: where its term starts is a guess.
+    /// </summary>
+    public static IEnumerable<(string Term, string Definition)> Namings(string paragraph)
+    {
+        var text = paragraph.Trim();
+        var ends = SentenceEnd().Matches(text).Select(m => m.Index + 1).Append(text.Length).ToList();
+        var start = 0;
+        string? previous = null;
+        foreach (var end in ends)
+        {
+            var sentence = text[start..end].Trim();
+            start = end;
+            var before = previous;
+            previous = sentence;
+            if (NamingSentence().Match(sentence) is not { Success: true } m) continue;
+            var raw = m.Groups["term"].Value;
+            if (Quoted().Match(raw) is { Success: true } quoted) raw = quoted.Groups[1].Value;
+            else if (raw.Contains('"') || raw.Contains('“') || raw.Contains('«')) continue;
+            // "Session ID və ya qısaca SID" → "Session ID (SID)".
+            raw = Regex.Replace(raw, @"^(?<name>.+?)\s+və ya qısaca\s+(?<short>\S+)$", "${name} (${short})");
+            if (Regex.IsMatch(raw, @"\b(?:bu|yəni|isə|görə)\b", RegexOptions.IgnoreCase) || Term(raw) is not { } term) continue;
+            var explanation = m.Groups["inline"].Success ? m.Groups["inline"].Value.Trim().TrimEnd(',', ';') + "." : before;
+            if (explanation is null || explanation.Length is < 25 or > 350 || !char.IsUpper(explanation[0]) || explanation.Contains('?')
+                || !explanation.EndsWith('.') || DocumentCleaner.IsNoise(explanation) || DocumentCleaner.IsCode(explanation)
+                || ExampleStart().IsMatch(explanation) || DependentStart().IsMatch(explanation) || Reference().IsMatch(explanation)) continue;
+            yield return (term, m.Groups["inline"].Success ? sentence : $"{explanation} {sentence}");
+        }
+    }
+
     /// <summary>Reject fragments, dangling references and multi-paragraph answers rather than inventing an explanation.</summary>
     public static bool ReliableDefinition(string text) => text.Length is >= 25 and <= 350
         && !DocumentCleaner.IsNoise(text) && !DocumentCleaner.IsCode(text)
@@ -325,7 +412,36 @@ public static partial class NotesCardBuilder
         return m.Success ? text[..(m.Index + 1)] : text;
     }
 
-    private static string Capital(string text) => text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];
+    /// <summary>First letter in capitals; Azerbaijani "i" becomes "İ" (culture-free, so it also works without ICU).</summary>
+    private static string Capital(string text) => text.Length == 0 ? text : (text[0] == 'i' ? 'İ' : char.ToUpperInvariant(text[0])) + text[1..];
+
+    /// <summary>Word key that ignores case and the I/İ/ı/i confusion of text typed in capitals.</summary>
+    private static string SpellingKey(string word) => string.Concat(word.Select(c => c is 'İ' or 'I' or 'ı' ? 'i' : char.ToLowerInvariant(c)));
+
+    /// <summary>
+    /// How the body writes each word in mid-sentence ("IoT", "AWS", "qurğularının"), by <see cref="SpellingKey"/>. Words at a
+    /// sentence start are skipped: their capital says nothing about the word.
+    /// </summary>
+    public static Dictionary<string, string> Spellings(IReadOnlyList<DocParagraph> paragraphs)
+    {
+        var counts = new Dictionary<string, Dictionary<string, int>>();
+        foreach (var p in paragraphs)
+        {
+            if (p.IsTableRow || p.Text.Length < 40 || Shouting(p.Text)) continue;
+            foreach (Match m in Word().Matches(p.Text))
+            {
+                var before = p.Text[..m.Index].TrimEnd();
+                if (before.Length == 0 || ".!?:•-–—\"“«(".Contains(before[^1])) continue;
+                var forms = counts.TryGetValue(SpellingKey(m.Value), out var f) ? f : counts[SpellingKey(m.Value)] = [];
+                forms[m.Value] = forms.GetValueOrDefault(m.Value) + 1;
+            }
+        }
+        return counts.ToDictionary(c => c.Key, c => c.Value.MaxBy(f => f.Value).Key);
+    }
+
+    /// <summary>A calmed heading with each word spelled as the body spells it; the first letter stays capital.</summary>
+    public static string Respell(string heading, IReadOnlyDictionary<string, string> spellings) =>
+        Capital(Word().Replace(heading, m => spellings.TryGetValue(SpellingKey(m.Value), out var body) ? body : m.Value));
 
     // ---------- sections ----------
 
@@ -560,4 +676,15 @@ public static partial class NotesCardBuilder
     [GeneratedRegex(@"^(?:bu|bunlar|həmin|onun|onlar|belə|əgər|məsələn|lakin|amma|beləliklə|burada|sonra|əvvəl|hər|bütün|bəzi|biz|siz|mən|nəticədə|yəni|misal|adətən|praktikada|qeyd|diqqət|nümunə|əsasən|xüsusilə|əksər|bir|iki|üç|çox|daha|ən)$", RegexOptions.IgnoreCase)]
     private static partial Regex NotTermStart();
     [GeneratedRegex(@"\p{L}(?:nda|ndə|ında|ində|unda|ündə|də|da|dən|dan)$", RegexOptions.IgnoreCase)] private static partial Regex Locative();
+    [GeneratedRegex(@"^\s*(?:[-•▪●◦*]|\d{1,2}[.)])\s")] private static partial Regex ItemStart();
+    [GeneratedRegex(@"\p{L}+")] private static partial Regex Word();
+    [GeneratedRegex(@"^(?:(?<inline>\p{Lu}.{20,}?)\s+[-–—]\s+)?(?:buna|(?:bu|belə)\s+(?!görə\b)\p{L}+)\s+(?<term>\S.{1,60}?)\s+(?:deyilir|adlanır|adlandırılır)\.$", RegexOptions.IgnoreCase)]
+    private static partial Regex NamingSentence();
+    [GeneratedRegex(@"^[""“«]([^""“”«»]{2,60})[""”»]$")] private static partial Regex Quoted();
+    [GeneratedRegex(@"^(?:məsələn|misal|nümunə|yuxarıda|aşağıda|şəkildə|cədvəldə|bu (?:bölmədə|fəsildə|mövzuda|hissədə|mühazirədə))\b", RegexOptions.IgnoreCase)]
+    private static partial Regex ExampleStart();
+    [GeneratedRegex(@"\b(?:Şəkil|Şək\.|Cədvəl|Diaqram|Sxem|Figure|Fig\.|Table|Рис\.|Рисунок|Таблица)\s*\d", RegexOptions.IgnoreCase)] private static partial Regex Reference();
+    /// <summary>Headings that ask nothing on their own ("Giriş", "Nəticə").</summary>
+    [GeneratedRegex(@"^(?:giriş|nəticə|nəticələr|xülasə|yekun|annotasiya|ümumi məlumat|introduction|conclusion|summary|введение|заключение)$", RegexOptions.IgnoreCase)]
+    private static partial Regex GenericHeading();
 }

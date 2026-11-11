@@ -280,8 +280,18 @@ public static partial class OpenQuestionExtractor
         }
         var question = text[..(mark + 1)].Trim();
         var answer = text[(mark + 1)..].Trim();
+        // "Explain X. Describe its benefits." is one instruction, not an inline answer. Keep the existing
+        // question key stable, but leave its answer empty so adjacent headings can share the real source answer.
+        if (question.Length >= 5 && answer.Length >= 20 && IsPromptOnly(answer)) return (question, "");
         return question.Length >= 5 && answer.Length >= 20 ? (question, answer) : null;
     }
+
+    public static bool IsPromptOnly(string text) =>
+        Regex.Split(text.Trim(), @"(?<=[.!?])\s+(?=\p{Lu})")
+            .All(sentence => PromptEnding().IsMatch(sentence));
+
+    [GeneratedRegex(@"\b(?:izah edin|şərh edin|müqayisə edin|təsvir edin|qeyd edin|təhlil edin|açıqlayın|əsaslandırın|yazın|göstərin|sadalayın)\s*[.!?]?\s*$", RegexOptions.IgnoreCase)]
+    private static partial Regex PromptEnding();
 
     [GeneratedRegex(@"[.!:](?=\s+[\p{Lu}\d])")] private static partial Regex SentenceEnd();
     [GeneratedRegex(@"^\(?(\d{1,3})\s*[.)]\s*(\S[\s\S]*)$")] private static partial Regex Numbered();
