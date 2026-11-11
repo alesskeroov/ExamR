@@ -1,15 +1,16 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { GraduationCap, Loader2 } from 'lucide-react'
-import { ApiError, checkServerLiveness } from '../../lib/api-client'
+import { checkServerLiveness } from '../../lib/api-client'
 import { Alert } from './Alert'
 import { Button } from './Button'
 
 const retryInterval = 4_000
+const requestTimeout = 15_000
+const startupTimeout = 90_000
 
 export function ServerStartup({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false)
   const [attempt, setAttempt] = useState(0)
-  const [slow, setSlow] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -17,29 +18,31 @@ export function ServerStartup({ children }: { children: ReactNode }) {
     let controller: AbortController
     let retryTimer: ReturnType<typeof setTimeout>
     let requestTimer: ReturnType<typeof setTimeout>
-    const slowTimer = setTimeout(() => setSlow(true), 60_000)
+    let connectionError: string | null = null
+    const startupTimer = setTimeout(() => {
+      stopped = true
+      controller.abort()
+      clearTimeout(requestTimer)
+      clearTimeout(retryTimer)
+      setError(connectionError ?? '90 saniyə ərzində serverə qoşulmaq mümkün olmadı. Zəhmət olmasa yenidən cəhd edin.')
+    }, startupTimeout)
 
     async function check() {
-      const started = Date.now()
       controller = new AbortController()
-      requestTimer = setTimeout(() => controller.abort(), retryInterval)
+      requestTimer = setTimeout(() => controller.abort(), requestTimeout)
       try {
         await checkServerLiveness(controller.signal)
         if (!stopped) {
-          clearTimeout(slowTimer)
+          clearTimeout(startupTimer)
           setReady(true)
         }
       } catch (cause) {
         if (stopped) return
-        // Only connectivity failures and temporary gateway/rate-limit responses imply a retry.
-        const transient = controller.signal.aborted || cause instanceof TypeError ||
-          (cause instanceof ApiError && [408, 429, 502, 503, 504].includes(cause.status))
-        if (transient) {
-          retryTimer = setTimeout(() => void check(), Math.max(0, retryInterval - (Date.now() - started)))
-        } else {
-          clearTimeout(slowTimer)
-          setError(cause instanceof Error ? cause.message : 'Server bağlantısını yoxlamaq mümkün olmadı.')
-        }
+        // A cold start can return gateway errors or an HTML loading page before the API is ready.
+        // Wait for this request to settle before scheduling another; never retry app/auth writes here.
+        connectionError = !controller.signal.aborted && cause instanceof Error && !(cause instanceof TypeError)
+          ? cause.message : null
+        retryTimer = setTimeout(() => void check(), retryInterval)
       } finally {
         clearTimeout(requestTimer)
       }
@@ -51,7 +54,7 @@ export function ServerStartup({ children }: { children: ReactNode }) {
       controller.abort()
       clearTimeout(requestTimer)
       clearTimeout(retryTimer)
-      clearTimeout(slowTimer)
+      clearTimeout(startupTimer)
     }
   }, [attempt])
 
@@ -66,7 +69,7 @@ export function ServerStartup({ children }: { children: ReactNode }) {
         </div>
         <p className="mb-3 text-xs font-semibold tracking-[0.25em] text-faint">EXAMR</p>
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{error ? 'Bağlantı alınmadı' : 'ExamR hazırlanır...'}</h1>
-        <p className="mt-4 text-sm leading-6 text-muted">Serverə qoşuluruq. Bu proses bir neçə saniyə çəkə bilər.</p>
+        {!error && <p className="mt-4 text-sm leading-6 text-muted">Serverə qoşuluruq, zəhmət olmasa gözləyin...</p>}
         {error ? (
           <div className="mt-6 text-left"><Alert title="Server bağlantısında xəta">{error}</Alert></div>
         ) : (
@@ -77,11 +80,9 @@ export function ServerStartup({ children }: { children: ReactNode }) {
             <p role="status" className="mt-4 text-xs text-muted">Bağlantı yoxlanılır...</p>
           </>
         )}
-        {(slow || error) && (
+        {error && (
           <div className="mt-8">
-            {!error && <p className="mb-4 text-sm leading-6 text-muted">Qoşulma gözləniləndən uzun çəkir. Avtomatik yoxlama davam edir.</p>}
             <Button variant="secondary" onClick={() => {
-              setSlow(false)
               setError(null)
               setAttempt(value => value + 1)
             }}>Yenidən cəhd et</Button>
