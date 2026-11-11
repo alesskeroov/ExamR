@@ -34,6 +34,38 @@ public class DocumentAnalysisTests
     }
 
     [Fact]
+    public void Inline_instructions_do_not_break_a_shared_answer_group_or_change_its_first_key()
+    {
+        const string first = "CSS-in nə olduğunu izah edin.";
+        var scan = OpenQuestionExtractor.Scan(Doc(
+            "16. " + first + " HTML ilə əlaqəsini şərh edin.",
+            "17. CSS-in qoşulma üsullarını izah edin.",
+            "18. CSS selektorlarını izah edin. İstifadəsini nümunələrlə açıqlayın.",
+            Long));
+        Assert.Equal(first, scan.Questions[0].Text);
+        Assert.Equal([16, 17], scan.SharedAnswers!.Order());
+        Assert.All(scan.Answers.Values, answer => Assert.Equal(Long, answer));
+    }
+
+    [Fact]
+    public void A_real_inline_answer_is_kept_even_if_it_ends_with_an_exercise()
+    {
+        const string answer = "CSS səhifənin görünüşünü müəyyən edir. Fərqləri nümunələrlə izah edin.";
+        var split = OpenQuestionExtractor.SplitInline("CSS nədir? " + answer);
+        Assert.NotNull(split);
+        Assert.Equal(answer, split.Value.Answer);
+    }
+
+    [Fact]
+    public void A_long_instruction_only_sequence_does_not_borrow_the_last_answer()
+    {
+        var headings = Enumerable.Range(1, 7).Select(n => $"{n}. Mövzu haqqında danışın. Əsas xüsusiyyətləri nümunələrlə izah edin.").ToArray();
+        var scan = OpenQuestionExtractor.Scan(Doc([.. headings, Long]));
+        Assert.All(Enumerable.Range(1, 6), n => Assert.Equal("", scan.Answers[n]));
+        Assert.Empty(scan.SharedAnswers!);
+    }
+
+    [Fact]
     public void Unanswered_questions_are_kept_with_a_reason_but_never_used()
     {
         var index = OpenQuestionClassifier.Classify(Doc("1. One?", Long, "2. Two?", Long + " Two.", "3. Three?", Long + " Three.", "4. Four?"),

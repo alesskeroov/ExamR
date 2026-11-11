@@ -88,7 +88,7 @@ public sealed record TestQuestion(int Number, string Text, string Correct, IRead
 /// </summary>
 public static partial class CardDeckBuilder
 {
-    public const string Version = "cards6";
+    public const string Version = "cards11";
     public const int MaxCards = 2000;
     private const int MaxTermWords = 6;
     private const int MaxTermLength = 70;
@@ -102,30 +102,42 @@ public static partial class CardDeckBuilder
     /// <summary>Every exam question is a topic (chunk headings proved unreliable); its answer, terms and lists are its cards.</summary>
     public static StudyDeck FromOpenQuestions(IReadOnlyList<IndexedQuestion> questions)
     {
-        var topics = new List<CardTopic>();
-        var topicOf = new Dictionary<int, string>();
+        // Headings the document answers together with one text ("8. …", "9. …", "10. …", then the answer) are one card and one
+        // topic: the same answer on several cards reads as a parsing error. The card keeps the first question's id.
+        var groups = new List<List<IndexedQuestion>>();
         foreach (var q in questions)
         {
-            topics.Add(new(Key($"{q.Number}|{q.Text}"), Title(q.Text)));
-            topicOf[q.Number] = topics[^1].Key;
+            if (groups.Count > 0 && groups[^1][^1] is { SharedAnswer: true } previous && previous.Answer == q.Answer) groups[^1].Add(q);
+            else groups.Add([q]);
+        }
+        var topics = new List<CardTopic>();
+        var topicOf = new Dictionary<int, string>();
+        foreach (var group in groups)
+        {
+            topics.Add(new(Key($"{group[0].Number}|{group[0].Text}"), Title(group[0].Text)));
+            topicOf[group[0].Number] = topics[^1].Key;
         }
         var cards = new List<StudyCardItem>();
         var seen = new HashSet<string>();
         void Add(StudyCardItem card) { if (cards.Count < MaxCards && seen.Add(card.Id)) cards.Add(NotesCardBuilder.Review(card)); }
 
-        foreach (var q in questions)
+        foreach (var group in groups)
         {
+            var q = group[0];
             // The answer goes through the same cleaning as whole documents: captions, citations, code and table debris
             // leave; table rows become table cards instead of loose words in the answer.
             var cleaned = DocumentCleaner.Clean(q.Answer.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
                 .Select(l => new DocParagraph(l, q.Page, q.ChunkOrdinal)).ToList(), dropTail: false);
-            var lines = cleaned.Where(p => !p.IsTableRow).Select(p => p.Text).ToList();
+            var lines = cleaned.Where(p => !p.IsTableRow).Select(p => p.Text).Where(line => !OpenQuestionExtractor.IsPromptOnly(line)).ToList();
+            // "rdə öyrənmənin prosesi …": a heading's tail left over from editing, not the start of the answer.
+            if (lines.Count > 1 && LeadingFragment(lines[0])) lines.RemoveAt(0);
             if (lines.Count == 0) continue;
             var terms = new List<(string Term, string Definition)>();
             foreach (var line in lines)
                 if (Definition(line) is { } d) terms.Add(d);
+                else terms.AddRange(NotesCardBuilder.Namings(line));
 
-            Add(new(CardMastery.Hash(q.Text), CardKind.Question, topicOf[q.Number], q.Text, string.Join('\n', lines),
+            Add(new(CardMastery.Hash(q.Text), CardKind.Question, topicOf[q.Number], string.Join('\n', group.Select(g => g.Text)), string.Join('\n', lines),
                 terms.Select(t => t.Term).Distinct().Take(10).ToList(), [], q.Number, q.Page, q.ChunkOrdinal));
             foreach (var card in NotesCardBuilder.TableCards(cleaned, topicOf[q.Number], q.Number)) Add(card);
             foreach (var (term, definition) in terms)
@@ -135,6 +147,10 @@ public static partial class CardDeckBuilder
         }
         return new(topics, cards);
     }
+
+    /// <summary>A short line that starts in lowercase and ends without punctuation: a broken piece of text, not a sentence.</summary>
+    public static bool LeadingFragment(string line) =>
+        line.Length is > 0 and <= 80 && char.IsLower(line[0]) && !".:;?!".Contains(line[^1]);
 
     /// <summary>"Term — definition" (also "–" or " - "): a short noun phrase before the dash and a real sentence after it.</summary>
     public static (string Term, string Definition)? Definition(string line)
