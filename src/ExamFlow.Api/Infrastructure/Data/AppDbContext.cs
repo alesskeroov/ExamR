@@ -1,4 +1,5 @@
 using ExamFlow.Api.Features.Usage;
+using ExamFlow.Api.Features.Feedback;
 using ExamFlow.Api.Features.Auth;
 using ExamFlow.Api.Features.Study;
 using ExamFlow.Api.Features.Battles;
@@ -23,6 +24,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     : IdentityDbContext<AppUser, IdentityRole<Guid>, Guid>(options), IDataProtectionKeyContext
 {
     public DbSet<UsageEvent> UsageEvents => Set<UsageEvent>();
+    public DbSet<FeedbackMessage> FeedbackMessages => Set<FeedbackMessage>();
     public DbSet<UserUsageLimit> UserUsageLimits => Set<UserUsageLimit>();
 
     public DbSet<UploadedDocument> Documents => Set<UploadedDocument>();

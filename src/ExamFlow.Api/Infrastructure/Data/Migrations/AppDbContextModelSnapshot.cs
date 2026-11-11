@@ -881,6 +881,73 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.ToTable("QuestionExplanations", (string)null);
                 });
 
+            modelBuilder.Entity("ExamFlow.Api.Features.Feedback.FeedbackMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DocumentName")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid?>("LeaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PagePath")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SenderEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("SenderName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset?>("SentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(1500)
+                        .HasColumnType("character varying(1500)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NextAttemptAt")
+                        .HasFilter("\"SentAt\" IS NULL");
+
+                    b.HasIndex("UserId", "RequestId")
+                        .IsUnique();
+
+                    b.ToTable("FeedbackMessages");
+                });
+
             modelBuilder.Entity("ExamFlow.Api.Features.Focus.FocusSession", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2541,6 +2608,15 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                         .WithMany()
                         .HasForeignKey("SourceQuestionId")
                         .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Feedback.FeedbackMessage", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Auth.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("ExamFlow.Api.Features.Focus.FocusSession", b =>
