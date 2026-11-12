@@ -1,12 +1,15 @@
 name: Keep API awake
 
+# Render's free host sleeps after 15 idle minutes, and GitHub delays or skips cron runs for hours, so a single ping per
+# schedule cannot keep it awake. Instead one run pings every five minutes for almost the 6-hour job limit and then
+# starts its successor itself. The schedule only restarts the chain if it ever breaks.
 on:
-  # Scheduled workflows become active after this file reaches the default branch.
   schedule:
-    - cron: '3,13,23,33,43,53 * * * *'
+    - cron: '7 */2 * * *'
   workflow_dispatch:
 
-permissions: {}
+permissions:
+  actions: write
 
 concurrency:
   group: api-keepalive
@@ -15,15 +18,25 @@ concurrency:
 jobs:
   ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 355
     steps:
-      - name: Ping API liveness endpoint
+      - name: Ping API liveness endpoint every five minutes
         shell: bash
-        # Liveness does not query or wake the database.
+        # Liveness does not query or wake the database. A failed ping is logged, not fatal, so the loop keeps going.
         run: |
-          curl --fail --silent --show-error \
-            --connect-timeout 15 \
-            --max-time 90 \
-            --output /dev/null \
-            --write-out 'HTTP %{http_code}; total %{time_total}s\n' \
-            https://examr-api.onrender.com/api/health/live
+          end=$((SECONDS + 340 * 60))
+          while [ "$SECONDS" -lt "$end" ]; do
+            curl --silent --show-error \
+              --connect-timeout 15 \
+              --max-time 95 \
+              --output /dev/null \
+              --write-out "$(date -u +%H:%M:%S) HTTP %{http_code}; total %{time_total}s\n" \
+              https://examr-api.onrender.com/api/health/live || true
+            sleep 300
+          done
+
+      - name: Start the next keepalive run
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run api-keepalive.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"

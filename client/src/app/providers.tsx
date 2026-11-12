@@ -1,9 +1,8 @@
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ConfirmProvider } from '../components/common/ConfirmProvider'
 import { ErrorBoundary } from '../components/common/ErrorBoundary'
-import { ServerStartup } from '../components/common/ServerStartup'
 import { RouterProvider } from 'react-router'
-import { ApiError } from '../lib/api-client'
+import { ApiError, wakeServer } from '../lib/api-client'
 import { clearToken } from '../lib/auth-token'
 import { pausePollingWhenIdle } from '../lib/idle-polling'
 import { queryKeys } from '../lib/query-keys'
@@ -31,12 +30,14 @@ const queryClient: QueryClient = new QueryClient({
 })
 
 pausePollingWhenIdle()
+// Start waking a sleeping API host while the first screen renders, so the user never waits on a startup screen.
+void wakeServer()
 
 export function Providers() {
   useTheme()
   return (
     <QueryClientProvider client={queryClient}>
-      <ErrorBoundary><ServerStartup><ConfirmProvider><RouterProvider router={router} /></ConfirmProvider></ServerStartup></ErrorBoundary>
+      <ErrorBoundary><ConfirmProvider><RouterProvider router={router} /></ConfirmProvider></ErrorBoundary>
     </QueryClientProvider>
   )
 }

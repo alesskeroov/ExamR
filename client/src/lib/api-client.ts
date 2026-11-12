@@ -30,41 +30,72 @@ const CSRF_HEADER = 'X-ExamR-Request'
 
 type RequestOptions = Omit<RequestInit, 'body'> & { body?: unknown }
 
-/** The API host is asleep and only wakes after a person opens `wakeUrl` in a browser. */
-export class ServerAsleepError extends Error {
-  readonly wakeUrl: string
+// Render's free host sleeps when idle. Through the Pages proxy (Cloudflare IPs) Render refuses to wake it and answers
+// 429 "hibernate-rate-limited"; the proxy then adds this header with the API's direct URL.
+const WAKE_HEADER = 'x-examr-wake-url'
+const wakeDeadline = 180_000
+// Render holds a request open while it boots (about a minute); aborting and resending makes it rate-limit wake-ups.
+const bootRequestTimeout = 95_000
+const directWakeInterval = 60_000
 
-  constructor(wakeUrl: string) {
-    super('Server yuxu rejimindədir.')
-    this.name = 'ServerAsleepError'
-    this.wakeUrl = wakeUrl
+function wakeUrlOf(response: Response): string | null {
+  const url = response.headers.get(WAKE_HEADER)
+  return url?.startsWith('https://') ? url : null
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeout: number): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeout)
+  try {
+    return await fetch(url, { ...init, signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
   }
 }
 
-/** Public startup probe, isolated from authentication and its error handlers. */
-export async function checkServerLiveness(signal: AbortSignal): Promise<void> {
-  const response = await fetch('/api/health/live', {
-    signal,
-    cache: 'no-store',
-    credentials: 'omit',
-    headers: { Accept: 'application/json' },
-  })
-  const wakeUrl = response.headers.get('x-examr-wake-url')
-  if (wakeUrl?.startsWith('https://')) throw new ServerAsleepError(wakeUrl)
-  if (response.headers.get('cf-mitigated') === 'challenge') {
-    throw new Error('Bağlantı təhlükəsizlik yoxlaması tərəfindən bloklanıb. Bu, serverin oyanmasını gözləməklə bağlı deyil.')
-  }
-  if (!response.ok) throw new ApiError(response.status)
+async function isServerHealthy(response: Response | null): Promise<boolean> {
+  if (!response?.ok) return false
   const data: unknown = await response.json().catch(() => null)
-  if (!data || typeof data !== 'object' || !('status' in data) || data.status !== 'Healthy') {
-    throw new Error('Serverin sağlamlıq yoxlaması gözlənilməz cavab verdi. API bağlantısını yoxlamaq lazımdır.')
+  return !!data && typeof data === 'object' && 'status' in data && data.status === 'Healthy'
+}
+
+async function runWake(): Promise<void> {
+  const deadline = Date.now() + wakeDeadline
+  let lastDirectWake = -Infinity
+  while (Date.now() < deadline) {
+    const response = await fetchWithTimeout('/api/health/live', {
+      cache: 'no-store',
+      credentials: 'omit',
+      headers: { Accept: 'application/json' },
+    }, bootRequestTimeout).catch(() => null)
+    if (await isServerHealthy(response)) return
+    const wakeUrl = response && wakeUrlOf(response)
+    if (wakeUrl && Date.now() - lastDirectWake >= directWakeInterval) {
+      lastDirectWake = Date.now()
+      // The visitor's own connection may wake the host. The no-cors response is opaque; it settling means Render
+      // answered, so probe through the proxy again right away.
+      await fetchWithTimeout(wakeUrl, { mode: 'no-cors', cache: 'no-store', credentials: 'omit' }, bootRequestTimeout)
+        .catch(() => undefined)
+      continue
+    }
+    await new Promise(resolve => setTimeout(resolve, wakeUrl ? 10_000 : 3_000))
   }
+}
+
+let waking: Promise<void> | null = null
+
+/** Makes sure the API host is up. Shared by all callers; settles once it is healthy or after about three minutes. */
+export function wakeServer(): Promise<void> {
+  waking ??= runWake().finally(() => {
+    waking = null
+  })
+  return waking
 }
 
 export async function apiRequest<T>(path: string, { body, headers, ...init }: RequestOptions = {}): Promise<T> {
   const isFormData = body instanceof FormData
 
-  const response = await fetch(`/api${path}`, {
+  const send = () => fetch(`/api${path}`, {
     ...init,
     credentials: 'same-origin',
     headers: {
@@ -75,6 +106,16 @@ export async function apiRequest<T>(path: string, { body, headers, ...init }: Re
     },
     body: body === undefined ? undefined : isFormData ? body : JSON.stringify(body),
   })
+
+  let response = await send()
+  // A hibernation answer comes from Render's edge, so the request never reached the API and is safe to resend.
+  if (wakeUrlOf(response)) {
+    await wakeServer()
+    response = await send()
+    if (wakeUrlOf(response)) {
+      throw new ApiError(503, { detail: 'Server hələ işə düşür. Bir az sonra yenidən cəhd edin.' })
+    }
+  }
 
   const text = await response.text()
   const data: unknown = text ? JSON.parse(text) : undefined
