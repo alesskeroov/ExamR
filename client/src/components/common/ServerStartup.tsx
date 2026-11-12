@@ -1,30 +1,38 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { GraduationCap, Loader2 } from 'lucide-react'
-import { checkServerLiveness } from '../../lib/api-client'
+import { ExternalLink, GraduationCap, Loader2 } from 'lucide-react'
+import { checkServerLiveness, ServerAsleepError } from '../../lib/api-client'
 import { Alert } from './Alert'
 import { Button } from './Button'
 
-const retryInterval = 4_000
-const requestTimeout = 15_000
-const startupTimeout = 90_000
+// A sleeping Render free service holds the first request open while it boots (about a minute), so give that request
+// time instead of aborting and resending it: rapid repeat wake-ups make Render rate-limit the host behind a bot check.
+const requestTimeout = 95_000
+const retryDelays = [5_000, 10_000, 20_000, 30_000]
+const rateLimitedDelay = 30_000
+const startupTimeout = 180_000
+// Only if Render keeps refusing wake-ups this long do we offer opening it directly as a last resort.
+const wakeFallbackAfter = 120_000
 
 export function ServerStartup({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [wakeUrl, setWakeUrl] = useState<string | null>(null)
 
   useEffect(() => {
     let stopped = false
+    let failures = 0
     let controller: AbortController
     let retryTimer: ReturnType<typeof setTimeout>
     let requestTimer: ReturnType<typeof setTimeout>
     let connectionError: string | null = null
+    const startedAt = Date.now()
     const startupTimer = setTimeout(() => {
       stopped = true
       controller.abort()
       clearTimeout(requestTimer)
       clearTimeout(retryTimer)
-      setError(connectionError ?? '90 saniyə ərzində serverə qoşulmaq mümkün olmadı. Zəhmət olmasa yenidən cəhd edin.')
+      setError(connectionError ?? 'Server 3 dəqiqə ərzində açılmadı. Zəhmət olmasa yenidən cəhd edin.')
     }, startupTimeout)
 
     async function check() {
@@ -38,11 +46,20 @@ export function ServerStartup({ children }: { children: ReactNode }) {
         }
       } catch (cause) {
         if (stopped) return
+        if (cause instanceof ServerAsleepError) {
+          if (Date.now() - startedAt >= wakeFallbackAfter) {
+            // The fallback needs a person, so stop the deadline and keep probing until the host is up.
+            clearTimeout(startupTimer)
+            setWakeUrl(cause.wakeUrl)
+          }
+          retryTimer = setTimeout(() => void check(), rateLimitedDelay)
+          return
+        }
         // A cold start can return gateway errors or an HTML loading page before the API is ready.
         // Wait for this request to settle before scheduling another; never retry app/auth writes here.
         connectionError = !controller.signal.aborted && cause instanceof Error && !(cause instanceof TypeError)
           ? cause.message : null
-        retryTimer = setTimeout(() => void check(), retryInterval)
+        retryTimer = setTimeout(() => void check(), retryDelays[Math.min(failures++, retryDelays.length - 1)])
       } finally {
         clearTimeout(requestTimer)
       }
@@ -69,7 +86,19 @@ export function ServerStartup({ children }: { children: ReactNode }) {
         </div>
         <p className="mb-3 text-xs font-semibold tracking-[0.25em] text-faint">EXAMR</p>
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{error ? 'Bağlantı alınmadı' : 'ExamR hazırlanır...'}</h1>
-        {!error && <p className="mt-4 text-sm leading-6 text-muted">Serverə qoşuluruq, zəhmət olmasa gözləyin...</p>}
+        {!error && !wakeUrl && <p className="mt-4 text-sm leading-6 text-muted">Server işə salınır. Bu, 1–2 dəqiqə çəkə bilər, səhifəni bağlamayın.</p>}
+        {!error && wakeUrl && (
+          <div className="mt-4">
+            <p className="text-sm leading-6 text-muted">
+              Server gözləniləndən uzun açılır. Aşağıdakı düymə onu yeni tabda açır: orada yoxlama bitəndə həmin tabı
+              bağlayın, ExamR təxminən bir dəqiqəyə özü açılacaq.
+            </p>
+            <Button className="mt-5" onClick={() => window.open(wakeUrl, '_blank', 'noopener,noreferrer')}>
+              Serveri oyat
+              <ExternalLink className="size-4" aria-hidden />
+            </Button>
+          </div>
+        )}
         {error ? (
           <div className="mt-6 text-left"><Alert title="Server bağlantısında xəta">{error}</Alert></div>
         ) : (

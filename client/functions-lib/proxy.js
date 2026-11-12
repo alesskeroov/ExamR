@@ -9,5 +9,11 @@ export async function proxy({ request, env }) {
   // Overwrite (not append) so clients cannot spoof their IP for the API's per-IP rate limits.
   forwarded.headers.set('X-Forwarded-For', request.headers.get('CF-Connecting-IP') ?? '')
   forwarded.headers.set('X-Forwarded-Proto', 'https')
-  return fetch(forwarded, { redirect: 'manual' })
+  const response = await fetch(forwarded, { redirect: 'manual' })
+  // A sleeping Render free service refuses wake-ups from server-side callers ("hibernate-rate-limited") and only
+  // starts after a person opens it in a browser. Tell the client where to send the user.
+  if (!(response.headers.get('x-render-routing') ?? '').startsWith('hibernate')) return response
+  const marked = new Response(response.body, response)
+  marked.headers.set('X-ExamR-Wake-Url', new URL('/api/health/live', env.API_ORIGIN).href)
+  return marked
 }
