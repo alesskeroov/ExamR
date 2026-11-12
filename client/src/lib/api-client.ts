@@ -30,6 +30,17 @@ const CSRF_HEADER = 'X-ExamR-Request'
 
 type RequestOptions = Omit<RequestInit, 'body'> & { body?: unknown }
 
+/** The API host is asleep and only wakes after a person opens `wakeUrl` in a browser. */
+export class ServerAsleepError extends Error {
+  readonly wakeUrl: string
+
+  constructor(wakeUrl: string) {
+    super('Server yuxu rejimindədir.')
+    this.name = 'ServerAsleepError'
+    this.wakeUrl = wakeUrl
+  }
+}
+
 /** Public startup probe, isolated from authentication and its error handlers. */
 export async function checkServerLiveness(signal: AbortSignal): Promise<void> {
   const response = await fetch('/api/health/live', {
@@ -38,6 +49,8 @@ export async function checkServerLiveness(signal: AbortSignal): Promise<void> {
     credentials: 'omit',
     headers: { Accept: 'application/json' },
   })
+  const wakeUrl = response.headers.get('x-examr-wake-url')
+  if (wakeUrl?.startsWith('https://')) throw new ServerAsleepError(wakeUrl)
   if (response.headers.get('cf-mitigated') === 'challenge') {
     throw new Error('Bağlantı təhlükəsizlik yoxlaması tərəfindən bloklanıb. Bu, serverin oyanmasını gözləməklə bağlı deyil.')
   }
