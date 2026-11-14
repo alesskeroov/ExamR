@@ -22,7 +22,7 @@ public class SampleDeckTests
 
     public static IEnumerable<object[]> Samples() =>
         SamplesDir() is { } dir
-            ? Directory.GetFiles(dir).Where(f => f.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".docx", StringComparison.OrdinalIgnoreCase))
+            ? Directory.GetFiles(dir).Where(f => f.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".docx", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".pptx", StringComparison.OrdinalIgnoreCase))
                 .Select(f => new object[] { Path.GetFileName(f) })
             : [new object[] { "" }];
 
@@ -31,16 +31,24 @@ public class SampleDeckTests
     public void Deck_matches_its_reviewed_snapshot(string file)
     {
         if (file.Length == 0 || SamplesDir() is not { } dir) return; // No samples on this machine.
-        var deck = Build(Path.Combine(dir, file));
+        var path = Path.Combine(dir, file);
+        string actual;
+        ExtractedText extracted;
+        using (var stream = File.OpenRead(path)) extracted = LearningTextExtractor.Extract(stream, Path.GetExtension(path), new LearningOptions().Limits);
+        if (extracted.Failure != TextExtractionFailure.None)
+            actual = $"Extraction failed: {extracted.Failure}{(extracted.LooksScanned ? " (pictures only)" : "")}, {extracted.PageCount} pages\n";
+        else
+        {
+            var deck = Build(path);
 
-        // Rules every deck must keep, whatever the document.
-        var topics = deck.Topics.Select(t => t.Key).ToHashSet();
-        Assert.All(deck.Cards, c => Assert.Contains(c.TopicKey, topics));
-        Assert.All(deck.Cards, c => Assert.False(string.IsNullOrWhiteSpace(c.Front)));
-        Assert.All(deck.Cards, c => Assert.True(c.Back.Length > 0 || c.Items.Count > 0, $"Card without an answer: {c.Front}"));
-        Assert.Equal(deck.Cards.Count, deck.Cards.Select(c => c.Id).Distinct().Count());
-
-        var actual = Snapshot(deck);
+            // Rules every deck must keep, whatever the document.
+            var topics = deck.Topics.Select(t => t.Key).ToHashSet();
+            Assert.All(deck.Cards, c => Assert.Contains(c.TopicKey, topics));
+            Assert.All(deck.Cards, c => Assert.False(string.IsNullOrWhiteSpace(c.Front)));
+            Assert.All(deck.Cards, c => Assert.True(c.Back.Length > 0 || c.Items.Count > 0, $"Card without an answer: {c.Front}"));
+            Assert.Equal(deck.Cards.Count, deck.Cards.Select(c => c.Id).Distinct().Count());
+            actual = Snapshot(deck);
+        }
         var expectedPath = Path.Combine(dir, file + ".deck.txt");
         var actualPath = Path.Combine(dir, file + ".deck.actual.txt");
         if (!File.Exists(expectedPath) || Environment.GetEnvironmentVariable("DECK_SNAPSHOT_UPDATE") == "1")
@@ -67,6 +75,10 @@ public class SampleDeckTests
             Ordinal = c.Ordinal, Text = c.Text, TokenEstimate = c.Tokens, PageFrom = c.PageFrom, PageTo = c.PageTo,
             Section = c.Section is { Length: > 200 } s ? s[..200] : c.Section, ParagraphFrom = c.ParagraphFrom, ParagraphTo = c.ParagraphTo,
         }).ToList();
+
+        // Slides have no question parser: the API always builds notes cards for them.
+        if (OpenQuestionIndexer.IsSlides(Path.GetExtension(path).TrimStart('.')))
+            return NotesCardBuilder.Build(CardDeckService.Paragraphs(text, options.Chunking));
 
         var pdfParser = new PdfQuestionParser();
         var docxParser = new DocxQuestionParser(pdfParser);

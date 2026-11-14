@@ -25,6 +25,8 @@ public sealed class ExtractedText
     public TextExtractionFailure Failure { get; init; }
     /// <summary>Most pages have images but almost no text: a scanned document that needs OCR.</summary>
     public bool LooksScanned { get; init; }
+    /// <summary>Pages (PDF) or slides (PPTX) with images but almost no text: their content is only in the picture.</summary>
+    public IReadOnlyList<int> VisualPages { get; init; } = [];
 
     public static ExtractedText Failed(TextExtractionFailure failure, int? pages = null, bool scanned = false) =>
         new() { Blocks = [], PageCount = pages, Failure = failure, LooksScanned = scanned };
@@ -41,6 +43,7 @@ public static partial class LearningTextExtractor
         {
             ".pdf" => FromPdf(content, limits, ct),
             ".docx" => FromDocx(content, limits, ct),
+            ".pptx" => FromPptx(content, limits, ct),
             ".txt" => FromTxt(content, limits, ct),
             _ => ExtractedText.Failed(TextExtractionFailure.Unreadable),
         };
@@ -60,13 +63,16 @@ public static partial class LearningTextExtractor
 
             var blocks = new List<TextBlock>();
             long characters = 0;
-            var imageOnlyPages = 0;
+            var visualPages = new List<int>();
+            var textPages = 0;
             for (var number = 1; number <= pages; number++)
             {
                 ct.ThrowIfCancellationRequested();
                 var page = document.GetPage(number);
                 var text = ContentOrderTextExtractor.GetText(page);
-                if (text.Count(char.IsLetterOrDigit) < 20 && page.NumberOfImages > 0) imageOnlyPages++;
+                var letters = text.Count(char.IsLetterOrDigit);
+                if (letters < MinPageLetters && page.NumberOfImages > 0) visualPages.Add(number);
+                if (letters >= MinPageLetters) textPages++;
                 foreach (var paragraph in Paragraphs(text))
                 {
                     characters += paragraph.Length;
@@ -75,12 +81,17 @@ public static partial class LearningTextExtractor
                 }
             }
 
-            var scanned = pages > 0 && imageOnlyPages * 2 >= pages;
-            if (blocks.Count == 0 || (scanned && characters < pages * 200L))
-                return ExtractedText.Failed(TextExtractionFailure.NoText, pages, scanned);
-            return new ExtractedText { Blocks = blocks, PageCount = pages, Characters = characters, LooksScanned = scanned };
+            // Decided per page: slides full of diagrams keep their text pages. Only a document where (almost) no page has
+            // text is a scan; picture pages are listed so they can be read from the image later.
+            var scanned = pages > 0 && visualPages.Count * 2 >= pages;
+            if (blocks.Count == 0 || (visualPages.Count > 0 && textPages * 5 < pages))
+                return ExtractedText.Failed(TextExtractionFailure.NoText, pages, visualPages.Count > 0);
+            return new ExtractedText { Blocks = blocks, PageCount = pages, Characters = characters, LooksScanned = scanned, VisualPages = visualPages };
         }
     }
+
+    /// <summary>A page or slide with fewer letters and digits than this (and an image) carries its content in the image.</summary>
+    private const int MinPageLetters = 20;
 
     public static ExtractedText FromDocx(Stream docx, TextExtractionLimits limits, CancellationToken ct = default)
     {
@@ -225,7 +236,9 @@ public static partial class LearningTextExtractor
             {
                 var name = child.Name;
                 if (name == W + "drawing" || name == W + "pict" || name == W + "txbxContent" || name == W + "object" || name.Namespace == Mc) continue;
-                if (name == W + "t") text.Append(child.Value);
+                // Word equations: kept as linear text instead of disappearing from the sentence.
+                if (name == MathText.M + "oMath" || name == MathText.M + "oMathPara") text.Append(' ').Append(MathText.Linear(child)).Append(' ');
+                else if (name == W + "t") text.Append(child.Value);
                 else if (name == W + "tab") text.Append('\t');
                 else if (name == W + "br" || name == W + "cr") text.Append('\n');
                 else Collect(child);

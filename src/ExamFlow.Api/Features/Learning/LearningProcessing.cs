@@ -126,6 +126,8 @@ public sealed class LearningProcessor(AppDbContext db, UsageLimiter usage, IFile
                 TextExtractionFailure.None => null,
                 TextExtractionFailure.Encrypted => "Şifrə ilə qorunan sənəd dəstəklənmir.",
                 TextExtractionFailure.TooLarge => $"Sənəd emal limitlərini aşır (ən çox {settings.MaxPages} səhifə və {settings.MaxCharacters / 1_000_000} milyon simvol).",
+                TextExtractionFailure.NoText when text.LooksScanned && OpenQuestionIndexer.IsSlides(learning.Format) =>
+                    "Slaydlar şəkil kimi saxlanılıb, onlarda oxunan mətn tapılmadı. Şəkillərin oxunması hələ dəstəklənmir.",
                 TextExtractionFailure.NoText when text.LooksScanned => "Sənəd skan edilmiş şəkillərdən ibarətdir. Mətn tanıma (OCR) hələ dəstəklənmir — mətnli PDF, DOCX və ya TXT yükləyin.",
                 TextExtractionFailure.NoText => "Sənəddə oxunan mətn tapılmadı.",
                 _ => "Sənəd oxuna bilmədi. Fayl zədələnmiş ola bilər.",

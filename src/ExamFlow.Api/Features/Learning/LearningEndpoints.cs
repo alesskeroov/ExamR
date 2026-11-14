@@ -22,7 +22,7 @@ public static class LearningEndpoints
 {
     // AI Tutor works only with open-question PDF and Word (DOCX) files. TXT support stays in the text extractor; it is only
     // switched off here, and already indexed TXT rows are kept untouched.
-    private static readonly HashSet<string> Formats = [".pdf", ".docx"];
+    private static readonly HashSet<string> Formats = [".pdf", ".docx", ".pptx"];
 
     /// <summary>Readable documents for the study guide: files with closed (multiple-choice) test questions are left out.</summary>
     internal static IQueryable<UploadedDocument> GuideDocuments(AppDbContext db, Guid userId) =>
@@ -62,10 +62,15 @@ public static class LearningEndpoints
         IOptions<LearningOptions> options, TimeProvider clock, UsageLimiter usage, CancellationToken ct)
     {
         var limit = Math.Min(options.Value.MaxFileSizeBytes, LearningOptionsLimit);
-        if (file is null || file.Length == 0) return Invalid("PDF və ya Word (.docx) faylı seçilməyib.");
+        if (file is null || file.Length == 0) return Invalid("PDF, Word (.docx) və ya PowerPoint (.pptx) faylı seçilməyib.");
         if (file.Length > limit) return TypedResults.Problem($"Fayl {limit / 1024 / 1024} MB-dan böyük ola bilməz.", statusCode: StatusCodes.Status413PayloadTooLarge);
         var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-        if (!Formats.Contains(extension)) return Invalid(extension == ".doc" ? "Köhnə .doc formatı dəstəklənmir. Faylı Word-də .docx kimi saxlayıb yenidən yükləyin." : "AI Tutor yalnız açıq suallı PDF və Word (.docx) faylları qəbul edir.");
+        if (!Formats.Contains(extension)) return Invalid(extension switch
+        {
+            ".doc" => "Köhnə .doc formatı dəstəklənmir. Faylı Word-də .docx kimi saxlayıb yenidən yükləyin.",
+            ".ppt" => "Köhnə .ppt formatı dəstəklənmir. Faylı PowerPoint-də .pptx kimi saxlayıb yenidən yükləyin.",
+            _ => "Öyrənmə bələdçisi yalnız PDF, Word (.docx) və PowerPoint (.pptx) faylları qəbul edir.",
+        });
 
         // Stream to a temp file (not memory): hash and signature are checked there before anything is stored.
         var tempPath = Path.GetTempFileName();
@@ -131,7 +136,7 @@ public static class LearningEndpoints
     private static async Task<IResult> List(ClaimsPrincipal user, AppDbContext db, CancellationToken ct)
     {
         var items = await GuideDocuments(db, user.GetUserId())
-            .Where(d => d.StoredFileName.EndsWith(".pdf") || d.StoredFileName.EndsWith(".docx"))
+            .Where(d => d.StoredFileName.EndsWith(".pdf") || d.StoredFileName.EndsWith(".docx") || d.StoredFileName.EndsWith(".pptx"))
             .OrderByDescending(d => d.CreatedAt).Take(200)
             .Select(d => new
             {
@@ -156,7 +161,7 @@ public static class LearningEndpoints
                 ? Invalid("Qapalı test sualları olan fayllar öyrənmə bələdçisində istifadə olunmur.")
                 : NotFound();
         var extension = Path.GetExtension(document.StoredFileName).ToLowerInvariant();
-        if (!Formats.Contains(extension)) return Invalid("Öyrənmə bələdçisi yalnız PDF və Word (.docx) faylları ilə işləyir.");
+        if (!Formats.Contains(extension)) return Invalid("Öyrənmə bələdçisi yalnız PDF, Word (.docx) və PowerPoint (.pptx) faylları ilə işləyir.");
 
         var learning = await db.Set<LearningDocument>().FirstOrDefaultAsync(l => l.DocumentId == documentId, ct);
         if (learning is { Status: LearningStatus.Completed }) return TypedResults.Ok(await Dto(db, documentId, ct));
@@ -222,7 +227,7 @@ public static class LearningEndpoints
         return extension switch
         {
             ".pdf" => bytes.StartsWith("%PDF-"u8),
-            ".docx" => bytes.StartsWith("PK\u0003\u0004"u8),
+            ".docx" or ".pptx" => bytes.StartsWith("PK\u0003\u0004"u8),
             ".txt" => !bytes.Contains((byte)0) && IsUtf8Prefix(bytes),
             _ => false,
         };
