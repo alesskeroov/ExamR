@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { FormField } from '../../components/common/FormField'
 import { Button } from '../../components/common/Button'
+import { SupportContact } from '../../components/common/SupportContact'
 import { AuthShell } from './AuthPage'
 import { useConfirmEmail, useCurrentUser, useResendConfirmation } from './api'
 
@@ -54,6 +55,7 @@ export function VerifyEmailPage() {
               <Button type="submit" loading={resend.isPending} disabled={!email.trim()} className="auth-submit w-full">Yeni link göndər</Button>
             </form>
           )}
+          <SupportContact className="auth-muted text-center" topic="Email təsdiqi" lead="Yeni link də işləməsə, bizə yazın:" />
           <Link to="/?auth=login" className="auth-link text-center text-sm font-medium">Girişə qayıt</Link>
         </div>
       ) : (

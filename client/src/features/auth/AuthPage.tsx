@@ -3,6 +3,7 @@ import { useEffect, useState, type ComponentProps, type FormEvent, type ReactNod
 import { Link } from 'react-router'
 import { Button } from '../../components/common/Button'
 import { FormField } from '../../components/common/FormField'
+import { SupportContact } from '../../components/common/SupportContact'
 import { fieldErrors } from '../../lib/form-errors'
 import { cn } from '../../lib/utils'
 import { useForgotPassword, useLogin, useRegister, useResendConfirmation } from './api'
@@ -195,6 +196,8 @@ function SignInForm({ mode, onModeChange }: { mode: 'login' | 'register'; onMode
         <div className={errors.general || googleError ? undefined : 'hidden'} aria-live="polite">
           {(errors.general ?? googleError) && <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-rose-700">{errors.general ?? googleError}</p>}
           {unconfirmed && <div className="mt-2"><ResendLink email={email} /></div>}
+          {/* Signed-out users cannot use the in-app form, so a failed Google sign-in or a locked account shows the address. */}
+          {googleError && !errors.general && <SupportContact className="auth-muted mt-2" topic="Giriş problemi" lead="Problem davam etsə, bizə yazın:" />}
         </div>
 
         <Button type="submit" loading={mutation.isPending} className="auth-submit w-full">
@@ -229,6 +232,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
             <p>{forgot.data.message} Spam qovluğunu da yoxla.</p>
           </div>
           <ResendButton onResend={() => forgot.mutate(email)} busy={forgot.isPending} />
+          <SupportContact className="auth-muted text-center" topic="Şifrə bərpası" lead="Email gəlmirsə, bizə yazın:" />
           <button type="button" onClick={() => forgot.reset()} className="auth-link text-sm font-medium">Başqa email daxil et</button>
         </div>
       ) : (

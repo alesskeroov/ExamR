@@ -1,6 +1,7 @@
 import { Bug, CheckCircle2, Lightbulb, Loader2, Send } from 'lucide-react'
 import { useId, useRef, useState, type FormEvent } from 'react'
 import { Alert } from '../../components/common/Alert'
+import { SupportContact } from '../../components/common/SupportContact'
 import { ApiError } from '../../lib/api-client'
 import { cn } from '../../lib/utils'
 import { useSendFeedback } from './api'
@@ -77,6 +78,7 @@ export function FeedbackDialog({ onClose, documentName }: Props) {
             {feedback.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Send className="size-4" aria-hidden />}
             {feedback.isPending ? 'Göndərilir...' : 'Göndər'}
           </button>
+          <SupportContact className="text-center text-slate-500" topic="Müraciət" lead="Və ya birbaşa email yazın:" />
         </form>
       )}
     </GuideDialog>

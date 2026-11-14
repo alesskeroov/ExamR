@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { ArrowUpRight, Check, Menu, Moon, Plus, Sun, X } from 'lucide-react'
 import { Link, useLocation } from 'react-router'
+import { SUPPORT_EMAIL, supportMailto } from '../../lib/support'
 import { useTheme } from '../../lib/use-theme'
 import { ProductPreview } from './ProductPreview'
 import './landing.css'
@@ -193,6 +194,7 @@ export function LandingPage() {
               <Faq q="Sual səhv tanınıbsa nə edim?">Sual bankında öz sualını redaktə edə və “yoxlanılıb” kimi təsdiqləyə bilərsən. Dəyişiklik növbəti imtahanlarda nəzərə alınır.</Faq>
               <Faq q="ExamR ödənişlidir?">Hazırda ExamR demo mərhələsindədir və pulsuzdur. Bu dövrdə bəzi funksiyalar dəyişə bilər.</Faq>
               <Faq q="Google hesabı ilə daxil ola bilərəm?">Bəli. Eyni email ilə artıq hesabın varsa, əvvəl şifrə ilə daxil ol və Google-u profilindən əlaqələndir.</Faq>
+              <Faq q="Problem yaransa, kimə yazım?">Saytda və ya imtahan zamanı problem yaranarsa, <a href={`mailto:${SUPPORT_EMAIL}`} className="font-semibold underline underline-offset-2">{SUPPORT_EMAIL}</a> ünvanına yaz. Hesabına daxil olmusansa, sol menyudakı “Kömək və əlaqə” bölməsindən də müraciət göndərə bilərsən.</Faq>
             </div>
           </div>
         </section>
@@ -227,6 +229,11 @@ export function LandingPage() {
               <p className="lp-footer-heading">Hesab</p>
               <Link viewTransition to={auth('register')}>Qeydiyyat</Link>
               <Link viewTransition to={auth('login')}>Daxil ol</Link>
+            </nav>
+            <nav aria-label="Əlaqə" className="lp-footer-col">
+              <p className="lp-footer-heading">Əlaqə</p>
+              <a href={supportMailto({ topic: 'Müraciət' })} className="break-words">{SUPPORT_EMAIL}</a>
+              <span className="text-[13px]">Problem və təkliflər üçün</span>
             </nav>
           </div>
           <div className="lp-footer-bottom">

@@ -1,4 +1,4 @@
-import { GraduationCap, Layers, ShieldCheck, DoorOpen, FileUp, History, LayoutDashboard, Library, ListChecks, LogOut, Menu, School, Swords, Users, X, type LucideIcon } from 'lucide-react'
+import { GraduationCap, LifeBuoy, Layers, ShieldCheck, DoorOpen, FileUp, History, LayoutDashboard, Library, ListChecks, LogOut, Menu, School, Swords, Users, X, type LucideIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useSearchParams } from 'react-router'
 import { useCurrentUser, useLogout } from '../features/auth/api'
@@ -8,6 +8,7 @@ import { cn } from '../lib/utils'
 import { Nameplate } from '../features/nameplates/Nameplate'
 import { useNameplate } from '../features/nameplates/api'
 import { ThemeToggle } from '../components/common/ThemeToggle'
+import { FeedbackDialog } from '../features/tutor/FeedbackDialog'
 
 const navItems: { to: string; label: string; icon: LucideIcon; group: string; end?: boolean; adminOnly?: boolean; badge?: string }[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, group: '', end: true },
@@ -98,6 +99,7 @@ export function AppLayout() {
             </div>
           })}
         </nav>
+        <SupportButton />
         <UserMenu />
       </aside>
 
@@ -110,6 +112,21 @@ export function AppLayout() {
           <Outlet />
         </main>
       </div>
+    </div>
+  )
+}
+
+/** Reachable from every signed-in page: the in-app form, with the email address inside it as a fallback. */
+function SupportButton() {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="shrink-0 px-3 pb-2">
+      <button type="button" onClick={() => setOpen(true)}
+        className="app-nav-link flex h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] font-medium transition-colors duration-150">
+        <LifeBuoy className="size-4 shrink-0" aria-hidden />
+        <span className="truncate">Kömək və əlaqə</span>
+      </button>
+      {open && <FeedbackDialog onClose={() => setOpen(false)} />}
     </div>
   )
 }

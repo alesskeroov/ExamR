@@ -6,6 +6,7 @@ import { AlertTriangle, Check, Clock, History, RotateCcw, RotateCw, X } from 'lu
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
+import { SupportContact } from '../../components/common/SupportContact'
 import { EmptyState } from '../../components/common/EmptyState'
 import { PageHeader } from '../../components/common/PageHeader'
 import { QuestionVisuals } from '../../components/common/QuestionVisuals'
@@ -35,7 +36,7 @@ export function ExamResultPage() {
   }
 
   if (result.isError) {
-    return <Alert title="Nəticə yüklənmədi">{result.error.message}</Alert>
+    return <Alert title="Nəticə yüklənmədi">{result.error.message}<SupportContact className="mt-1" topic="Nəticə yüklənmədi" reference={id} /></Alert>
   }
 
   return <ResultView result={result.data} />
