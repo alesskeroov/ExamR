@@ -1,3 +1,5 @@
+using ExamFlow.Api.Features.Questions;
+
 namespace ExamFlow.Api.Features.Exams;
 
 public sealed record ExamCandidate(Guid Id, byte[] ContentHash, bool IsGradable);
@@ -67,6 +69,9 @@ public static class ExamEngine
 
     public static ExamOutcome OutcomeOf(ExamQuestion question) => question switch
     {
+        { Snapshot.IsCoded: true, CorrectAnswer: null } => ExamOutcome.Ungraded,
+        { Snapshot.IsCoded: true, AnswerText: null } => ExamOutcome.Unanswered,
+        { Snapshot.IsCoded: true } => CodedAnswers.Matches(question.CorrectAnswer, question.AnswerText) ? ExamOutcome.Correct : ExamOutcome.Incorrect,
         { CorrectOptionId: null } => ExamOutcome.Ungraded,
         { SelectedOptionId: null } => ExamOutcome.Unanswered,
         _ when question.SelectedOptionId == question.CorrectOptionId => ExamOutcome.Correct,

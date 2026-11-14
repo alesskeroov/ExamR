@@ -17,6 +17,7 @@ public class QuestionConfiguration : IEntityTypeConfiguration<Question>
         builder.Property(q => q.ContentHash).HasColumnType("bytea").IsRequired();
         builder.Property(q => q.VerificationStatus).HasConversion<string>().HasMaxLength(20).IsUnicode(false);
         builder.Property(q => q.ParseWarning).HasMaxLength(500);
+        builder.Property(q => q.CodedAnswer).HasMaxLength(CodedAnswers.MaxKeyLength);
         builder.Property(q => q.CreatedAt).HasPrecision(3);
         builder.Property(q => q.UpdatedAt).HasPrecision(3);
         builder.Property(q => q.RowVersion).IsRowVersion();

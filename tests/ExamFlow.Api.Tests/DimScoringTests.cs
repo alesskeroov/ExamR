@@ -53,6 +53,38 @@ public class DimScoringTests
     }
 
     [Fact]
+    public void Open_coded_answers_fill_the_coded_part_of_mathematics()
+    {
+        var items = Items("riy", 13, ExamOutcome.Correct)
+            .Concat(Enumerable.Repeat(new DimGradedItem("riy", null, ExamOutcome.Correct, IsOpen: true), 3))
+            .Concat(Enumerable.Repeat(new DimGradedItem("riy", null, ExamOutcome.Incorrect, IsOpen: true), 2))
+            .ToList();
+
+        var riy = Assert.Single(DimScoring.Score(DimTrack.Buraxilis, null, items).Subjects);
+
+        Assert.Equal(40.6m, riy.ClosedPoints);   // 13 × 100/32
+        Assert.Equal(9.4m, riy.OpenPoints);      // 3/5 × 5 coded × 100/32
+        Assert.Equal(15.6m, riy.OpenMaxPoints);
+        Assert.Equal(5, riy.OpenTotal);
+        Assert.Equal(3, riy.OpenCorrect);
+        Assert.Equal(50m, riy.MeasuredPoints);
+        Assert.Equal(56.3m, riy.MeasuredMaxPoints);
+        Assert.Equal(88.9m, riy.EstimatedPoints); // 50 / 56.25 × 100
+    }
+
+    [Fact]
+    public void Open_answers_of_a_subject_without_coded_tasks_stand_for_its_written_tasks()
+    {
+        var items = Enumerable.Repeat(new DimGradedItem("az", null, ExamOutcome.Correct, IsOpen: true), 4).ToList();
+
+        var az = Assert.Single(DimScoring.Score(DimTrack.Buraxilis, null, items).Subjects);
+
+        Assert.Equal(0m, az.ClosedMaxPoints);
+        Assert.Equal(50m, az.OpenMaxPoints);      // 10 written × 2 × 100/40
+        Assert.Equal(100m, az.EstimatedPoints);
+    }
+
+    [Fact]
     public void Net_score_never_goes_below_zero_and_ungraded_questions_are_left_out()
     {
         var items = Items("fiz", 1, ExamOutcome.Correct).Concat(Items("fiz", 10, ExamOutcome.Incorrect))

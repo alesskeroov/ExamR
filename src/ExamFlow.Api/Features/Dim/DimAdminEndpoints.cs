@@ -23,7 +23,10 @@ public static class DimAdminEndpoints
         group.MapGet("/documents", SourceDocuments);
         group.MapGet("/documents/{documentId:guid}/questions", SourceQuestions);
         group.MapPost("/documents/{documentId:guid}/approve-valid", ApproveValid).Validate<DimApproveDocumentRequest>();
+        group.MapPost("/sets", CreateSet).Validate<DimCreateSetRequest>();
+        group.MapPost("/questions", CreateQuestion).Validate<DimCreateQuestionRequest>();
         group.MapPut("/questions/{questionId:guid}", EditQuestion).Validate<DimEditQuestionRequest>();
+        group.MapDelete("/questions/{questionId:guid}", DeleteQuestion);
         group.MapPost("/documents/{documentId:guid}/answer-key", AnswerKey).Validate<DimAnswerKeyRequest>();
         group.MapPost("/bank", Approve).Validate<DimApproveRequest>();
         group.MapDelete("/bank/{questionId:guid}", RemoveFromBank);
@@ -43,12 +46,14 @@ public static class DimAdminEndpoints
             .OrderByDescending(d => d.CreatedAt)
             .Select(d => new
             {
-                d.Id, d.OriginalFileName, d.CreatedAt,
+                d.Id, d.OriginalFileName, d.CreatedAt, d.StoredFileName,
                 Total = db.Questions.Count(q => q.DocumentId == d.Id),
-                // Mirrors BankRejection: 2–5 non-empty options, exactly one correct, non-empty text.
+                // Mirrors BankRejection: non-empty text and either a coded answer without options, or 2–5 non-empty
+                // options with exactly one correct.
                 Valid = db.Questions.Count(q => q.DocumentId == d.Id && q.Text.Trim() != ""
-                    && q.Options.Count >= 2 && q.Options.Count <= MaxOptions
-                    && q.Options.Count(o => o.IsCorrect) == 1 && !q.Options.Any(o => o.Text.Trim() == "")),
+                    && ((q.CodedAnswer != null && q.Options.Count == 0)
+                        || (q.Options.Count >= 2 && q.Options.Count <= MaxOptions
+                            && q.Options.Count(o => o.IsCorrect) == 1 && !q.Options.Any(o => o.Text.Trim() == "")))),
             })
             .ToListAsync(ct);
 
@@ -61,7 +66,8 @@ public static class DimAdminEndpoints
 
         return TypedResults.Ok(documents.Select(d => new DimSourceDocumentDto(d.Id, d.OriginalFileName, d.CreatedAt, d.Total, d.Valid,
             bank.Where(b => b.DocumentId == d.Id).OrderBy(b => b.Track).ThenBy(b => b.Subject)
-                .Select(b => new DimDocumentBankDto(b.Track, b.Subject, DimCatalog.SubjectName(b.Subject), b.Count)).ToList())).ToList());
+                .Select(b => new DimDocumentBankDto(b.Track, b.Subject, DimCatalog.SubjectName(b.Subject), b.Count)).ToList(),
+            IsManualSet(d.StoredFileName))).ToList());
     }
 
     /// <summary>Questions of a document the admin uploaded, with their answer key and bank state.</summary>
@@ -76,7 +82,7 @@ public static class DimAdminEndpoints
             .OrderBy(q => q.SourceNumber)
             .Select(q => new
             {
-                q.Id, q.SourceNumber, q.Text, q.VerificationStatus, q.ParseWarning,
+                q.Id, q.SourceNumber, q.Text, q.CodedAnswer, q.VerificationStatus, q.ParseWarning,
                 Options = q.Options.OrderBy(o => o.Position).Select(o => new { o.Id, o.Text, o.IsCorrect }).ToList(),
                 Bank = db.DimBankQuestions.Where(b => b.QuestionId == q.Id).Select(b => new DimBankInfoDto(b.Track, b.Subject, b.Topic)).FirstOrDefault(),
             })
@@ -84,7 +90,7 @@ public static class DimAdminEndpoints
 
         return TypedResults.Ok(questions.Select(q => new DimSourceQuestionDto(q.Id, q.SourceNumber, q.Text,
             q.Options.Select((o, i) => new DimOptionDto(o.Id, ((char)('A' + i)).ToString(), o.Text, o.IsCorrect)).ToList(),
-            q.VerificationStatus, q.ParseWarning, q.Bank)).ToList());
+            q.VerificationStatus, q.ParseWarning, q.Bank, q.CodedAnswer)).ToList());
     }
 
     /// <summary>Applies a typed answer key ("1-A 2-C …") to the document's questions by their original number.</summary>
@@ -131,9 +137,14 @@ public static class DimAdminEndpoints
             invalid.Distinct().Order().ToList(), conflicts.Order().ToList()));
     }
 
-    /// <summary>Why a question cannot enter the bank (MVP: closed A–E questions with exactly one known answer).</summary>
+    /// <summary>
+    /// Why a question cannot enter the bank: it must be a closed A–E question with exactly one known answer, or an open
+    /// coded question (no options) with its numeric answer.
+    /// </summary>
     public static string? BankRejection(Question question) =>
-        question.Options.Count < 2 ? "Qapalı sual deyil (variant yoxdur)."
+        string.IsNullOrWhiteSpace(question.Text) ? "Sual mətni boşdur."
+        : question.Options.Count == 0 ? (question.CodedAnswer is null ? "Variant yoxdur: kodlaşdırılan sual kimi cavabını yazın." : null)
+        : question.Options.Count < 2 ? "Qapalı sualda ən azı 2 variant olmalıdır."
         : question.Options.Count > MaxOptions ? "Variantların sayı 5-dən çoxdur."
         : question.Options.Count(o => o.IsCorrect) != 1 ? "Düzgün cavab müəyyən edilməyib."
         : question.Options.Any(o => string.IsNullOrWhiteSpace(o.Text)) || string.IsNullOrWhiteSpace(question.Text) ? "Sual və ya variant mətni boşdur."
@@ -178,7 +189,10 @@ public static class DimAdminEndpoints
         db.Documents.Where(d => documentIds.Contains(d.Id) && !d.IsDimSource)
             .ExecuteUpdateAsync(s => s.SetProperty(d => d.IsDimSource, true), ct);
 
-    /// <summary>Fixes a parsed question in place: text, option texts and the single correct option.</summary>
+    /// <summary>
+    /// Fixes a question in place: for a closed question its text, option texts and the single correct option; for a
+    /// question without options its text and coded answer (which turns a parsed open question into a coded one).
+    /// </summary>
     private static async Task<IResult> EditQuestion(
         Guid questionId, DimEditQuestionRequest request, ClaimsPrincipal user, AppDbContext db, CancellationToken ct)
     {
@@ -186,6 +200,19 @@ public static class DimAdminEndpoints
         var question = await db.Questions.Include(q => q.Options)
             .FirstOrDefaultAsync(q => q.Id == questionId && q.Document.UploadedByUserId == userId, ct);
         if (question is null) return Problem(StatusCodes.Status404NotFound, "Sual tapılmadı.");
+        if (question.Options.Count == 0)
+        {
+            if (string.IsNullOrWhiteSpace(request.Text)) return Problem(StatusCodes.Status400BadRequest, "Sual mətni boş ola bilməz.");
+            var (key, keyError) = CodedAnswers.NormalizeKey(request.CodedAnswer);
+            if (keyError is not null) return Problem(StatusCodes.Status400BadRequest, keyError);
+            question.Text = request.Text.Trim();
+            question.CodedAnswer = key;
+            question.VerificationStatus = VerificationStatus.Verified;
+            question.ParseWarning = null;
+            await db.SaveChangesAsync(ct);
+            return TypedResults.NoContent();
+        }
+
         if (question.Options.Count < 2 || question.Options.Count > MaxOptions)
             return Problem(StatusCodes.Status400BadRequest, "Bu sualın variant sayı DİM formatına uyğun deyil (2–5 variant olmalıdır).");
         if (request.Options.Count != question.Options.Count || question.Options.Any(o => request.Options.All(r => r.Id != o.Id)))
@@ -213,6 +240,130 @@ public static class DimAdminEndpoints
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
         });
+        return TypedResults.NoContent();
+    }
+
+    /// <summary>File-name suffix of a hand-made question set: a document row without a stored file.</summary>
+    public const string ManualSetSuffix = ".manual";
+
+    internal static bool IsManualSet(string storedFileName) => storedFileName.EndsWith(ManualSetSuffix, StringComparison.Ordinal);
+
+    /// <summary>
+    /// An empty set for questions typed in by hand. It is an ordinary document (so tests can draw from it like from an
+    /// uploaded PDF) that has no file and is hidden from users from the start.
+    /// </summary>
+    private static async Task<IResult> CreateSet(
+        DimCreateSetRequest request, ClaimsPrincipal user, AppDbContext db, TimeProvider clock, CancellationToken ct)
+    {
+        var now = clock.GetUtcNow();
+        var id = Guid.NewGuid();
+        var document = new UploadedDocument
+        {
+            Id = id,
+            OriginalFileName = request.Title.Trim(),
+            StoredFileName = $"{id:N}{ManualSetSuffix}",
+            // Unique per user like an upload's file hash; there is no file, so the id stands in for its content.
+            Sha256 = System.Security.Cryptography.SHA256.HashData(id.ToByteArray()),
+            IsDimSource = true,
+            Status = DocumentStatus.Completed,
+            UploadedByUserId = user.GetUserId(),
+            CreatedAt = now,
+            UpdatedAt = now,
+            ProcessedAt = now,
+        };
+        db.Documents.Add(document);
+        await db.SaveChangesAsync(ct);
+        return TypedResults.Created($"/api/admin/dim/documents/{id}",
+            new DimSourceDocumentDto(id, document.OriginalFileName, now, 0, 0, [], IsManual: true));
+    }
+
+    /// <summary>
+    /// Adds one question typed in by hand to a document of the admin (usually a manual set) and puts it straight into
+    /// the bank. Without options it is an open coded question and <see cref="DimCreateQuestionRequest.CodedAnswer"/>
+    /// is required; otherwise 2–5 options with one correct.
+    /// </summary>
+    private static async Task<IResult> CreateQuestion(
+        DimCreateQuestionRequest request, ClaimsPrincipal user, AppDbContext db, TimeProvider clock, CancellationToken ct)
+    {
+        if (!DimCatalog.IsSubjectOf(request.Track, request.Subject))
+            return Problem(StatusCodes.Status400BadRequest, "Fənn bu imtahan növünə aid deyil.");
+
+        var userId = user.GetUserId();
+        var document = await db.Documents.FirstOrDefaultAsync(d => d.Id == request.DocumentId && d.UploadedByUserId == userId, ct);
+        if (document is null) return Problem(StatusCodes.Status404NotFound, "Sənəd tapılmadı.");
+        if (document.Status != DocumentStatus.Completed)
+            return Problem(StatusCodes.Status409Conflict, "Sənəd hələ emal olunur, sonra yenidən cəhd edin.");
+
+        var text = request.Text.Trim();
+        var options = request.Options.Select(o => o.Trim()).ToList();
+        if (text.Length == 0) return Problem(StatusCodes.Status400BadRequest, "Sual mətnini yazın.");
+
+        string? codedAnswer = null;
+        if (options.Count == 0)
+        {
+            var (key, keyError) = CodedAnswers.NormalizeKey(request.CodedAnswer);
+            if (keyError is not null) return Problem(StatusCodes.Status400BadRequest, keyError);
+            codedAnswer = key;
+        }
+        else
+        {
+            if (options.Count < 2 || options.Count > MaxOptions)
+                return Problem(StatusCodes.Status400BadRequest, $"Qapalı sualda 2–{MaxOptions} variant olmalıdır.");
+            if (options.Any(o => o.Length == 0)) return Problem(StatusCodes.Status400BadRequest, "Variant mətni boş ola bilməz.");
+            if (request.CorrectIndex is not { } correct || correct < 0 || correct >= options.Count)
+                return Problem(StatusCodes.Status400BadRequest, "Düzgün variantı seçin.");
+        }
+
+        var now = clock.GetUtcNow();
+        var lastNumber = await db.Questions.Where(q => q.DocumentId == document.Id).MaxAsync(q => (int?)q.SourceNumber, ct) ?? 0;
+        var question = new Question
+        {
+            DocumentId = document.Id,
+            SourceNumber = lastNumber + 1,
+            Text = text,
+            CodedAnswer = codedAnswer,
+            // The coded answer is part of the identity: the same stem with another answer is another question.
+            ContentHash = ExamFlow.Parsing.ContentHasher.Compute(text, codedAnswer is null ? options : [$"\0coded:{codedAnswer}"]),
+            VerificationStatus = VerificationStatus.Verified,
+            CreatedAt = now,
+            UpdatedAt = now,
+            Options = options.Select((o, i) => new AnswerOption
+            {
+                Position = (byte)i,
+                Label = ((char)('A' + i)).ToString(),
+                Text = o,
+                IsCorrect = i == request.CorrectIndex,
+            }).ToList(),
+        };
+        db.Questions.Add(question);
+        await db.SaveChangesAsync(ct);
+
+        var rejected = await AddToBankAsync(db, [question], request.Track, request.Subject, request.Topic, userId, now, ct);
+        if (rejected.Count > 0) return Problem(StatusCodes.Status400BadRequest, rejected[0].Reason);
+        await MarkDimSourcesAsync(db, [document.Id], ct);
+
+        var topic = string.IsNullOrWhiteSpace(request.Topic) ? null : request.Topic.Trim();
+        return TypedResults.Created($"/api/admin/dim/questions/{question.Id}", new DimSourceQuestionDto(question.Id, question.SourceNumber, question.Text,
+            question.Options.Select(o => new DimOptionDto(o.Id, o.Label, o.Text, o.IsCorrect)).ToList(), question.VerificationStatus, null,
+            new DimBankInfoDto(request.Track, request.Subject, topic), question.CodedAnswer));
+    }
+
+    /// <summary>
+    /// Deletes a question of a manual set (with its bank row). Questions of an uploaded PDF are only removed from the
+    /// bank, since the PDF would bring them back and their images belong to it. Past exams keep their snapshot.
+    /// </summary>
+    private static async Task<IResult> DeleteQuestion(Guid questionId, ClaimsPrincipal user, AppDbContext db, CancellationToken ct)
+    {
+        var userId = user.GetUserId();
+        var question = await db.Questions
+            .Where(q => q.Id == questionId && q.Document.UploadedByUserId == userId)
+            .Select(q => new { q.Id, q.Document.StoredFileName })
+            .FirstOrDefaultAsync(ct);
+        if (question is null) return Problem(StatusCodes.Status404NotFound, "Sual tapılmadı.");
+        if (!IsManualSet(question.StoredFileName))
+            return Problem(StatusCodes.Status400BadRequest, "Yalnız əl ilə əlavə olunmuş suallar silinə bilər; PDF sualını bankdan çıxarın.");
+
+        await db.Questions.Where(q => q.Id == questionId).ExecuteDeleteAsync(ct);
         return TypedResults.NoContent();
     }
 

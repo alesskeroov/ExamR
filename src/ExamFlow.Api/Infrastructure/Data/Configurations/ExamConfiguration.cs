@@ -1,4 +1,5 @@
 using ExamFlow.Api.Features.Exams;
+using ExamFlow.Api.Features.Questions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -48,6 +49,8 @@ public class ExamQuestionConfiguration : IEntityTypeConfiguration<ExamQuestion>
         builder.Property(q => q.Outcome).HasConversion<string>().HasMaxLength(20).IsUnicode(false);
         builder.Property(q => q.AnsweredAt).HasPrecision(3);
         builder.Property(q => q.LockedAt).HasPrecision(3);
+        builder.Property(q => q.CorrectAnswer).HasMaxLength(CodedAnswers.MaxKeyLength);
+        builder.Property(q => q.AnswerText).HasMaxLength(CodedAnswers.MaxAnswerLength);
 
         builder.OwnsOne(q => q.Snapshot, snapshot =>
         {
