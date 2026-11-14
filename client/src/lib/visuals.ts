@@ -32,6 +32,4 @@ export const visualUrls = {
   document: (documentId: string) => (id: string) => `/api/documents/${documentId}/visuals/${id}`,
   exam: (examId: string) => (id: string) => `/api/exams/${examId}/visuals/${id}`,
   battle: (code: string) => (id: string) => `/api/battles/rooms/${encodeURIComponent(code)}/visuals/${id}`,
-  /** Admin explanation bank: every completed PDF, not only the admin's own. */
-  explanationBank: (documentId: string) => (id: string) => `/api/admin/explanations/documents/${documentId}/visuals/${id}`,
 }
