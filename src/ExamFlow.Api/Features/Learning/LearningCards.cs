@@ -64,8 +64,9 @@ public static class CardMastery
 }
 
 /// <summary>Question = open question and its answer; Term = "X — definition" inside an answer; List = "…:" and its items; Test = test question and its correct option;
-/// Table = one row (or a two-column comparison) of a table; Custom = a card the student wrote.</summary>
-public enum CardKind { Question, Term, List, Test, Table, Custom }
+/// Table = one row (or a two-column comparison) of a table; Custom = a card the student wrote;
+/// Cloze = a sentence with the term the author set in bold left blank (Back = the term).</summary>
+public enum CardKind { Question, Term, List, Test, Table, Custom, Cloze }
 
 /// <summary>
 /// One flashcard. Front/Back are the two sides; Items = list items (List) or the terms explained in the answer (Question);
@@ -88,7 +89,7 @@ public sealed record TestQuestion(int Number, string Text, string Correct, IRead
 /// </summary>
 public static partial class CardDeckBuilder
 {
-    public const string Version = "cards11";
+    public const string Version = "cards12";
     public const int MaxCards = 2000;
     private const int MaxTermWords = 6;
     private const int MaxTermLength = 70;
@@ -380,7 +381,7 @@ public sealed class CardDeckService(AppDbContext db, OpenQuestionIndexer indexer
         foreach (var chunk in LearningChunker.Chunk(text.Blocks, chunking))
             for (var paragraph = chunk.ParagraphFrom; paragraph <= chunk.ParagraphTo; paragraph++)
                 ordinals.TryAdd(paragraph, chunk.Ordinal);
-        return text.Blocks.Select(b => new DocParagraph(b.Text, b.Page, ordinals.GetValueOrDefault(b.Paragraph)) { HeadingLevel = b.HeadingLevel }).ToList();
+        return text.Blocks.Select(b => new DocParagraph(b.Text, b.Page, ordinals.GetValueOrDefault(b.Paragraph)) { HeadingLevel = b.HeadingLevel, Bold = b.Bold, Level = b.Level }).ToList();
     }
 
     private async Task<StudyDeck?> TestsAsync(Guid learningId, string storedFileName, string format, CancellationToken ct)

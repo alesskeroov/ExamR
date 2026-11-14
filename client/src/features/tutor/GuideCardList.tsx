@@ -25,6 +25,7 @@ const kinds: { id: CardKind | 'all'; label: string }[] = [
   { id: 'Term', label: 'Anlayışlar' },
   { id: 'List', label: 'Siyahılar' },
   { id: 'Table', label: 'Cədvəllər' },
+  { id: 'Cloze', label: 'Boşluqlar' },
   { id: 'Test', label: 'Testlər' },
   { id: 'Custom', label: 'Mənim kartlarım' },
 ]

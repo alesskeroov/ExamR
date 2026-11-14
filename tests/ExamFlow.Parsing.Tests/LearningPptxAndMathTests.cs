@@ -152,6 +152,39 @@ public class LearningPptxAndMathTests
         Assert.Equal("Dairənin sahəsi S=πr² düsturu ilə tapılır.", Assert.Single(result.Blocks).Text);
     }
 
+    private static MemoryStream DocxBody(string body) =>
+        Zip(("word/document.xml", $"""<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>{body}</w:body></w:document>"""));
+
+    [Fact]
+    public void Docx_bold_runs_are_kept_as_phrases()
+    {
+        var body = """
+            <w:p><w:r><w:t xml:space="preserve">Buna qarşı </w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>opex</w:t></w:r><w:r><w:t xml:space="preserve"> cari xərcdir, </w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">virtuallaşdırma </w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>(virtualization</w:t></w:r><w:r><w:t>) isə texnologiyadır.</w:t></w:r></w:p>
+            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Tam qalın abzas başlıq kimidir</w:t></w:r></w:p>
+            <w:p><w:r><w:rPr><w:b w:val="0"/></w:rPr><w:t>Qalın deyil</w:t></w:r><w:r><w:t> mətn.</w:t></w:r></w:p>
+            """;
+        var result = LearningTextExtractor.FromDocx(DocxBody(body), Limits);
+
+        Assert.Equal(["opex", "virtuallaşdırma"], result.Blocks[0].Bold);
+        Assert.Empty(result.Blocks[1].Bold);
+        Assert.Empty(result.Blocks[2].Bold);
+    }
+
+    [Fact]
+    public void Pptx_keeps_bullet_levels_and_bold_terms()
+    {
+        var body = """
+            <p:sp><p:nvSpPr><p:cNvPr id="2" name="b"/><p:cNvSpPr/><p:nvPr><p:ph idx="1"/></p:nvPr></p:nvSpPr><p:txBody>
+            <a:p><a:r><a:t>Hidrid ionları elektron verir və </a:t></a:r><a:r><a:rPr b="1"/><a:t>güclü reduksiyaedicidir</a:t></a:r></a:p>
+            <a:p><a:pPr lvl="1"/><a:r><a:t>NaH, CaH₂</a:t></a:r></a:p>
+            </p:txBody></p:sp>
+            """;
+        var result = LearningTextExtractor.FromPptx(Pptx([Text("Hidridlər", "title") + body]), Limits);
+
+        Assert.Equal([null, 0, 1], result.Blocks.Select(b => b.Level));
+        Assert.Equal(["güclü reduksiyaedicidir"], result.Blocks[1].Bold);
+    }
+
     [Fact]
     public void Pdf_with_some_picture_pages_is_kept()
     {

@@ -54,13 +54,13 @@ public static partial class LearningTextExtractor
 
             string? section = null;
             var tooLarge = false;
-            void Add(int slide, string text, int? headingLevel)
+            void Add(int slide, string text, int? headingLevel, int? level = null, IReadOnlyList<string>? bold = null)
             {
                 if (text.Length == 0 || tooLarge) return;
                 if (headingLevel is not null) section = text.Length > 200 ? text[..200] : text;
                 characters += text.Length;
                 if (characters > limits.MaxCharacters) { tooLarge = true; return; }
-                blocks.Add(new TextBlock(blocks.Count + 1, slide, section, text) { HeadingLevel = headingLevel });
+                blocks.Add(new TextBlock(blocks.Count + 1, slide, section, text) { HeadingLevel = headingLevel, Level = level, Bold = bold ?? [] });
             }
 
             for (var index = 0; index < slides.Count; index++)
@@ -73,7 +73,7 @@ public static partial class LearningTextExtractor
                 if (tree is null) continue;
 
                 var titles = new List<string>();
-                var body = new List<(string Text, bool TableStart, bool TableRow)>();
+                var body = new List<SlideLine>();
                 CollectShapes(tree, titles, body);
 
                 var slash = slides[index].LastIndexOf('/');
@@ -82,7 +82,7 @@ public static partial class LearningTextExtractor
                 var notes = new List<string>();
                 if (notesPath is not null && Load(notesPath)?.Root?.Element(P + "cSld")?.Element(P + "spTree") is { } notesTree)
                     foreach (var shape in notesTree.Descendants(P + "sp").Where(s => Placeholder(s) == "body"))
-                        notes.AddRange(ShapeParagraphs(shape));
+                        notes.AddRange(ShapeParagraphs(shape).Select(l => l.Text));
 
                 var title = Normalize(string.Join(' ', titles));
                 var letters = title.Count(char.IsLetterOrDigit) + body.Sum(b => b.Text.Count(char.IsLetterOrDigit));
@@ -90,8 +90,8 @@ public static partial class LearningTextExtractor
                 else if (tree.Descendants(A + "blip").Any()) visualPages.Add(number);
 
                 Add(number, title, 1);
-                foreach (var (text, tableStart, tableRow) in body)
-                    Add(number, tableStart ? TableStartMark + text : tableRow ? TableRowMark + text : text, null);
+                foreach (var line in body)
+                    Add(number, line.TableStart ? TableStartMark + line.Text : line.TableRow ? TableRowMark + line.Text : line.Text, null, line.Level, line.Bold);
                 foreach (var note in notes) Add(number, note, null);
                 if (tooLarge) return ExtractedText.Failed(TextExtractionFailure.TooLarge, slideCount);
             }
@@ -110,7 +110,7 @@ public static partial class LearningTextExtractor
     }
 
     /// <summary>Title placeholders go to <paramref name="titles"/>; other text boxes, tables and groups to <paramref name="body"/> in document order.</summary>
-    private static void CollectShapes(XElement container, List<string> titles, List<(string Text, bool TableStart, bool TableRow)> body)
+    private static void CollectShapes(XElement container, List<string> titles, List<SlideLine> body)
     {
         foreach (var element in container.Elements())
         {
@@ -119,18 +119,18 @@ public static partial class LearningTextExtractor
                 var placeholder = Placeholder(element);
                 if (placeholder is not null && ChromePlaceholders.Contains(placeholder)) continue;
                 var paragraphs = ShapeParagraphs(element);
-                if (placeholder is "title" or "ctrTitle") titles.AddRange(paragraphs);
-                else body.AddRange(paragraphs.Select(p => (p, false, false)));
+                if (placeholder is "title" or "ctrTitle") titles.AddRange(paragraphs.Select(l => l.Text));
+                else body.AddRange(paragraphs);
             }
             else if (element.Name == P + "grpSp") CollectShapes(element, titles, body);
             else if (element.Name == P + "graphicFrame" && element.Descendants(A + "tbl").FirstOrDefault() is { } table)
             {
                 var rows = table.Elements(A + "tr")
-                    .Select(tr => tr.Elements(A + "tc").Select(tc => Normalize(string.Join(' ', ShapeParagraphs(tc))).Replace('|', '/')).ToList())
+                    .Select(tr => tr.Elements(A + "tc").Select(tc => Normalize(string.Join(' ', ShapeParagraphs(tc).Select(l => l.Text))).Replace('|', '/')).ToList())
                     .Where(cells => cells.Any(c => c.Length > 0)).ToList();
                 if (rows.Count == 0) continue;
-                if (rows.Max(r => r.Count) < 2) body.AddRange(rows.SelectMany(r => r).Where(c => c.Length > 0).Select(c => (c, false, false)));
-                else body.AddRange(rows.Select((r, i) => (string.Join(" | ", r), i == 0, i > 0)));
+                if (rows.Max(r => r.Count) < 2) body.AddRange(rows.SelectMany(r => r).Where(c => c.Length > 0).Select(c => new SlideLine(c, null, [])));
+                else body.AddRange(rows.Select((r, i) => new SlideLine(string.Join(" | ", r), null, []) { TableStart = i == 0, TableRow = i > 0 }));
             }
             // Equation shapes are saved twice: as Office Math (mc:Choice) and as a picture fallback.
             else if (element.Name == Mc + "AlternateContent" && (element.Element(Mc + "Choice") ?? element.Element(Mc + "Fallback")) is { } choice)
@@ -144,18 +144,34 @@ public static partial class LearningTextExtractor
         return ph is null ? null : (string?)ph.Attribute("type") ?? "body";
     }
 
-    /// <summary>Non-empty paragraphs of a shape's or table cell's text body.</summary>
-    private static List<string> ShapeParagraphs(XElement shape) =>
-        (shape.Element(P + "txBody") ?? shape.Element(A + "txBody"))?.Elements(A + "p").Select(DrawingParagraphText).Where(t => t.Length > 0).ToList() ?? [];
+    /// <summary>One text paragraph of a slide shape: its bullet level and bold phrases; table rows carry the table marks instead.</summary>
+    private sealed record SlideLine(string Text, int? Level, IReadOnlyList<string> Bold)
+    {
+        public bool TableStart { get; init; }
+        public bool TableRow { get; init; }
+    }
 
-    private static string DrawingParagraphText(XElement paragraph)
+    /// <summary>Non-empty paragraphs of a shape's or table cell's text body.</summary>
+    private static List<SlideLine> ShapeParagraphs(XElement shape) =>
+        (shape.Element(P + "txBody") ?? shape.Element(A + "txBody"))?.Elements(A + "p")
+            .Select(p => new SlideLine(DrawingParagraphText(p, out var bold),
+                int.TryParse((string?)p.Element(A + "pPr")?.Attribute("lvl"), out var level) ? Math.Clamp(level, 0, 8) : 0, bold))
+            .Where(l => l.Text.Length > 0).ToList() ?? [];
+
+    private static string DrawingParagraphText(XElement paragraph, out IReadOnlyList<string> bold)
     {
         var text = new System.Text.StringBuilder();
+        var ranges = new List<(int Start, int End)>();
         void Collect(XElement element)
         {
             foreach (var child in element.Elements())
             {
-                if (child.Name == A + "r" || child.Name == A + "fld") text.Append(child.Element(A + "t")?.Value);
+                if (child.Name == A + "r" || child.Name == A + "fld")
+                {
+                    var start = text.Length;
+                    text.Append(child.Element(A + "t")?.Value);
+                    if ((string?)child.Element(A + "rPr")?.Attribute("b") is "1" or "true") ranges.Add((start, text.Length));
+                }
                 else if (child.Name == A + "br") text.Append(' ');
                 else if (child.Name == Mc + "AlternateContent") { if (child.Element(Mc + "Choice") is { } choice) Collect(choice); }
                 else if (child.Name == MathText.M + "oMathPara" || child.Name == MathText.M + "oMath") text.Append(' ').Append(MathText.Linear(child)).Append(' ');
@@ -163,7 +179,9 @@ public static partial class LearningTextExtractor
             }
         }
         Collect(paragraph);
-        return Normalize(text.ToString());
+        var raw = text.ToString();
+        bold = BoldPhrases(raw, ranges);
+        return Normalize(raw);
     }
 
     /// <summary>Relationship id → package path. Targets are relative to <paramref name="baseDir"/> ("ppt/", "ppt/slides/").</summary>
