@@ -2,7 +2,7 @@ import { UsageMeter } from '../../components/common/UsageMeter'
 import { useUsageLimit } from '../usage/api'
 import './exam-flow.css'
 import { answerDisplayText } from './answer-display'
-import { AlertTriangle, Check, Clock, History, RotateCcw, RotateCw, X } from 'lucide-react'
+import { AlertTriangle, BookOpen, Check, Clock, History, RotateCcw, RotateCw, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
@@ -16,6 +16,8 @@ import { useExamResult, type ExamOutcome, type ExamResult, type ExamResultQuesti
 import { sourceName, sourceRange } from './examSource'
 import { DimReportCard } from '../dim/DimReportCard'
 import { DimRetakeButton } from '../dim/DimRetakeButton'
+import { useExamLinks, type ExamQuestionLink } from '../courses/api'
+import { placeLabel } from '../tutor/place-label'
 
 type Filter = 'All' | 'Correct' | 'Incorrect' | 'Unanswered'
 
@@ -45,6 +47,8 @@ function ResultView({ result }: { result: ExamResult }) {
   const monthly = useUsageLimit('Exam')
   const [filter, setFilter] = useState<Filter>('All')
   const [focused, setFocused] = useState<number | null>(null)
+  // Missed questions of a bank that is in one of the student's courses point to the lecture part that explains them.
+  const links = useExamLinks(result.id)
 
   const questions = filter === 'All' ? result.questions : result.questions.filter((q) => q.outcome === filter)
   const minutes = Math.floor(result.durationSeconds / 60)
@@ -201,7 +205,8 @@ function ResultView({ result }: { result: ExamResult }) {
         {questions.length === 0 ? (
           <EmptyState title="Bu filtrə uyğun sual yoxdur" />
         ) : (
-          questions.map((q) => <ReviewCard key={q.position} question={q} visualSrc={visualUrls.exam(result.id)} highlighted={focused === q.position} />)
+          questions.map((q) => <ReviewCard key={q.position} question={q} visualSrc={visualUrls.exam(result.id)} highlighted={focused === q.position}
+            link={links.data?.find(l => l.position === q.position)} />)
         )}
         </div>
       </section>
@@ -264,7 +269,7 @@ const outcomeBadge: Record<ExamOutcome, { label: string; className: string }> = 
   Ungraded: { label: 'Qiymətləndirilməyib', className: 'bg-amber-50 text-amber-800 ring-amber-200' },
 }
 
-function ReviewCard({ question, visualSrc, highlighted }: { question: ExamResultQuestion; visualSrc: (id: string) => string; highlighted: boolean }) {
+function ReviewCard({ question, visualSrc, highlighted, link }: { question: ExamResultQuestion; visualSrc: (id: string) => string; highlighted: boolean; link?: ExamQuestionLink }) {
   const badge = outcomeBadge[question.outcome]
   const unanswered = question.outcome === 'Unanswered'
   // Unanswered questions list every option so the student sees what they skipped.
@@ -320,6 +325,18 @@ function ReviewCard({ question, visualSrc, highlighted }: { question: ExamResult
           )
         })}
       </ul>
+
+      {link && (
+        <Link to={`/tutor?document=${link.materialDocumentId}&at=${link.chunkOrdinal}${link.pageFrom != null ? `&page=${link.pageFrom}` : ''}`}
+          className="mt-3 flex items-start gap-2 rounded-lg bg-indigo-50 px-3 py-2 text-sm text-indigo-800 hover:bg-indigo-100">
+          <BookOpen className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <span className="min-w-0">
+            <span className="font-semibold">Konspektdə bax: </span>
+            {[link.materialName, link.section, placeLabel(link.format, link.pageFrom, link.pageTo)].filter(Boolean).join(' · ')}
+            <span className="mt-0.5 line-clamp-2 block text-xs text-indigo-700/80">{link.excerpt}</span>
+          </span>
+        </Link>
+      )}
 
       {question.outcome === 'Ungraded' && (
         <p className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-amber-800">

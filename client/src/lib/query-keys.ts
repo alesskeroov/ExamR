@@ -37,6 +37,14 @@ export const queryKeys = {
     history: (documentId: string) => ['study', documentId, 'history'] as const,
     usage: ['study', 'usage'] as const,
   },
+  courses: {
+    all: ['courses'] as const,
+    list: ['courses', 'list'] as const,
+    detail: (id: string) => ['courses', 'detail', id] as const,
+    plan: (id: string) => ['courses', 'plan', id] as const,
+    candidates: ['courses', 'candidates'] as const,
+    examLinks: (examId: string) => ['courses', 'exam-links', examId] as const,
+  },
   tutor: {
     documents: ['tutor', 'documents'] as const,
     chats: ['tutor', 'chats'] as const,

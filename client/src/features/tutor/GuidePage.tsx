@@ -1,8 +1,11 @@
-import { BookOpen, FileText, Layers, ListChecks, Menu, MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRight, Plus, Search, Trash2, X, type LucideIcon } from 'lucide-react'
+import { BookOpen, CalendarDays, FileText, GraduationCap, Layers, ListChecks, Menu, MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRight, Plus, Search, Trash2, X, type LucideIcon } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
 import { useConfirm } from '../../lib/use-confirm'
+import { useCourses, type CourseSummary, type GuideTarget } from '../courses/api'
+import { CourseDialog } from '../courses/CourseDialog'
+import { CoursePanel } from '../courses/CoursePanel'
 import { cn } from '../../lib/utils'
 import { useChat, useChats, useCreateChat, useDeck, useDeleteChat, useTutorDocuments, type ChatSession, type ChatSource, type LearnScope, type SearchHit, type StudyCard } from './api'
 import { FeedbackDialog } from './FeedbackDialog'
@@ -66,11 +69,20 @@ export function GuidePage() {
   const docInfo = documents.data?.find(d => d.documentId === session?.documentId)
   const format = docInfo?.format ?? session?.documentName.split('.').pop()?.toLowerCase() ?? ''
 
+  const courseId = chatId ? null : params.get('course')
+  const courses = useCourses()
+  const [newCourse, setNewCourse] = useState(false)
+
+  // Opening a document closes the drawer; a link to a place in it ("at": indexed part, "page") opens the preview there.
   const [shownChat, setShownChat] = useState(chatId)
   if (shownChat !== chatId) {
     setShownChat(chatId)
     setDrawerOpen(false)
-    setPreview({ open: false, source: null })
+    const at = params.get('at')
+    const page = params.get('page') ? Number(params.get('page')) : null
+    setPreview(at !== null && chatId
+      ? { open: true, source: { number: 0, chunkOrdinal: Number(at), pageFrom: page, pageTo: page, section: null, excerpt: '', cited: true } }
+      : { open: false, source: null })
   }
 
   useEffect(() => {
@@ -109,8 +121,31 @@ export function GuidePage() {
   }
   const newDocument = () => { setParams({}); setDrawerOpen(false) }
 
+  /** Opens a material of a course (or an exam result's link) in the guide, creating its entry on first use. */
+  const openMaterial = (documentId: string, knownChat: string | null, target: GuideTarget) => {
+    const extra: Record<string, string> = {
+      ...(target.tab ? { tab: target.tab } : {}), ...(target.scope ? { scope: target.scope } : {}),
+      ...(target.at != null ? { at: String(target.at) } : {}), ...(target.page != null ? { page: String(target.page) } : {}),
+    }
+    const existing = knownChat ?? chats.data?.items.find(c => c.documentId === documentId)?.id
+    if (existing) setParams({ chat: existing, ...extra })
+    else createChat.mutate(documentId, { onSuccess: created => setParams({ chat: created.id, ...extra }, { replace: true }) })
+  }
+
+  // "/tutor?document=…&at=…" (from an exam result): open that material once the student's entries are known.
+  const linkedDocument = params.get('document')
+  const followed = useRef<string | null>(null)
+  useEffect(() => {
+    if (!linkedDocument || !chats.data || followed.current === linkedDocument) return
+    followed.current = linkedDocument
+    const at = params.get('at')
+    openMaterial(linkedDocument, null, { at: at !== null ? Number(at) : undefined, page: params.get('page') ? Number(params.get('page')) : null })
+  })
+
   const list = <DocumentList items={chats.data?.items ?? []} loading={chats.isLoading} activeId={chatId}
-    onSelect={id => setParams({ chat: id })} onNew={newDocument} onDelete={remove} />
+    onSelect={id => setParams({ chat: id })} onNew={newDocument} onDelete={remove}
+    courses={courses.data ?? []} activeCourseId={courseId} onSelectCourse={id => { setParams({ course: id }); setDrawerOpen(false) }}
+    onNewCourse={() => setNewCourse(true)} />
 
   return (
     <div ref={workspace} className="tutor-workspace tutor-surface tutor-border relative flex overflow-hidden lg:border">
@@ -147,7 +182,7 @@ export function GuidePage() {
               </div>
             </div>
           ) : (
-            <p className="flex-1 truncate px-1 text-sm font-semibold">{chatId ? '' : 'Öyrənmə bələdçisi'}</p>
+            <p className="flex-1 truncate px-1 text-sm font-semibold">{chatId ? '' : courseId ? 'Fənn · hazırlıq planı' : 'Öyrənmə bələdçisi'}</p>
           )}
           <button type="button" onClick={() => setFeedback(true)} aria-label="Təklif və iradlar"
             className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100">
@@ -183,8 +218,13 @@ export function GuidePage() {
           </nav>
         )}
 
-        <div key={`${chatId}-${tab}`} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          {!chatId ? (
+        <div key={`${chatId}-${courseId}-${tab}`} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          {!chatId && courseId ? (
+            <>
+              {createChat.isError && <div className="mx-auto max-w-2xl px-4 pt-5"><Alert title="Material açılmadı">{createChat.error.message}</Alert></div>}
+              <CoursePanel courseId={courseId} onOpenMaterial={openMaterial} onDeleted={() => setParams({})} />
+            </>
+          ) : !chatId ? (
             <TutorDocumentPicker onStart={startDocument} starting={createChat.isPending} startError={createChat.error?.message}
               resumable={chats.data?.items.map(c => c.documentId) ?? []} />
           ) : chat.isError ? (
@@ -204,6 +244,7 @@ export function GuidePage() {
         </aside>
       )}
       {feedback && <FeedbackDialog documentName={session?.documentName} onClose={() => setFeedback(false)} />}
+      {newCourse && <CourseDialog onClose={() => setNewCourse(false)} onSaved={created => { setParams({ course: created.id }); setDrawerOpen(false) }} />}
     </div>
   )
 }
@@ -233,18 +274,49 @@ function DeckView({ chatId, documentId, format, tab, scope, onLearn, onSource, o
 interface ListProps {
   items: ChatSession[]; loading: boolean; activeId: string | null
   onSelect: (id: string) => void; onNew: () => void; onDelete: (item: ChatSession) => void
+  courses: CourseSummary[]; activeCourseId: string | null; onSelectCourse: (id: string) => void; onNewCourse: () => void
 }
 
-function DocumentList({ items, loading, activeId, onSelect, onNew, onDelete }: ListProps) {
+/** "İmtahana 5 gün", "Bu gün imtahan", or nothing without an upcoming exam. */
+const courseDays = (course: CourseSummary) =>
+  course.daysLeft === null ? null : course.daysLeft === 0 ? 'Bu gün imtahan' : `İmtahana ${course.daysLeft} gün`
+
+function DocumentList({ items, loading, activeId, onSelect, onNew, onDelete, courses, activeCourseId, onSelectCourse, onNewCourse }: ListProps) {
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col">
-      <div className="p-3">
+      <div className="flex flex-col gap-2 p-3">
         <button type="button" onClick={onNew}
           className="tutor-border flex h-10 w-full items-center gap-2 rounded-xl border bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50">
           <Plus className="size-4" aria-hidden />Sənəd seç
         </button>
       </div>
-      <nav aria-label="Sənədlərim" className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+      <nav aria-label="Fənlərim və sənədlərim" className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+        <div className="flex items-center justify-between px-3 pt-1 pb-1">
+          <p className="text-[11px] font-semibold tracking-wide text-slate-400 uppercase">Fənlərim</p>
+          <button type="button" onClick={onNewCourse} aria-label="Yeni fənn" className="grid size-7 place-items-center rounded-md text-slate-500 hover:bg-slate-200/60 hover:text-slate-800">
+            <Plus className="size-3.5" />
+          </button>
+        </div>
+        {courses.length === 0 ? (
+          <button type="button" onClick={onNewCourse} className="mx-1 mb-2 flex w-[calc(100%-0.5rem)] items-start gap-2 rounded-lg px-2 py-2 text-left text-xs text-slate-500 hover:bg-slate-200/60">
+            <GraduationCap className="mt-0.5 size-4 shrink-0" aria-hidden />Fənn yarat: mühazirələri və sual bankını birləşdir, imtahana hazırlıq planı al.
+          </button>
+        ) : (
+          <ul className="mb-2">
+            {courses.map(course => (
+              <li key={course.id}>
+                <button type="button" onClick={() => onSelectCourse(course.id)} aria-current={course.id === activeCourseId ? 'page' : undefined}
+                  className={cn('flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors', course.id === activeCourseId ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:bg-slate-200/60')}>
+                  <GraduationCap className="size-4 shrink-0 text-indigo-600" aria-hidden />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">{course.name}</span>
+                    {courseDays(course) && <span className="flex items-center gap-1 text-[11px] text-slate-500"><CalendarDays className="size-3" aria-hidden />{courseDays(course)}</span>}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
         <p className="px-3 pt-2 pb-1 text-[11px] font-semibold tracking-wide text-slate-400 uppercase">Sənədlərim</p>
         {loading ? (
           [0, 1, 2].map(i => <div key={i} className="mx-1 my-1.5 h-9 animate-pulse rounded-lg bg-slate-200/60" />)
