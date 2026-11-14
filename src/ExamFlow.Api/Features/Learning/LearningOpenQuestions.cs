@@ -174,6 +174,8 @@ public sealed class OpenQuestionIndexer(AppDbContext db, IFileStorage storage, P
     public static bool IsSupportedFormat(string? format) =>
         string.Equals(format, "pdf", StringComparison.OrdinalIgnoreCase) || string.Equals(format, "docx", StringComparison.OrdinalIgnoreCase);
 
+    public static bool IsSlides(string? format) => string.Equals(format, "pptx", StringComparison.OrdinalIgnoreCase);
+
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private static readonly TimeSpan BuildTimeout = TimeSpan.FromSeconds(180);
 
@@ -197,6 +199,8 @@ public sealed class OpenQuestionIndexer(AppDbContext db, IFileStorage storage, P
         var learning = await db.Set<LearningDocument>().AsNoTracking().Where(l => l.Id == learningId && l.Status == LearningStatus.Completed)
             .Select(l => new { l.Format, l.ProcessedAt, l.Document.Sha256, l.Document.StoredFileName }).FirstOrDefaultAsync(ct);
         if (learning is null) return null;
+        // Slides are lecture material: there is no question parser for them, so they always give notes cards.
+        if (IsSlides(learning.Format)) return new(OpenQuestionClassifier.Version, OpenDocumentKind.NoOpenQuestions, 0, 0, 0, []);
         if (!IsSupportedFormat(learning.Format)) return new(OpenQuestionClassifier.Version, OpenDocumentKind.NotPdf, 0, 0, 0, []);
 
         var key = CacheKey(learningId, learning.Sha256, learning.ProcessedAt);

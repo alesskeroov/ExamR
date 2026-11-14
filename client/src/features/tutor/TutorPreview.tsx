@@ -20,7 +20,7 @@ export function TutorPreview({ documentId, fileName, format, source, onClose }: 
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold">{fileName}</p>
           <p className="text-xs text-slate-500">
-            {source ? (source.pageFrom != null ? `Mənbə ${source.number} · səhifə ${source.pageFrom}${source.pageTo && source.pageTo !== source.pageFrom ? `–${source.pageTo}` : ''}` : `Mənbə ${source.number}`) : 'Önizləmə'}
+            {source ? (source.pageFrom != null ? `Mənbə ${source.number} · ${format === 'pptx' ? 'slayd' : 'səhifə'} ${source.pageFrom}${source.pageTo && source.pageTo !== source.pageFrom ? `–${source.pageTo}` : ''}` : `Mənbə ${source.number}`) : 'Önizləmə'}
           </p>
         </div>
         <button type="button" onClick={onClose} aria-label="Önizləməni bağla" className="grid size-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900">

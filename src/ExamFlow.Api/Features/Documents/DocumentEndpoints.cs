@@ -201,8 +201,12 @@ public static class DocumentEndpoints
         if (document is null) return NotFound();
         try
         {
-            var contentType = Path.GetExtension(document.StoredFileName).Equals(".docx", StringComparison.OrdinalIgnoreCase)
-                ? DocxQuestionParser.ContentType : "application/pdf";
+            var contentType = Path.GetExtension(document.StoredFileName).ToLowerInvariant() switch
+            {
+                ".docx" => DocxQuestionParser.ContentType,
+                ".pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                _ => "application/pdf",
+            };
             return TypedResults.File(storage.OpenRead(document.StoredFileName), contentType, document.OriginalFileName, enableRangeProcessing: true);
         }
         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException) { return NotFound(); }

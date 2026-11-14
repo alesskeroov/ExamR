@@ -142,7 +142,7 @@ public static partial class CardDeckBuilder
             foreach (var card in NotesCardBuilder.TableCards(cleaned, topicOf[q.Number], q.Number)) Add(card);
             foreach (var (term, definition) in terms)
                 Add(new(CardMastery.Hash(CardKind.Term, term), CardKind.Term, topicOf[q.Number], $"{term} nədir?", definition, [], [], q.Number, q.Page, q.ChunkOrdinal));
-            foreach (var (title, items) in Lists(lines))
+            foreach (var (title, items) in Lists(lines).Where(l => NotesCardBuilder.ReliableList(l.Title, l.Items)))
                 Add(new(CardMastery.Hash(CardKind.List, title), CardKind.List, topicOf[q.Number], $"{title}: hansılardır?", "", items, [], q.Number, q.Page, q.ChunkOrdinal));
         }
         return new(topics, cards);

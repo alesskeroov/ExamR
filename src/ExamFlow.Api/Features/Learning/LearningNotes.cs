@@ -246,7 +246,7 @@ public static partial class NotesCardBuilder
                         front, paragraph.Text, [], [], number, paragraph.Page, paragraph.ChunkOrdinal));
                 }
             }
-            foreach (var (title, items) in CardDeckBuilder.Lists(lines))
+            foreach (var (title, items) in CardDeckBuilder.Lists(lines).Where(l => ReliableList(l.Title, l.Items)))
                 Add(new(CardMastery.Hash(CardKind.List, title), CardKind.List, topic.Key, $"{title}: hansılardır?", "", items, [],
                     number, section.Body[0].Page, section.Body[0].ChunkOrdinal));
             foreach (var card in TableCards(section.Body, topic.Key, number)) Add(card);
@@ -668,6 +668,27 @@ public static partial class NotesCardBuilder
     private static partial Regex AttributeHeader();
     /// <summary>"3 Title" or "3.2 Title": a chapter number without the "." or ")" that numbered list items carry.</summary>
     [GeneratedRegex(@"^\d{1,2}(?:\.\d{1,2}){0,3}\s+\p{L}")] private static partial Regex ChapterNumber();
+
+    /// <summary>
+    /// A list card is only as good as its items: "A; və ya" (an alternative formula, not a list) or a title that announces
+    /// "dörd mərhələ" over three items would teach something wrong.
+    /// </summary>
+    public static bool ReliableList(string title, IReadOnlyList<string> items)
+    {
+        if (items.Count(i => !ListConnector().IsMatch(i.Trim())) < 2 || items.Any(i => ListConnector().IsMatch(i.Trim()))) return false;
+        return CountWord().Match(title) is not { Success: true } count || NumberOf(count.Groups["n"].Value) == items.Count;
+    }
+
+    private static int NumberOf(string word) => word.ToLowerInvariant() switch
+    {
+        "iki" or "two" => 2, "üç" or "three" => 3, "dörd" or "four" => 4, "beş" or "five" => 5, "altı" or "six" => 6,
+        "yeddi" or "seven" => 7, "səkkiz" or "eight" => 8, "doqquz" or "nine" => 9,
+        var digits => int.TryParse(digits, out var n) ? n : -1,
+    };
+
+    [GeneratedRegex(@"^(?:və ya|yaxud|və|ya da|həmçinin|or|and)[.:;,]?$", RegexOptions.IgnoreCase)] private static partial Regex ListConnector();
+    [GeneratedRegex(@"(?<![\p{L}\d.,-])(?<n>iki|üç|dörd|beş|altı|yeddi|səkkiz|doqquz|two|three|four|five|six|seven|eight|nine|[2-9]|1\d)\s+(?:əsas\s+|main\s+|key\s+)?\p{L}{3,}", RegexOptions.IgnoreCase)]
+    private static partial Regex CountWord();
     [GeneratedRegex(@"^(?:plan|mövzunun planı|mühazirənin planı|mündəricat|məzmun|содержание|план|contents)$", RegexOptions.IgnoreCase)] private static partial Regex PlanTitle();
     [GeneratedRegex(@"^\s*(?:[-•▪●◦*]\s*)?(?<term>[^:()\n]{2,60}?)\s*:\s+(?<def>\S.{20,})$")] private static partial Regex Labelled();
     [GeneratedRegex(@"^(?<term>[\p{Lu}][^,.:;\n]{1,60}?)\s+dedikdə\s+(?<def>.+)$")] private static partial Regex Meaning();

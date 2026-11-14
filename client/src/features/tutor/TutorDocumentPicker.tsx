@@ -15,8 +15,8 @@ interface Props {
   resumable?: string[]
 }
 
-// AI Tutor works only with open-question PDF and Word (.docx) files; the server checks the type and the content again.
-const accept = '.pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+// PDF, Word (.docx) and PowerPoint (.pptx); the server checks the type and the content again.
+const accept = '.pdf,.docx,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation'
 
 /** Start of a new chat: pick (or upload) the one document this conversation will be about. */
 export function TutorDocumentPicker({ onStart, starting, startError, resumable = [] }: Props) {
@@ -36,9 +36,10 @@ export function TutorDocumentPicker({ onStart, starting, startError, resumable =
   const upload = (file: File | undefined) => {
     if (!file || monthly.blocked) return
     const name = file.name.toLowerCase()
-    const error = name.endsWith('.pdf') || name.endsWith('.docx') ? null
+    const error = name.endsWith('.pdf') || name.endsWith('.docx') || name.endsWith('.pptx') ? null
       : name.endsWith('.doc') ? 'Köhnə .doc formatı dəstəklənmir. Faylı Word-də .docx kimi saxlayıb yenidən yükləyin.'
-      : 'Öyrənmə bələdçisi yalnız PDF və Word (.docx) faylları qəbul edir.'
+      : name.endsWith('.ppt') ? 'Köhnə .ppt formatı dəstəklənmir. Faylı PowerPoint-də .pptx kimi saxlayıb yenidən yükləyin.'
+      : 'Öyrənmə bələdçisi yalnız PDF, Word (.docx) və PowerPoint (.pptx) faylları qəbul edir.'
     setTypeError(error)
     if (error) return
     setProgress(0)
@@ -66,7 +67,7 @@ export function TutorDocumentPicker({ onStart, starting, startError, resumable =
           {progress !== null ? `Yüklənir ${progress}%` : 'Yeni sənəd yüklə'}
         </button>
       </div>
-      <p className="mt-2 text-xs text-slate-500">PDF və ya Word (.docx): konspekt, açıq sual–cavab və ya düzgün cavabı işarələnmiş testlər · ən çox 50 MB. Skan edilmiş PDF-lər dəstəklənmir.</p>
+      <p className="mt-2 text-xs text-slate-500">PDF, Word (.docx) və ya PowerPoint (.pptx): konspekt, slaydlar, açıq sual–cavab və ya düzgün cavabı işarələnmiş testlər · ən çox 50 MB. Yalnız şəkildən ibarət (skan) fayllar hələ dəstəklənmir.</p>
 
       {typeError && <div className="mt-4"><Alert title="Fayl növü dəstəklənmir">{typeError}</Alert></div>}
       {index.isError && <div className="mt-4"><Alert title="Sənəd hazırlana bilmədi">{index.error.message}</Alert></div>}
@@ -100,12 +101,12 @@ function DocumentRow({ doc, resumable, busy, onStart, onIndex }: { doc: TutorDoc
   return (
     <li className="tutor-enter tutor-border flex items-center gap-3 rounded-xl border bg-white px-3 py-3 sm:px-4">
       <span className={cn('grid size-10 shrink-0 place-items-center rounded-lg text-[11px] font-bold uppercase', ready ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-100 text-slate-500')} aria-hidden>
-        {doc.format === 'pdf' ? 'PDF' : doc.format === 'docx' ? 'DOC' : <FileText className="size-4" />}
+        {doc.format === 'pdf' ? 'PDF' : doc.format === 'docx' ? 'DOC' : doc.format === 'pptx' ? 'PPT' : <FileText className="size-4" />}
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold">{doc.fileName}</p>
         <p className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
-          {ready && <><CheckCircle2 className="size-3.5 text-emerald-600" aria-hidden />Hazırdır{doc.pageCount ? ` · ${doc.pageCount} səhifə` : ''}</>}
+          {ready && <><CheckCircle2 className="size-3.5 text-emerald-600" aria-hidden />Hazırdır{doc.pageCount ? ` · ${doc.pageCount} ${doc.format === 'pptx' ? 'slayd' : 'səhifə'}` : ''}</>}
           {working && <><Loader2 className="size-3.5 animate-spin" aria-hidden />Hazırlanır…</>}
           {doc.status === 'Failed' && <><TriangleAlert className="size-3.5 text-rose-600" aria-hidden />Emal alınmadı</>}
           {doc.status === null && 'Hələ hazırlanmayıb'}
