@@ -3,17 +3,24 @@ import { useMemo, useState } from 'react'
 import { Alert } from '../../components/common/Alert'
 import { cn } from '../../lib/utils'
 import { studyCards, topicStats, type CardDeck, type LearnScope } from './api'
+import { SelectionToCard } from './SelectionToCard'
 import { Frame } from './TutorShared'
 
 interface Props {
+  chatId: string
   deck: CardDeck
   onLearn: (scope: LearnScope) => void
 }
 
+const steps = ['Konspekti oxu', 'Kartlarla yoxla', 'Bilmədiyini axtar']
+
 const fold = (text: string) => text.toLocaleLowerCase('az')
 
-/** "Mövzular": overall progress, the three ways to start, and a searchable topic list; a tap on a topic studies it. */
-export function GuideTopics({ deck, onLearn }: Props) {
+/**
+ * "Konspekt": the way to study, overall progress, and the topics with their notes. A tap on a topic studies its cards;
+ * text selected in the notes can become an own card.
+ */
+export function GuideTopics({ chatId, deck, onLearn }: Props) {
   const [term, setTerm] = useState('')
   const stats = useMemo(() => topicStats(deck), [deck])
   const cards = studyCards(deck)
@@ -28,7 +35,15 @@ export function GuideTopics({ deck, onLearn }: Props) {
 
   return (
     <Frame>
-      {total === 0 && <Alert tone="info" title="Bu sənəd konspekt kimi saxlanıldı">Etibarlı sual–cavab əlaqəsi tapılmadığı üçün avtomatik kart yaradılmadı. Mövzuların altından konspekti oxuya bilərsiniz.</Alert>}
+      <ol aria-label="Necə öyrənək" className="grid grid-cols-3 gap-2">
+        {steps.map((step, i) => (
+          <li key={step} className="tutor-border flex items-center gap-2 rounded-xl border bg-white px-3 py-2 text-xs font-medium text-slate-700 sm:text-sm">
+            <span className="grid size-6 shrink-0 place-items-center rounded-full bg-indigo-50 text-xs font-semibold text-indigo-700">{i + 1}</span>
+            <span className="min-w-0 leading-snug">{step}</span>
+          </li>
+        ))}
+      </ol>
+      {total === 0 && <Alert tone="info" title="Avtomatik kart tapılmadı">Sənəddə qalın yazılmış termin, cədvəl və ya tərif tapılmadı. Mövzuların altından konspekti oxuyun, vacib hissəni seçib «Seçilmiş mətndən kart et» düyməsi ilə öz kartınızı yaradın.</Alert>}
       {deck.warning && <Alert tone="info" title="Qeyd">{deck.warning}</Alert>}
 
       {total > 0 && <section aria-label="Ümumi gedişat" className="tutor-border rounded-3xl border bg-white p-5 sm:p-6">
@@ -101,7 +116,11 @@ export function GuideTopics({ deck, onLearn }: Props) {
                 {topic.notes && (
                   <details className="px-4 pb-4">
                     <summary className="cursor-pointer py-2 text-sm font-semibold text-indigo-700">Konspekti oxu</summary>
-                    <div className="guide-scroll mt-2 max-h-[60dvh] overflow-y-auto whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700">{topic.notes}</div>
+                    <SelectionToCard chatId={chatId} deck={deck} topicKey={topic.key}
+                      className="guide-scroll mt-2 flex max-h-[60dvh] flex-col gap-3 overflow-y-auto break-words text-[15px] leading-relaxed text-slate-700 sm:text-sm">
+                      {topic.notes.split('\n\n').map((paragraph, j) => <p key={j} className="whitespace-pre-wrap">{paragraph}</p>)}
+                    </SelectionToCard>
+                    <p className="mt-2 text-xs text-slate-500">Vacib hissəni seçin — öz kartınızı yaratmaq üçün düymə görünəcək.</p>
                   </details>
                 )}
               </li>

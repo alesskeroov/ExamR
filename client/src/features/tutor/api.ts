@@ -58,6 +58,21 @@ export function useDocumentChunks(documentId: string | null, enabled: boolean) {
   })
 }
 
+/** One passage of the material that matches a search (no AI: word matching), with where it is in the file. */
+export interface SearchHit { ordinal: number; pageFrom: number | null; pageTo: number | null; section: string | null; text: string }
+export interface SearchResult { found: boolean; chunks: SearchHit[] }
+
+/** "Axtar": the passages of the material that best match the student's words. */
+export function useDocumentSearch(documentId: string, q: string) {
+  return useQuery({
+    queryKey: queryKeys.tutor.search(documentId, q),
+    queryFn: () => api.get<SearchResult>(`/learning/documents/${documentId}/search?q=${encodeURIComponent(q)}&top=5`),
+    enabled: q.length > 0,
+    staleTime: 5 * 60_000,
+    retry: false,
+  })
+}
+
 export function useCreateChat() {
   const client = useQueryClient()
   return useMutation({

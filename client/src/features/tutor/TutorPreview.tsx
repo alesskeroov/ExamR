@@ -2,6 +2,7 @@ import { ExternalLink, Loader2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { cn } from '../../lib/utils'
 import { useDocumentChunks, type ChatSource } from './api'
+import { placeLabel } from './place-label'
 
 interface Props {
   documentId: string
@@ -20,7 +21,10 @@ export function TutorPreview({ documentId, fileName, format, source, onClose }: 
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold">{fileName}</p>
           <p className="text-xs text-slate-500">
-            {source ? (source.pageFrom != null ? `Mənbə ${source.number} · ${format === 'pptx' ? 'slayd' : 'səhifə'} ${source.pageFrom}${source.pageTo && source.pageTo !== source.pageFrom ? `–${source.pageTo}` : ''}` : `Mənbə ${source.number}`) : 'Önizləmə'}
+            {source
+              // A search hit has no source number: only its place is shown.
+              ? [source.number > 0 ? `Mənbə ${source.number}` : null, placeLabel(format, source.pageFrom, source.pageTo)].filter(Boolean).join(' · ') || 'Önizləmə'
+              : 'Önizləmə'}
           </p>
         </div>
         <button type="button" onClick={onClose} aria-label="Önizləməni bağla" className="grid size-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900">
