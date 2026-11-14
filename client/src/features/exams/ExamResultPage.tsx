@@ -288,7 +288,24 @@ function ReviewCard({ question, visualSrc, highlighted }: { question: ExamResult
         <p className="mb-2.5 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-600">Bu suala cavab verməmisiniz.</p>
       )}
 
-      <ul className="flex flex-col gap-1.5">
+      {question.isCoded && (
+        <dl className="grid gap-1.5 text-sm sm:grid-cols-2">
+          {question.answerText && (
+            <div className={cn('rounded-lg border px-3 py-2.5', question.outcome === 'Correct' ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50')}>
+              <dt className="text-xs font-medium text-slate-500">Sizin cavab{question.outcome === 'Correct' ? ' · düzgün' : ''}</dt>
+              <dd className={cn('mt-0.5 text-base font-semibold tabular-nums', question.outcome === 'Correct' ? 'text-emerald-900' : 'text-rose-900')}>{question.answerText}</dd>
+            </div>
+          )}
+          {question.correctAnswer && question.outcome !== 'Correct' && (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+              <dt className="text-xs font-medium text-slate-500">Düzgün cavab</dt>
+              <dd className="mt-0.5 text-base font-semibold text-emerald-900 tabular-nums">{question.correctAnswer}</dd>
+            </div>
+          )}
+        </dl>
+      )}
+
+      {!question.isCoded && <ul className="flex flex-col gap-1.5">
         {options.map((option) => {
           const isCorrect = option.id === question.correctOptionId
           const isSelected = option.id === question.selectedOptionId
@@ -320,7 +337,7 @@ function ReviewCard({ question, visualSrc, highlighted }: { question: ExamResult
             </li>
           )
         })}
-      </ul>
+      </ul>}
 
       {question.outcome === 'Ungraded' && (
         <p className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-amber-800">

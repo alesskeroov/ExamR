@@ -17,8 +17,13 @@ public static class DimEndpoints
 {
     public const string ClosedOnlyNotice =
         "Bu sınaq yalnız qapalı (A–E) suallardan ibarətdir. Rəsmi DİM balı açıq (kodlaşdırılan və yazılı) tapşırıqları da " +
-        "əhatə etdiyi üçün tam 300/400 ballıq nəticə hesablanmır. \"Qapalı hissə balı\" qapalı tapşırıqların rəsmi düsturla " +
+        "əhatə etdiyi üçün tam 300/400 ballıq nəticə hesablanmır. \"Ölçülən bal\" qapalı tapşırıqların rəsmi düsturla " +
         "gətirdiyi baldır; \"Təxmini bal\" isə açıq tapşırıqlarda da eyni nəticə göstərəcəyiniz fərziyyəsinə əsaslanır.";
+
+    public const string WithOpenNotice =
+        "Bu sınaqda qapalı və açıq (kodlaşdırılan) suallar var. Yazılı tapşırıqlar imtahançı tərəfindən yoxlandığı üçün sınağa " +
+        "daxil deyil, ona görə tam 300/400 ballıq nəticə hesablanmır. \"Ölçülən bal\" sınaqdakı tapşırıqların rəsmi düsturla " +
+        "gətirdiyi baldır; \"Təxmini bal\" isə yazılı tapşırıqlarda da eyni nəticə göstərəcəyiniz fərziyyəsinə əsaslanır.";
 
     public static void MapDimEndpoints(this RouteGroupBuilder api)
     {
@@ -167,13 +172,14 @@ public static class DimEndpoints
         var items = attempt.Items.ToDictionary(i => i.Position);
         var graded = exam.Questions
             .Where(q => items.ContainsKey(q.Position))
-            .Select(q => new DimGradedItem(items[q.Position].Subject, items[q.Position].Topic, q.Outcome ?? ExamEngine.OutcomeOf(q)))
+            .Select(q => new DimGradedItem(items[q.Position].Subject, items[q.Position].Topic, q.Outcome ?? ExamEngine.OutcomeOf(q),
+                q.Snapshot.IsCoded))
             .ToList();
         var test = attempt.Test;
         var used = await db.DimAttempts.CountAsync(a => a.TestId == test.Id && a.UserId == userId, ct);
         return TypedResults.Ok(new DimReportDto(exam.Id, test.Id, test.Title, test.Track, test.Kind, test.GroupCode, DimCatalog.Group(test.GroupCode)?.Name,
             exam.CorrectCount ?? 0, exam.IncorrectCount ?? 0, exam.UnansweredCount ?? 0, exam.UngradedCount ?? 0, exam.ScorePercent,
-            DimScoring.Score(test.Track, test.GroupCode, graded), ClosedOnlyNotice,
+            DimScoring.Score(test.Track, test.GroupCode, graded), graded.Any(g => g.IsOpen) ? WithOpenNotice : ClosedOnlyNotice,
             test.AttemptLimit, used, test.IsPublished && IsOpen(test, clock.GetUtcNow())));
     }
 

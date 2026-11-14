@@ -24,6 +24,7 @@ import {
   type ExamSessionQuestion,
 } from './api'
 import { sourceName } from './examSource'
+import { isAnswered, isCodedNumber } from './coded'
 import { useSwipeNavigation } from './useSwipeNavigation'
 
 export function ExamSessionPage() {
@@ -91,7 +92,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
   const summary = history.data?.items.find(e => e.id === session.id)
   const title = summary ? sourceName(summary.source) : null
 
-  const answered = session.questions.filter((q) => q.selectedOptionId).length
+  const answered = session.questions.filter(isAnswered).length
   const isShown = (q: ExamSessionQuestion) => immediate && q.locked
   const isRevealed = isShown(question)
   // Offered on every question of an Immediate exam, answered or not, until its answer has been shown.
@@ -123,6 +124,16 @@ function ExamRunner({ session }: { session: ExamSession }) {
       answer.mutate({ examQuestionId: question.examQuestionId, selectedOptionId: optionId })
     },
     [answer, finish.isPending, question.examQuestionId, question.locked],
+  )
+
+  /** Coded questions: saves the typed number (null clears it). */
+  const write = useCallback(
+    (text: string | null) => {
+      if (finish.isPending || question.locked) return
+      if ((text ?? null) === (question.answerText ?? null)) return
+      answer.mutate({ examQuestionId: question.examQuestionId, selectedOptionId: null, answerText: text })
+    },
+    [answer, finish.isPending, question.answerText, question.examQuestionId, question.locked],
   )
 
   const submit = useCallback(() => {
@@ -238,6 +249,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
             flagged={flagged.has(question.examQuestionId)}
             onFlag={() => toggleFlag(question.examQuestionId)}
             onChoose={choose}
+            onWrite={write}
           />
 
           <div ref={controlsRef} className="exam-controls fixed inset-x-0 bottom-0 z-20 border-t px-3 pt-2.5 min-[900px]:static min-[900px]:border-0 min-[900px]:bg-transparent min-[900px]:p-0">
@@ -295,7 +307,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
         flagged={session.questions.filter((q) => flagged.has(q.examQuestionId)).length}
         onReviewUnanswered={() => {
           setConfirmOpen(false)
-          goTo(session.questions.findIndex((q) => !q.selectedOptionId))
+          goTo(session.questions.findIndex((q) => !isAnswered(q)))
         }}
         onCancel={() => setConfirmOpen(false)}
         onConfirm={() => {
@@ -319,9 +331,10 @@ interface QuestionPanelProps {
   flagged: boolean
   onFlag: () => void
   onChoose: (optionId: string | null) => void
+  onWrite: (text: string | null) => void
 }
 
-function QuestionPanel({ question, visualSrc, number, immediate, revealed, canReveal, revealing, onReveal, flagged, onFlag, onChoose }: QuestionPanelProps) {
+function QuestionPanel({ question, visualSrc, number, immediate, revealed, canReveal, revealing, onReveal, flagged, onFlag, onChoose, onWrite }: QuestionPanelProps) {
   const reveal = revealed ? question.reveal : null
   const headingId = `question-${question.examQuestionId}`
 
@@ -348,7 +361,11 @@ function QuestionPanel({ question, visualSrc, number, immediate, revealed, canRe
       </h1>
       <QuestionVisuals visuals={bodyVisuals(question.visuals)} src={visualSrc} className="mt-3" />
 
-      <div role="radiogroup" aria-labelledby={headingId} className="mt-4 flex flex-col gap-2 sm:mt-5 sm:gap-2.5">
+      {question.isCoded && (
+        <CodedAnswerField question={question} reveal={reveal} immediate={immediate} labelledBy={headingId} onWrite={onWrite} />
+      )}
+
+      {!question.isCoded && <div role="radiogroup" aria-labelledby={headingId} className="mt-4 flex flex-col gap-2 sm:mt-5 sm:gap-2.5">
         {question.options.map((option) => {
           const images = optionVisuals(question.visuals, option.id)
           const selected = question.selectedOptionId === option.id
@@ -404,7 +421,7 @@ function QuestionPanel({ question, visualSrc, number, immediate, revealed, canRe
             </button>
           )
         })}
-      </div>
+      </div>}
 
       {/* Below laptop width the answer is shown in the action bar instead (AnswerSheet). */}
       {reveal && <RevealNote reveal={reveal} className="hidden min-[900px]:flex" />}
@@ -418,12 +435,80 @@ function QuestionPanel({ question, visualSrc, number, immediate, revealed, canRe
         </div>
       )}
 
-      {!immediate && question.selectedOptionId && (
+      {!immediate && !question.isCoded && question.selectedOptionId && (
         <button type="button" onClick={() => onChoose(null)} className="mt-2 min-h-11 text-sm text-slate-500 hover:text-slate-800">
           Cavabı təmizlə
         </button>
       )}
     </section>
+  )
+}
+
+/**
+ * Open coded task: the number is typed into a field and saved when the field loses focus or Enter is pressed.
+ * Only numbers are accepted (12, -3, 2,5, 5/2), like the answer grid of the real exam.
+ */
+function CodedAnswerField({ question, reveal, immediate, labelledBy, onWrite }: {
+  question: ExamSessionQuestion
+  reveal: ExamSessionQuestion['reveal']
+  immediate: boolean
+  labelledBy: string
+  onWrite: (text: string | null) => void
+}) {
+  const [draft, setDraft] = useState(question.answerText ?? '')
+  const [invalid, setInvalid] = useState(false)
+  const inputId = `coded-${question.examQuestionId}`
+  const commitRef = useRef(commit)
+  useEffect(() => { commitRef.current = commit })
+
+  // Also saved a moment after typing stops, so an answer is not lost if time runs out before the field is left.
+  useEffect(() => {
+    if (question.locked || draft.trim() === (question.answerText ?? '')) return
+    const timer = window.setTimeout(() => commitRef.current(), 1200)
+    return () => window.clearTimeout(timer)
+  }, [draft, question.answerText, question.locked])
+
+  function commit() {
+    const text = draft.trim()
+    if (text === '') {
+      setInvalid(false)
+      if (!immediate) onWrite(null)
+      return
+    }
+    if (!isCodedNumber(text)) return setInvalid(true)
+    setInvalid(false)
+    onWrite(text)
+  }
+
+  const result = reveal?.isGradable ? reveal : null
+  return (
+    <div className="mt-4 sm:mt-5">
+      <label htmlFor={inputId} className="text-sm font-medium text-slate-700">Cavabınız</label>
+      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+        <input id={inputId} aria-describedby={`${labelledBy} ${inputId}-hint`} aria-invalid={invalid || undefined}
+          value={draft} inputMode="decimal" autoComplete="off" maxLength={30} disabled={question.locked}
+          onChange={e => { setDraft(e.target.value); setInvalid(false) }}
+          onBlur={commit}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commit() } }}
+          className={cn('exam-option h-12 w-44 rounded-xl border px-3 text-lg font-semibold tabular-nums focus:ring-2 focus:ring-sky-500/30 focus:outline-none',
+            result ? (result.isCorrect ? 'border-emerald-300 bg-emerald-50/60' : 'border-rose-300 bg-rose-50/60')
+              : invalid ? 'border-rose-400' : question.answerText ? 'border-sky-500 bg-sky-50' : 'border-slate-300')} />
+        {!immediate && question.answerText && !question.locked && (
+          <button type="button" onClick={() => { setDraft(''); onWrite(null) }} className="min-h-11 px-2 text-sm text-slate-500 hover:text-slate-800">
+            Cavabı təmizlə
+          </button>
+        )}
+      </div>
+      <p id={`${inputId}-hint`} className={cn('mt-1.5 text-xs', invalid ? 'text-rose-700' : 'text-slate-500')}>
+        {invalid ? 'Yalnız ədəd yazın: 12, -3, 2,5 və ya 5/2.' : 'Ədədi yazın (onluq kəsr üçün vergül: 2,5; adi kəsr: 5/2). Avtomatik yadda saxlanır.'}
+      </p>
+      {result && (
+        <p role="status" className={cn('mt-3 flex items-start gap-2 rounded-lg px-3 py-2 text-sm', result.isCorrect ? 'bg-emerald-50 text-emerald-900' : 'bg-rose-50 text-rose-900')}>
+          {result.isCorrect ? <Check className="mt-0.5 size-4 shrink-0" aria-hidden /> : <X className="mt-0.5 size-4 shrink-0" aria-hidden />}
+          <span>{result.isCorrect ? 'Düzgün cavab!' : 'Yanlış cavab.'} Düzgün cavab: <span className="font-semibold tabular-nums">{result.correctAnswer}</span></span>
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -493,7 +578,7 @@ interface QuestionNavigatorProps {
 
 /** Sidebar from laptop width; on smaller screens a bottom sheet opened from the action bar. */
 function QuestionNavigator({ questions, current, immediate, isShown, flagged, onSelect, open, onClose, examId }: QuestionNavigatorProps) {
-  const answeredCount = questions.filter(q => q.selectedOptionId).length
+  const answeredCount = questions.filter(isAnswered).length
   return (
     <>
       <div aria-hidden onClick={onClose} className="exam-sheet-backdrop" data-open={open} />
@@ -512,11 +597,11 @@ function QuestionNavigator({ questions, current, immediate, isShown, flagged, on
           {questions.map((q, i) => {
             const reveal = immediate && isShown(q) ? q.reveal : null
             const isFlagged = flagged.has(q.examQuestionId)
-            const state = !q.selectedOptionId
+            const state = !isAnswered(q)
               ? 'empty'
               : !reveal ? 'answered'
                 : !reveal.isGradable ? 'ungraded'
-                  : reveal.correctOptionId === q.selectedOptionId ? 'correct' : 'wrong'
+                  : (q.isCoded ? reveal.isCorrect : reveal.correctOptionId === q.selectedOptionId) ? 'correct' : 'wrong'
 
             return (
               <li key={q.examQuestionId}>
@@ -524,7 +609,7 @@ function QuestionNavigator({ questions, current, immediate, isShown, flagged, on
                   type="button"
                   onClick={() => onSelect(i)}
                   aria-current={i === current ? 'step' : undefined}
-                  aria-label={`Sual ${i + 1}${q.selectedOptionId ? ', cavablanıb' : ''}${q.locked ? ', kilidlənib' : ''}${isFlagged ? ', işarələnib' : ''}`}
+                  aria-label={`Sual ${i + 1}${isAnswered(q) ? ', cavablanıb' : ''}${q.locked ? ', kilidlənib' : ''}${isFlagged ? ', işarələnib' : ''}`}
                   className={cn(
                     'relative flex h-11 w-full items-center justify-center rounded-md border text-xs font-semibold tabular-nums transition-colors duration-150 min-[900px]:h-9',
                     state === 'empty' && 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50',

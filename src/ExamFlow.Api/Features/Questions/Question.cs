@@ -11,6 +11,12 @@ public class Question : IAuditable
     public int SourceNumber { get; set; }
     public string Text { get; set; } = string.Empty;
     public string? Explanation { get; set; }
+
+    /// <summary>
+    /// Accepted answers of an open coded (kodlaşdırılan) task, separated by ';' (see <see cref="CodedAnswers"/>).
+    /// Set only on questions without options; null for multiple-choice and other open questions.
+    /// </summary>
+    public string? CodedAnswer { get; set; }
     public byte[] ContentHash { get; set; } = [];
     public VerificationStatus VerificationStatus { get; set; }
     public string? ParseWarning { get; set; }
