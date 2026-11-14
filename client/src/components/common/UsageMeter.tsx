@@ -1,5 +1,6 @@
 import { useUsage, useUsageLimit, type UsageKind } from '../../features/usage/api'
 import { Alert } from './Alert'
+import { SupportContact } from './SupportContact'
 
 const labels: Record<UsageKind, string> = { Upload: 'sənəd', Exam: 'imtahan', Battle: 'battle', AiRequest: 'AI sorğusu' }
 const months = ['yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun', 'iyul', 'avqust', 'sentyabr', 'oktyabr', 'noyabr', 'dekabr']
@@ -19,7 +20,7 @@ export function UsageMeter({ kind }: { kind: UsageKind }) {
     <div role="progressbar" aria-label={`${labels[kind]} istifadəsi`} aria-valuenow={used} aria-valuemin={0} aria-valuemax={Math.max(used, limit)} className="h-1.5 overflow-hidden rounded-full bg-slate-100">
       <div className={`h-full ${ratio >= 1 ? 'bg-rose-500' : ratio >= .8 ? 'bg-amber-500' : 'bg-indigo-500'}`} style={{ width: `${ratio * 100}%` }} />
     </div>
-    {usage.blocked && <Alert title="Aylıq limit bitib">Yeni {labels[kind]} üçün limit {reset}-da (Bakı vaxtı) yenilənir.</Alert>}
+    {usage.blocked && <Alert title="Aylıq limit bitib">Yeni {labels[kind]} üçün limit {reset}-da (Bakı vaxtı) yenilənir.<SupportContact className="mt-1" topic="Limit artırılması" lead="Daha çox lazımdırsa, bizə yazın:" /></Alert>}
   </div>
 }
 

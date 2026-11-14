@@ -6,6 +6,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
 import { Button } from '../../components/common/Button'
+import { SupportContact } from '../../components/common/SupportContact'
+import { supportMailto } from '../../lib/support'
 import { QuestionVisuals } from '../../components/common/QuestionVisuals'
 import { examThemes, useExamTheme, useExamThemeBase, type ExamTheme } from '../../lib/use-exam-theme'
 import { cn } from '../../lib/utils'
@@ -44,6 +46,7 @@ export function ExamSessionPage() {
           <Link to="/exams" className="font-semibold underline">
             Tarixçəyə qayıt
           </Link>
+          <SupportContact className="mt-2" topic="İmtahan açılmadı" reference={id} />
         </Alert>
       </div>
     )
@@ -215,7 +218,12 @@ function ExamRunner({ session }: { session: ExamSession }) {
 
       <main ref={layoutRef} className="exam-shell exam-layout mx-auto grid gap-3 px-3 pt-3 sm:px-4 sm:pt-4 min-[900px]:gap-6 min-[900px]:px-6 min-[900px]:pt-6">
         <div ref={swipeRef} data-enter-from={enterFrom} className="exam-swipe flex min-w-0 flex-col gap-4">
-          {finish.isError && <Alert title="İmtahan bitirilmədi">{finish.error.message}</Alert>}
+          {finish.isError && (
+            <Alert title="İmtahan bitirilmədi">
+              {finish.error.message}
+              <SupportContact className="mt-1" lead="Yenidən cəhd edin. Alınmasa, bizə yazın:" topic="İmtahan bitirilmədi" reference={session.id} />
+            </Alert>
+          )}
 
           <QuestionPanel
             key={question.examQuestionId}
@@ -276,7 +284,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
           </div>
         </div>
 
-        <QuestionNavigator questions={session.questions} current={index} immediate={immediate} isShown={isShown} flagged={flagged}
+        <QuestionNavigator examId={session.id} questions={session.questions} current={index} immediate={immediate} isShown={isShown} flagged={flagged}
           onSelect={goTo} open={mapOpen} onClose={() => setMapOpen(false)} />
       </main>
 
@@ -480,10 +488,11 @@ interface QuestionNavigatorProps {
   onSelect: (index: number) => void
   open: boolean
   onClose: () => void
+  examId: string
 }
 
 /** Sidebar from laptop width; on smaller screens a bottom sheet opened from the action bar. */
-function QuestionNavigator({ questions, current, immediate, isShown, flagged, onSelect, open, onClose }: QuestionNavigatorProps) {
+function QuestionNavigator({ questions, current, immediate, isShown, flagged, onSelect, open, onClose, examId }: QuestionNavigatorProps) {
   const answeredCount = questions.filter(q => q.selectedOptionId).length
   return (
     <>
@@ -544,6 +553,12 @@ function QuestionNavigator({ questions, current, immediate, isShown, flagged, on
           )}
           <Legend className="rounded-full border-amber-500 bg-amber-500" label="İşarələnmiş" />
         </div>
+        {/* Quiet, always reachable: a stuck exam needs a way out without a banner distracting everyone else. */}
+        <a href={supportMailto({ topic: 'İmtahan problemi', reference: examId })}
+          onClick={event => { event.currentTarget.href = supportMailto({ topic: 'İmtahan problemi', reference: examId }) }}
+          className="mt-4 inline-block text-xs text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline">
+          Problem var? Bizə yazın
+        </a>
         <p className="mt-3 hidden text-xs text-slate-400 min-[900px]:block">Klaviatura: ← → keçid, A–F seçim</p>
       </nav>
     </>

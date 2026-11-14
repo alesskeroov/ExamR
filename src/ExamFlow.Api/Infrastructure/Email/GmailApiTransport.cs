@@ -46,7 +46,7 @@ public sealed class GmailApiTransport(HttpClient http, IOptions<EmailOptions> op
             return false;
         }
 
-        var raw = GmailMime.Build(settings.From!, settings.FromName ?? "ExamR Support", message);
+        var raw = GmailMime.Build(settings.From!, settings.FromName ?? "ExamR Support", message, replyTo: settings.ReplyTo);
         var refreshedAfter401 = false;
         for (var attempt = 1; ; attempt++)
         {
@@ -163,7 +163,7 @@ public sealed class GmailApiTransport(HttpClient http, IOptions<EmailOptions> op
 /// <summary>RFC 5322 / MIME message for the Gmail API "raw" field (base64url), plain text + HTML alternatives.</summary>
 public static class GmailMime
 {
-    public static string Build(string fromAddress, string fromName, EmailMessage message, string? boundary = null)
+    public static string Build(string fromAddress, string fromName, EmailMessage message, string? boundary = null, string? replyTo = null)
     {
         // Header injection guard: addresses and subject never carry line breaks into the header block.
         static string Clean(string value) => value.Replace("\r", " ").Replace("\n", " ").Trim();
@@ -173,7 +173,9 @@ public static class GmailMime
         boundary ??= $"examr-{Guid.NewGuid():N}";
         var mime = new StringBuilder()
             .Append($"From: {Encoded(fromName)} <{Clean(fromAddress)}>\r\n")
-            .Append($"To: <{Clean(message.To)}>\r\n")
+            .Append($"To: <{Clean(message.To)}>\r\n");
+        if (!string.IsNullOrWhiteSpace(replyTo)) mime.Append($"Reply-To: <{Clean(replyTo)}>\r\n");
+        mime
             .Append($"Subject: {Encoded(message.Subject)}\r\n")
             .Append("MIME-Version: 1.0\r\n")
             .Append($"Content-Type: multipart/alternative; boundary=\"{boundary}\"\r\n\r\n");

@@ -1,4 +1,6 @@
 using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
 
 namespace ExamFlow.Api.Infrastructure.Email;
@@ -24,7 +26,8 @@ public sealed class BrevoTransport(HttpClient http, IOptions<EmailOptions> optio
                 subject = message.Subject,
                 htmlContent = message.HtmlBody,
                 textContent = message.TextBody,
-            }),
+                replyTo = string.IsNullOrWhiteSpace(settings.ReplyTo) ? null : new { email = settings.ReplyTo },
+            }, options: new JsonSerializerOptions(JsonSerializerDefaults.Web) { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull }),
         };
         request.Headers.Add("api-key", settings.BrevoApiKey);
         request.Headers.Accept.ParseAdd("application/json");
