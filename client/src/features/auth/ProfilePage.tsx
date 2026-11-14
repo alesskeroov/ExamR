@@ -5,7 +5,7 @@ import { AccountSettings } from './AccountSettings'
 import { ExamThemeSettings } from '../exams/ExamThemeSettings'
 import { RankBadge } from '../battle/RankSummary'
 import { useBattleRank } from '../battle/rank-api'
-import { Check, ClipboardList, ImagePlus, LayoutGrid, Pencil, Save, Settings, Swords, Trash2, UserRound, Users } from 'lucide-react'
+import { Check, ClipboardList, ImagePlus, LayoutGrid, Palette, Pencil, Save, Settings, ShieldCheck, Swords, Trash2, UserRound, Users } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useBlocker, useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
@@ -145,7 +145,7 @@ export function ProfilePage() {
         className="profile-tab"><Icon className="size-[18px] shrink-0 md:size-4" aria-hidden /><span className="md:hidden">{short}</span><span className="hidden md:inline">{label}</span></button>)}
     </div>
     <div key={tab} className="profile-panel" role="tabpanel" id="profile-panel" aria-labelledby={`profile-tab-${tab}`} tabIndex={0}>
-      {tab === 4 ? <><NameplatePicker /><div className="mt-6"><ExamThemeSettings /></div><div className="mt-4"><AccountSettings /></div><GoogleLinkSection /></> : <ProfileActivity tab={tab} />}
+      {tab === 4 ? <SettingsPanel /> : <ProfileActivity tab={tab} />}
     </div>
   </div>
 }
@@ -157,6 +157,30 @@ const linkMessages: Record<string, { ok: boolean; text: string }> = {
   login_required: { ok: false, text: 'Əlaqələndirmək üçün yenidən daxil olun.' },
 }
 
+const settingsSections = [
+  { id: 'account', label: 'Hesab', icon: ShieldCheck },
+  { id: 'custom', label: 'Fərdiləşdirmə', icon: Palette },
+] as const
+
+// Account settings come first; cosmetic options (effect, exam theme) live in their own sub-section.
+function SettingsPanel() {
+  const [params, setParams] = useSearchParams()
+  const section = params.get('section') === 'custom' ? 'custom' : 'account'
+  return <div className="space-y-4">
+    <div role="group" aria-label="Ayar bölmələri" className="grid grid-cols-2 gap-1 rounded-xl border border-line bg-surface p-1 sm:inline-grid sm:w-auto">
+      {settingsSections.map(({ id, label, icon: Icon }) => <button key={id} type="button" aria-pressed={section === id}
+        onClick={() => setParams(previous => { const next = new URLSearchParams(previous); next.set('section', id); return next }, { replace: true })}
+        className={cn('flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-accent',
+          section === id ? 'bg-accent-soft font-semibold text-accent' : 'text-muted hover:bg-sunken')}>
+        <Icon className="size-4 shrink-0" aria-hidden />{label}
+      </button>)}
+    </div>
+    {section === 'account'
+      ? <><AccountSettings /><GoogleLinkSection /></>
+      : <><NameplatePicker /><ExamThemeSettings /></>}
+  </div>
+}
+
 function GoogleLinkSection() {
   const { data: user } = useCurrentUser()
   const linked = !!user?.googleLinked
@@ -165,7 +189,7 @@ function GoogleLinkSection() {
     if (code) window.history.replaceState(null, '', window.location.pathname)
     return code ? linkMessages[code] ?? { ok: false, text: 'Google hesabı əlaqələndirilmədi.' } : null
   })
-  return <section className="mt-4 rounded-xl border border-slate-200 bg-white p-5">
+  return <section className="rounded-xl border border-slate-200 bg-white p-5">
     <h2 className="font-semibold">Google hesabı</h2>
     {/* The success message is only needed right after linking; afterwards the status line says it. */}
     {result && !(result.ok && linked) && <div className="mt-4"><Alert tone={result.ok ? 'info' : 'danger'} title={result.text} /></div>}
