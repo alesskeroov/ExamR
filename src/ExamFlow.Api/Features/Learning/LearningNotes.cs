@@ -10,6 +10,10 @@ public sealed record DocParagraph(string Text, int? Page, int ChunkOrdinal)
     public string? Caption { get; init; }
     /// <summary>Word heading level from the paragraph's style (1 = top, 0 = document title); null for body text and PDF.</summary>
     public int? HeadingLevel { get; init; }
+    /// <summary>Phrases the author set in bold in this paragraph (DOCX/PPTX, read from the file; empty from stored chunks).</summary>
+    public IReadOnlyList<string> Bold { get; init; } = [];
+    /// <summary>PPTX: bullet level of a slide text paragraph; null elsewhere.</summary>
+    public int? Level { get; init; }
     public bool IsTableStart => Text.StartsWith(LearningTextExtractor.TableStartMark, StringComparison.Ordinal);
     public bool IsTableRow => IsTableStart || Text.StartsWith(LearningTextExtractor.TableRowMark, StringComparison.Ordinal);
     public string TableText => Text[(IsTableStart ? LearningTextExtractor.TableStartMark.Length : LearningTextExtractor.TableRowMark.Length)..];
@@ -143,7 +147,8 @@ public static partial class DocumentCleaner
     /// <summary>Five or more one-to-four-word fragments in a row (not after a "…:" lead): the cells of a table a PDF flattened.</summary>
     private static List<DocParagraph> DropFragmentRuns(List<DocParagraph> list)
     {
-        static bool Fragment(DocParagraph p) => !p.IsTableRow && p.HeadingLevel is null && p.Text.Length <= 45 && p.Text.Split(' ').Length <= 4
+        // Slide bullets are short by nature; the author put them in a list, so they are never table debris.
+        static bool Fragment(DocParagraph p) => !p.IsTableRow && p.HeadingLevel is null && p.Level is null && p.Text.Length <= 45 && p.Text.Split(' ').Length <= 4
             && !ListMark().IsMatch(p.Text) && !".:;?!".Contains(p.Text[^1]);
         var keep = new bool[list.Count];
         Array.Fill(keep, true);
@@ -225,10 +230,25 @@ public static partial class NotesCardBuilder
                 ? p.TableText : p.Text));
             var previous = topics[^1];
             topics[^1] = previous with { Notes = string.Join("\n\n", new[] { previous.Notes, section.Heading, reading }.Where(t => !string.IsNullOrWhiteSpace(t))) };
-            // Lecture notes rarely write "X — definition"; every titled section still has an explanation to recall.
-            if (section.Heading.Length > 0 && char.IsUpper(section.Heading[0]) && !GenericHeading().IsMatch(section.Heading) && Summary(section.Body) is { } summary)
-                AddCard(new(CardMastery.Hash(CardKind.Question, "section\u001f" + section.Heading), CardKind.Question, topic.Key, section.Heading,
-                    summary, [], [], number, section.Body[0].Page, section.Body[0].ChunkOrdinal, IsSection: true));
+            // "Heading → its first paragraph" is reading, not recall: the section text stays in the topic's notes only.
+            // A slide is recalled by its title: "Reaksiyalar: əsas məqamlar?" → its bullets; a continued slide extends it.
+            if (SlideItems(section) is { } bullets)
+            {
+                var title = SlideTitle(section.Heading);
+                var id = CardMastery.Hash(CardKind.List, "slide\u001f" + title);
+                var previousSlide = cards.FindIndex(c => c.Id == id);
+                if (previousSlide >= 0 && cards[previousSlide].Items.Count + bullets.Count <= MaxSlideItems)
+                    cards[previousSlide] = cards[previousSlide] with { Items = [.. cards[previousSlide].Items, .. bullets] };
+                else if (previousSlide < 0)
+                    AddCard(new(id, CardKind.List, topic.Key, $"{title}: əsas məqamlar hansılardır?", "", bullets, [],
+                        number, section.Body[0].Page, section.Body[0].ChunkOrdinal));
+            }
+            // Annotation, introduction and conclusion talk about the material, not its subject.
+            var subject = section.Heading.Length == 0 || !GenericHeading().IsMatch(section.Heading);
+            foreach (var paragraph in section.Body.Where(p => subject && !p.IsTableRow && p.HeadingLevel is null))
+                foreach (var (front, term) in Clozes(paragraph))
+                    Add(new(CardMastery.Hash(CardKind.Cloze, front), CardKind.Cloze, topic.Key, front, term, [], [],
+                        number, paragraph.Page, paragraph.ChunkOrdinal));
             foreach (var paragraph in section.Body.Where(p => !p.IsTableRow))
             {
                 foreach (var (term, definition) in Terms(paragraph.Text).Concat(Namings(paragraph.Text)))
@@ -257,6 +277,80 @@ public static partial class NotesCardBuilder
             .Select(g => g.First()).ToList();
         return new(topics.Where(t => withBody.Contains(t.Key)).ToList(), unambiguous);
     }
+
+    // ---------- slides and bold terms ----------
+
+    private const int MinSlideItems = 2;
+    private const int MaxSlideItems = 10;
+    private const int MaxSlideItemLength = 220;
+    public const string Blank = "_____";
+
+    /// <summary>"Hidridlər (davamı)", "Hydrides (cont.)" and "Hidridlər" are one slide topic.</summary>
+    public static string SlideTitle(string heading) => ContinuedTitle().Replace(heading, "").Trim();
+
+    /// <summary>
+    /// The bullets of a titled slide as card items: a sub-bullet joins its top-level bullet ("A — a1; a2"). Null when the
+    /// section is not a slide, has fewer than two or more than ten points, or a point too long to recall.
+    /// </summary>
+    private static List<string>? SlideItems(Section section)
+    {
+        if (section.Heading.Length == 0 || GenericHeading().IsMatch(SlideTitle(section.Heading))) return null;
+        var bullets = section.Body.Where(p => p.Level is not null && !p.IsTableRow).ToList();
+        if (bullets.Count < MinSlideItems) return null;
+        var top = bullets.Min(p => p.Level!.Value);
+        var items = new List<string>();
+        foreach (var bullet in bullets)
+        {
+            var text = bullet.Text.Trim().TrimEnd(';');
+            if (bullet.Level == top || items.Count == 0) items.Add(text);
+            else items[^1] += (items[^1].Contains(" — ", StringComparison.Ordinal) ? "; " : " — ") + text;
+        }
+        if (items.Count is < MinSlideItems or > MaxSlideItems || items.Any(i => i.Length > MaxSlideItemLength || i.Count(char.IsLetter) < 2)) return null;
+        return items;
+    }
+
+    private const int MinClozeSentence = 40;
+    private const int MaxClozeSentence = 250;
+    private const int MaxClozeTermWords = 5;
+    private const int MaxClozesPerParagraph = 2;
+
+    /// <summary>
+    /// "Qrup 1 hidridləri _____ ." from a sentence whose term the author set in bold. Only short terms in a self-contained
+    /// statement: no questions, no "as follows:" lead-ins, and the term must not be most of the sentence.
+    /// </summary>
+    public static IEnumerable<(string Front, string Term)> Clozes(DocParagraph paragraph)
+    {
+        if (paragraph.Bold.Count == 0) yield break;
+        var text = paragraph.Text;
+        var ends = SentenceEnd().Matches(text).Select(m => m.Index + 1).Append(text.Length).ToList();
+        var sentences = new List<string>();
+        var from = 0;
+        foreach (var end in ends.Where(e => e > from)) { sentences.Add(text[from..end].Trim()); from = end; }
+        var made = 0;
+        var used = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var term in paragraph.Bold)
+        {
+            if (made >= MaxClozesPerParagraph) yield break;
+            if (term.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length > MaxClozeTermWords || term.Count(char.IsLetter) < 3) continue;
+            // Dates, numbers and "… -dir" statements are trivia or predicates, not the concept the sentence teaches.
+            if (term.Any(char.IsDigit) || PredicateEnd().IsMatch(term)) continue;
+            var sentence = sentences.FirstOrDefault(s => s.Contains(term, StringComparison.Ordinal) && !used.Contains(s));
+            if (sentence is null || sentence.Length is < MinClozeSentence or > MaxClozeSentence) continue;
+            if (sentence.Contains('?') || sentence.EndsWith(':') || term.Length * 2 > sentence.Length || DocumentCleaner.IsCode(sentence)) continue;
+            // The rest of the sentence must still say something: at least four words besides the blank.
+            var front = sentence.Replace(term, Blank, StringComparison.Ordinal);
+            // "_____: …" is a bold run-in label ("Kompüter şəbəkələri: IPv4 …"): it names a heading, not a fact to recall.
+            if (Word().Matches(front).Count < 4 || LabelBlank().IsMatch(front)) continue;
+            used.Add(sentence);
+            made++;
+            yield return (front, term);
+        }
+    }
+
+    [GeneratedRegex(@"\s*[(\[]?\s*(?:davamı|davam|ardı|cont\.?|continued|продолжение)\s*[)\]]?\s*$", RegexOptions.IgnoreCase)]
+    private static partial Regex ContinuedTitle();
+    [GeneratedRegex(@"(?:dır|dir|dur|dür|dırlar|dirlər|durlar|dürlər)$", RegexOptions.IgnoreCase)] private static partial Regex PredicateEnd();
+    [GeneratedRegex(@"^\W*_____\s*:")] private static partial Regex LabelBlank();
 
     // ---------- sections ----------
 
@@ -481,7 +575,9 @@ public static partial class NotesCardBuilder
         // A Word file that marks its headings with heading styles is read by those styles only: guessing from the text
         // would add false headings (short lines) and miss real ones (long titles, titles with ":").
         var styled = paragraphs.Where(p => p.HeadingLevel > 0 && !p.IsTableRow).Select(p => p.HeadingLevel!.Value).ToList();
-        var topLevel = styled.Count >= MinStyledHeadings ? styled.Min() : (int?)null;
+        // Slide titles are always real headings, however few slides there are.
+        var slides = paragraphs.Any(p => p.Level is not null);
+        var topLevel = styled.Count >= MinStyledHeadings || (slides && styled.Count > 0) ? styled.Min() : (int?)null;
         for (var i = 0; i < paragraphs.Count; i++)
         {
             if (i >= planRange.From && i < planRange.To && paragraphs[i].HeadingLevel is null) continue;

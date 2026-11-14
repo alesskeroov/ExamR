@@ -13,6 +13,10 @@ public sealed record TextBlock(int Paragraph, int? Page, string? Section, string
 {
     /// <summary>DOCX: the outline level of a heading paragraph (1 = top, 0 = the document title), from its Word style; null for body text and PDF.</summary>
     public int? HeadingLevel { get; init; }
+    /// <summary>DOCX/PPTX: phrases the author set in bold inside running text (not fully bold paragraphs), in order.</summary>
+    public IReadOnlyList<string> Bold { get; init; } = [];
+    /// <summary>PPTX: bullet indent level of a slide text paragraph (0 = top); null for titles, notes, tables and other formats.</summary>
+    public int? Level { get; init; }
 }
 
 public enum TextExtractionFailure { None, Unreadable, Encrypted, NoText, TooLarge }
@@ -124,13 +128,13 @@ public static partial class LearningTextExtractor
         string? section = null;
         long characters = 0;
         var tooLarge = false;
-        void Add(string text, int? headingLevel)
+        void Add(string text, int? headingLevel, IReadOnlyList<string>? bold = null)
         {
             if (text.Length == 0 || tooLarge) return;
             if (headingLevel is not null) section = text.Length > 200 ? text[..200] : text;
             characters += text.Length;
             if (characters > limits.MaxCharacters) { tooLarge = true; return; }
-            blocks.Add(new TextBlock(blocks.Count + 1, null, section, text) { HeadingLevel = headingLevel });
+            blocks.Add(new TextBlock(blocks.Count + 1, null, section, text) { HeadingLevel = headingLevel, Bold = headingLevel is null ? bold ?? [] : [] });
         }
 
         // Body order: paragraphs, tables (one block per row) and content controls; a table of contents is skipped.
@@ -148,7 +152,8 @@ public static partial class LearningTextExtractor
                     // A paragraph's own outline level wins over its style's.
                     var level = int.TryParse(properties?.Element(W + "outlineLvl")?.Attribute(W + "val")?.Value, out var outline) && outline < 9
                         ? outline + 1 : info.HeadingLevel;
-                    Add(ParagraphText(element), level);
+                    var text = ParagraphText(element, out var bold);
+                    Add(text, level, bold);
                 }
                 else if (element.Name == W + "tbl") Table(element);
                 else if (element.Name == W + "sdt")
@@ -227,9 +232,13 @@ public static partial class LearningTextExtractor
     /// Visible paragraph text. Text inside drawings, text boxes and shapes (diagram labels, often stored twice through
     /// mc:AlternateContent) is left out: on its own it is a list of fragments without meaning.
     /// </summary>
-    private static string ParagraphText(XElement paragraph)
+    private static string ParagraphText(XElement paragraph) => ParagraphText(paragraph, out _);
+
+    /// <param name="bold">Phrases of runs set in bold (direct formatting or a "Strong" character style).</param>
+    private static string ParagraphText(XElement paragraph, out IReadOnlyList<string> bold)
     {
         var text = new StringBuilder();
+        var ranges = new List<(int Start, int End)>();
         void Collect(XElement element)
         {
             foreach (var child in element.Elements())
@@ -241,11 +250,56 @@ public static partial class LearningTextExtractor
                 else if (name == W + "t") text.Append(child.Value);
                 else if (name == W + "tab") text.Append('\t');
                 else if (name == W + "br" || name == W + "cr") text.Append('\n');
+                else if (name == W + "r")
+                {
+                    var start = text.Length;
+                    Collect(child);
+                    if (IsBoldRun(child.Element(W + "rPr"))) ranges.Add((start, text.Length));
+                }
                 else Collect(child);
             }
         }
         Collect(paragraph);
-        return Normalize(text.ToString());
+        var raw = text.ToString();
+        bold = BoldPhrases(raw, ranges);
+        return Normalize(raw);
+    }
+
+    private static bool IsBoldRun(XElement? properties)
+    {
+        if (properties is null) return false;
+        if (properties.Element(W + "rStyle")?.Attribute(W + "val")?.Value.Contains("Strong", StringComparison.OrdinalIgnoreCase) == true) return true;
+        return properties.Element(W + "b") is { } b && (string?)b.Attribute(W + "val") is null or "1" or "true" or "on";
+    }
+
+    /// <summary>
+    /// Bold runs of one paragraph as phrases: runs split only by spaces are one phrase. Nothing when (almost) the whole
+    /// paragraph is bold — that is a heading or a highlighted paragraph, not a marked term.
+    /// </summary>
+    private static IReadOnlyList<string> BoldPhrases(string raw, List<(int Start, int End)> ranges)
+    {
+        if (ranges.Count == 0) return [];
+        var merged = new List<(int Start, int End)>();
+        foreach (var range in ranges.Where(r => r.End > r.Start))
+        {
+            if (merged.Count > 0 && string.IsNullOrWhiteSpace(raw[merged[^1].End..range.Start])) merged[^1] = (merged[^1].Start, range.End);
+            else merged.Add(range);
+        }
+        var letters = raw.Count(char.IsLetterOrDigit);
+        var boldLetters = merged.Sum(r => raw[r.Start..r.End].Count(char.IsLetterOrDigit));
+        if (letters == 0 || boldLetters >= letters * 0.9) return [];
+        return merged.Select(r => Balanced(Normalize(raw[r.Start..r.End]).Trim(' ', ',', ';', ':', '.', '"', '“', '”', '«', '»', '–', '-')))
+            .Where(p => p.Count(char.IsLetter) >= 2).Distinct().ToList();
+    }
+
+    /// <summary>"virtuallaşdırma (virtualization" → "virtuallaşdırma"; a bracket the bold run cut in half is dropped with its tail.</summary>
+    private static string Balanced(string phrase)
+    {
+        var open = phrase.LastIndexOf('(');
+        if (open >= 0 && phrase.IndexOf(')', open) < 0) phrase = phrase[..open];
+        var close = phrase.IndexOf(')');
+        if (close >= 0 && phrase.LastIndexOf('(', close) < 0) phrase = phrase[(close + 1)..];
+        return phrase.Trim(' ', ',', ';', ':', '.', '–', '-');
     }
 
     public static ExtractedText FromTxt(Stream txt, TextExtractionLimits limits, CancellationToken ct = default)

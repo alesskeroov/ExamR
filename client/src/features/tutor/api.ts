@@ -282,7 +282,7 @@ export type CardGrade = 'Again' | 'Hard' | 'Good'
  * Question = open question; Term = "X — definition" from an answer; List = "…:" with items; Test = test question and its
  * correct option; Table = a table row or comparison; Custom = a card the student wrote.
  */
-export type CardKind = 'Question' | 'Term' | 'List' | 'Test' | 'Table' | 'Custom'
+export type CardKind = 'Question' | 'Term' | 'List' | 'Test' | 'Table' | 'Custom' | 'Cloze'
 /**
  * One flashcard and the student's state. items: list items (List), terms explained in the answer (Question) or the
  * explanation (Test); others: wrong test options; source: the document's question number. weak: last answered "Bilmirdim"/"Qismən".

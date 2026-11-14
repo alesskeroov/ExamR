@@ -81,7 +81,7 @@ public class NotesCardBuilderTests
     }
 
     [Fact]
-    public void A_titled_section_gives_a_section_card_with_its_opening_sentences()
+    public void A_titled_section_is_reading_material_not_a_card()
     {
         var deck = NotesCardBuilder.Build(Doc(
             "1 Virtual şəbəkə",
@@ -91,10 +91,9 @@ public class NotesCardBuilderTests
             "3 Nəticə",
             Filler));
 
-        var card = Assert.Single(deck.Cards, c => c.IsSection);
-        Assert.Equal(CardKind.Question, card.Kind);
-        Assert.Equal("Virtual şəbəkə", card.Front);
-        Assert.Equal("Virtual şəbəkə buludda kirayəçiyə məxsus məntiqi şəbəkədir və onun sərhədini provayder tətbiq edir. İçini isə müştəri layihələndirir. Ünvanlar ayrıca ayrılır. Trafik qaydalarla idarə edilir. Giriş nəzarətdə saxlanılır. Hadisələr jurnalda saxlanılır.", card.Back);
+        // "Heading → its first paragraph" is not recall: no section card, but the text stays readable in the topic's notes.
+        Assert.DoesNotContain(deck.Cards, c => c.IsSection);
+        Assert.Contains(deck.Topics, t => t.Notes?.Contains("Virtual şəbəkə buludda kirayəçiyə məxsus məntiqi şəbəkədir") == true);
     }
 
     [Theory]

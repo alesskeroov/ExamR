@@ -5,7 +5,7 @@ import type { CardKind, StudyCard } from './api'
 import { splitCardAnswer } from './card-answer'
 
 // Shared with the card grid (kept here: this file is the card's look).
-const kindLabel: Record<CardKind, string> = { Question: 'Sual', Term: 'Anlayış', List: 'Siyahı', Test: 'Test', Table: 'Cədvəl', Custom: 'Mənim kartım' }
+const kindLabel: Record<CardKind, string> = { Question: 'Sual', Term: 'Anlayış', List: 'Siyahı', Test: 'Test', Table: 'Cədvəl', Custom: 'Mənim kartım', Cloze: 'Boşluq' }
 const prompt: Record<CardKind, string> = {
   Question: 'Cavabı yadına sal',
   Term: 'Bu anlayış nədir?',
@@ -13,6 +13,7 @@ const prompt: Record<CardKind, string> = {
   Test: 'Düzgün cavab hansıdır?',
   Table: 'Bu sətir üzrə məlumatları xatırla',
   Custom: 'Cavabı yadına sal',
+  Cloze: 'Boşluğa hansı termin yazılır?',
 }
 const kindTone: Record<CardKind, string> = {
   Question: 'bg-indigo-50 text-indigo-700',
@@ -21,6 +22,7 @@ const kindTone: Record<CardKind, string> = {
   Test: 'bg-sky-50 text-sky-700',
   Table: 'bg-rose-50 text-rose-700',
   Custom: 'bg-slate-100 text-slate-700',
+  Cloze: 'bg-emerald-50 text-emerald-700',
 }
 const kindAccent: Record<CardKind, string> = {
   Question: 'bg-indigo-500',
@@ -29,6 +31,7 @@ const kindAccent: Record<CardKind, string> = {
   Test: 'bg-sky-500',
   Table: 'bg-rose-500',
   Custom: 'bg-slate-500',
+  Cloze: 'bg-emerald-500',
 }
 
 interface Props {
