@@ -14,6 +14,15 @@ export const queryKeys = {
     list: ['admins', 'list'] as const,
     search: (term: string) => ['admins', 'search', term] as const,
   },
+  explanations: {
+    all: ['explanations'] as const,
+    status: ['explanations', 'status'] as const,
+    documents: ['explanations', 'documents'] as const,
+    document: (documentId: string) => ['explanations', 'document', documentId] as const,
+    questions: (documentId: string, params: string) => ['explanations', 'document', documentId, 'questions', params] as const,
+    estimate: (documentId: string) => ['explanations', 'document', documentId, 'estimate'] as const,
+    jobs: (documentId: string) => ['explanations', 'document', documentId, 'jobs'] as const,
+  },
   groups: {
     all: ['groups'] as const,
     list: (userId: string, admin: boolean) => ['groups', userId, 'list', admin] as const,
@@ -33,6 +42,7 @@ export const queryKeys = {
     chats: ['tutor', 'chats'] as const,
     chat: (id: string) => ['tutor', 'chats', id] as const,
     chunks: (documentId: string) => ['tutor', 'chunks', documentId] as const,
+    search: (documentId: string, q: string) => ['tutor', 'search', documentId, q] as const,
     review: (chatId: string) => ['tutor', 'review', chatId] as const,
     openQuestions: (chatId: string) => ['tutor', 'open-questions', chatId] as const,
     materials: (chatId: string) => ['tutor', 'materials', chatId] as const,

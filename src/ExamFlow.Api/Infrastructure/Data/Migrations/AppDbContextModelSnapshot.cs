@@ -683,9 +683,17 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AnswerText")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
                     b.Property<DateTimeOffset?>("AnsweredAt")
                         .HasPrecision(3)
                         .HasColumnType("timestamp(3) with time zone");
+
+                    b.Property<string>("CorrectAnswer")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<Guid?>("CorrectOptionId")
                         .HasColumnType("uuid");
@@ -1659,6 +1667,10 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CodedAnswer")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<byte[]>("ContentHash")
                         .IsRequired()
                         .HasColumnType("bytea");
@@ -2341,6 +2353,9 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                         {
                             b1.Property<Guid>("ExamQuestionId")
                                 .HasColumnType("uuid");
+
+                            b1.Property<bool>("IsCoded")
+                                .HasColumnType("boolean");
 
                             b1.Property<string>("Text")
                                 .IsRequired()

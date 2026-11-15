@@ -10,23 +10,29 @@ import { cn } from '../../lib/utils'
 import { MAX_FILE_SIZE_BYTES, useUploadDocument, type DocumentDto } from '../documents/api'
 import {
   useApplyAnswerKey, useApproveValid, useDimBankStats, useDimCatalog, useDimSourceDocuments, useDimSourceQuestions,
-  useEditDimQuestion, useRemoveFromBank, type DimSourceDocument, type DimSourceQuestion, type DimTrack,
+  useEditDimQuestion, useRemoveFromBank, useDeleteDimQuestion, type DimSourceDocument, type DimSourceQuestion, type DimTrack,
 } from './api'
+import { DimManualQuestion } from './DimManualQuestion'
 import { inputClass, trackLabel } from './ui'
 
 interface Classification { track: DimTrack; subject: string }
 
 /** Mirrors the server rule (DimAdminEndpoints.BankRejection); null = the question fits DİM tests. */
 function problem(q: DimSourceQuestion): string | null {
-  if (q.options.length < 2) return 'Açıq sual (variant yoxdur)'
+  if (!q.text.trim()) return 'Boş mətn'
+  if (q.options.length === 0) return q.codedAnswer ? null : 'Açıq sual: cavabını yazın'
+  if (q.options.length < 2) return 'Variant azdır'
   if (q.options.length > 5) return '5-dən çox variant'
   if (q.options.filter(o => o.isCorrect).length !== 1) return 'Düzgün cavab yoxdur'
   if (!q.text.trim() || q.options.some(o => !o.text.trim())) return 'Boş mətn'
   return null
 }
 
-/** Only answer and text problems can be fixed here; the option count comes from the PDF. */
-const fixable = (q: DimSourceQuestion) => q.options.length >= 2 && q.options.length <= 5
+/**
+ * Only answer and text problems can be fixed here; the option count comes from the PDF. A question without options
+ * becomes an open coded question once its answer is typed in.
+ */
+const fixable = (q: DimSourceQuestion) => q.options.length === 0 || (q.options.length >= 2 && q.options.length <= 5)
 
 export function DimBankAdmin() {
   const documents = useDimSourceDocuments()
@@ -35,19 +41,39 @@ export function DimBankAdmin() {
   const [upload, setUpload] = useState<Classification>({ track: 'Buraxilis', subject: '' })
   // Subject chosen at upload time, remembered per document for the one-click "add to bank".
   const [chosen, setChosen] = useState<Record<string, Classification>>({})
+  const [source, setSource] = useState<'upload' | 'manual'>('upload')
   const selected = documents.data?.find(d => d.id === documentId)
 
   return (
     <div className="flex flex-col gap-5">
       <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
-        <h2 className="font-semibold">PDF yüklə</h2>
-        <p className="mt-1 text-sm text-slate-600">Əvvəlcə imtahanı və fənni seçin, sonra faylı yükləyin. Suallar avtomatik çıxarılır və yoxlanılır.</p>
-        <SubjectFields value={upload} onChange={setUpload} />
-        <DimUpload disabled={!upload.subject} onReady={id => {
-          setChosen(c => ({ ...c, [id]: upload }))
-          setDocumentId(id)
-          void documents.refetch()
-        }} />
+        <div role="tablist" aria-label="Sualların mənbəyi" className="inline-flex rounded-lg border border-slate-200 bg-white p-1">
+          {([['upload', 'PDF / Word yüklə'], ['manual', 'Əl ilə yaz']] as const).map(([value, label]) => (
+            <button key={value} type="button" role="tab" aria-selected={source === value} onClick={() => setSource(value)}
+              className={cn('rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap', source === value ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100')}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {source === 'upload' ? (
+          <>
+            <p className="mt-3 text-sm text-slate-600">Əvvəlcə imtahanı və fənni seçin, sonra faylı yükləyin. Suallar avtomatik çıxarılır və yoxlanılır.</p>
+            <SubjectFields value={upload} onChange={setUpload} />
+            <DimUpload disabled={!upload.subject} onReady={id => {
+              setChosen(c => ({ ...c, [id]: upload }))
+              setDocumentId(id)
+              void documents.refetch()
+            }} />
+          </>
+        ) : (
+          <>
+            <p className="mt-3 text-sm text-slate-600">
+              Qapalı və ya açıq (kodlaşdırılan) sualı cavabı ilə yazın: dərhal banka düşür. Yeni dəst yaradın və ya mövcud sənədə əlavə edin
+              (məs. PDF-də olmayan açıq tapşırıqları).
+            </p>
+            <DimManualQuestion documents={documents.data ?? []} documentId={documentId} onDocument={setDocumentId} />
+          </>
+        )}
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
@@ -120,7 +146,7 @@ function DocumentPanel({ document, initial }: { document: DimSourceDocument; ini
   const all = questions.data
   const wrong = all.filter(q => problem(q) !== null)
   const valid = all.length - wrong.length
-  const missingAnswers = wrong.filter(q => fixable(q) && q.options.filter(o => o.isCorrect).length !== 1).length
+  const missingAnswers = wrong.filter(q => q.options.length >= 2 && q.options.length <= 5 && q.options.filter(o => o.isCorrect).length !== 1).length
   const visible = view === 'wrong' ? wrong : all
 
   return (
@@ -131,6 +157,10 @@ function DocumentPanel({ document, initial }: { document: DimSourceDocument; ini
           {all.length} sual tapıldı: <span className="font-medium text-emerald-700">{valid} düzgün formatda</span>
           {wrong.length > 0 && <>, <span className="font-medium text-amber-700">{wrong.length} səhv</span> (aşağıda düzəldə bilərsiniz)</>}.
         </p>
+        {document.isManual ? (
+          <p className="mt-2 text-sm text-slate-500">Əl ilə yazılmış dəst: hər sual əlavə olunanda birbaşa banka düşür. Yeni sual üçün yuxarıda "Əl ilə yaz" bölməsindən istifadə edin.</p>
+        ) : (
+          <>
         <SubjectFields value={target} onChange={setTarget} />
         <details className="mt-3 text-sm">
           <summary className="cursor-pointer font-medium text-slate-600">Mövzu əlavə et (istəyə bağlı)</summary>
@@ -150,6 +180,8 @@ function DocumentPanel({ document, initial }: { document: DimSourceDocument; ini
           )}
         </div>
         {approve.isError && <div className="mt-2"><Alert title="Əlavə alınmadı">{approve.error.message}</Alert></div>}
+          </>
+        )}
         {missingAnswers > 0 && <AnswerKey documentId={document.id} missing={missingAnswers} />}
       </section>
 
@@ -165,7 +197,7 @@ function DocumentPanel({ document, initial }: { document: DimSourceDocument; ini
         {visible.length === 0 ? (
           <EmptyState title={view === 'wrong' ? 'Səhv sual yoxdur' : 'Sual yoxdur'} description={view === 'wrong' ? 'Bütün suallar düzgün formatdadır.' : 'Bu sənəddə sual tapılmadı.'} />
         ) : (
-          <ul className="flex flex-col gap-2">{visible.map(q => <li key={q.id}><QuestionItem question={q} /></li>)}</ul>
+          <ul className="flex flex-col gap-2">{visible.map(q => <li key={q.id}><QuestionItem question={q} manual={document.isManual} /></li>)}</ul>
         )}
       </section>
     </>
@@ -200,9 +232,10 @@ function AnswerKey({ documentId, missing }: { documentId: string; missing: numbe
   )
 }
 
-function QuestionItem({ question: q }: { question: DimSourceQuestion }) {
+function QuestionItem({ question: q, manual }: { question: DimSourceQuestion; manual: boolean }) {
   const catalog = useDimCatalog()
   const remove = useRemoveFromBank()
+  const deleteQuestion = useDeleteDimQuestion()
   const [editing, setEditing] = useState(false)
   const issue = problem(q)
   const subjectName = (code: string) => [...(catalog.data?.buraxilis ?? []), ...(catalog.data?.blok ?? [])].find(s => s.code === code)?.name ?? code
@@ -220,7 +253,13 @@ function QuestionItem({ question: q }: { question: DimSourceQuestion }) {
               <Pencil className="size-3.5" aria-hidden />Düzəlt
             </button>
           )}
-          {q.bank && (
+          {manual ? (
+            <button type="button" disabled={deleteQuestion.isPending}
+              onClick={() => { if (window.confirm(`#${q.sourceNumber} sual silinsin?`)) deleteQuestion.mutate(q.id) }}
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50">
+              <Trash2 className="size-3.5" aria-hidden />Sil
+            </button>
+          ) : q.bank && (
             <button type="button" onClick={() => remove.mutate(q.id)} disabled={remove.isPending}
               className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50">
               <Trash2 className="size-3.5" aria-hidden />Bankdan çıxar
@@ -240,6 +279,9 @@ function QuestionItem({ question: q }: { question: DimSourceQuestion }) {
               ))}
             </ul>
           )}
+          {q.codedAnswer && (
+            <p className="mt-2 text-sm"><span className="rounded-md bg-emerald-50 px-2 py-1 font-medium text-emerald-800">Kodlaşdırılan cavab: {q.codedAnswer}</span></p>
+          )}
           {issue && !fixable(q) && <p className="mt-1 text-xs text-slate-500">Bu sual DİM formatına uyğun deyil və sınağa düşməyəcək.</p>}
           {q.parseWarning && <p className="mt-1 text-xs text-amber-700">{q.parseWarning}</p>}
         </>
@@ -251,10 +293,12 @@ function QuestionItem({ question: q }: { question: DimSourceQuestion }) {
 function QuestionEditor({ question, onDone }: { question: DimSourceQuestion; onDone: () => void }) {
   const edit = useEditDimQuestion()
   const [text, setText] = useState(question.text)
+  const [codedAnswer, setCodedAnswer] = useState(question.codedAnswer ?? '')
+  const coded = question.options.length === 0
   const [options, setOptions] = useState(question.options.map(o => ({ id: o.id, label: o.label, text: o.text })))
   const [correct, setCorrect] = useState(question.options.find(o => o.isCorrect)?.id ?? '')
   const name = `correct-${question.id}`
-  const ready = text.trim() !== '' && correct !== '' && options.every(o => o.text.trim() !== '')
+  const ready = text.trim() !== '' && (coded ? codedAnswer.trim() !== '' : correct !== '' && options.every(o => o.text.trim() !== ''))
 
   return (
     <div className="mt-3 flex flex-col gap-3">
@@ -262,6 +306,13 @@ function QuestionEditor({ question, onDone }: { question: DimSourceQuestion; onD
         <textarea value={text} onChange={e => setText(e.target.value)} rows={3} maxLength={4000}
           className="w-full rounded-lg border border-slate-300 bg-white p-3 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none" />
       </label>
+      {coded ? (
+        <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700 sm:max-w-sm">Kodlaşdırılan cavab
+          <input className={inputClass} value={codedAnswer} maxLength={100} inputMode="decimal" placeholder="məs. 2,5 və ya 2,5; 5/2"
+            onChange={e => setCodedAnswer(e.target.value)} />
+          <span className="text-xs font-normal text-slate-500">Variantı olmayan sual cavabı yazıldıqdan sonra açıq (kodlaşdırılan) sual kimi banka düşə bilər.</span>
+        </label>
+      ) : (
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-1 text-sm font-medium text-slate-700">Variantlar — düzgün cavabı işarələyin</legend>
         {options.map((o, i) => (
@@ -273,10 +324,13 @@ function QuestionEditor({ question, onDone }: { question: DimSourceQuestion; onD
           </div>
         ))}
       </fieldset>
+      )}
       {edit.isError && <Alert title="Yadda saxlanmadı">{edit.error.message}</Alert>}
       <div className="flex gap-2">
         <Button loading={edit.isPending} disabled={!ready}
-          onClick={() => edit.mutate({ id: question.id, text, options: options.map(o => ({ id: o.id, text: o.text })), correctOptionId: correct }, { onSuccess: onDone })}>
+          onClick={() => edit.mutate(coded
+            ? { id: question.id, text, options: [], codedAnswer }
+            : { id: question.id, text, options: options.map(o => ({ id: o.id, text: o.text })), correctOptionId: correct }, { onSuccess: onDone })}>
           Yadda saxla
         </Button>
         <Button variant="ghost" onClick={onDone}>Ləğv et</Button>

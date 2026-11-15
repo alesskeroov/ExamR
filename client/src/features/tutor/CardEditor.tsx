@@ -12,6 +12,9 @@ interface Props {
   card?: StudyCard
   /** Topic a new card starts in. */
   topicKey?: string
+  /** A new card's starting text, e.g. from text the student selected in the notes. */
+  initialFront?: string
+  initialBack?: string
   onClose: () => void
   onSaved?: (card: StudyCard) => void
 }
@@ -31,9 +34,9 @@ function message(error: unknown) {
 }
 
 /** Writes a new card or rewrites one: a simple question in front and its answer behind. */
-export function CardEditor({ chatId, deck, card, topicKey = '', onClose, onSaved }: Props) {
-  const [front, setFront] = useState(card?.front ?? '')
-  const [back, setBack] = useState(startBack(card))
+export function CardEditor({ chatId, deck, card, topicKey = '', initialFront = '', initialBack = '', onClose, onSaved }: Props) {
+  const [front, setFront] = useState(card?.front ?? initialFront.slice(0, maxFront))
+  const [back, setBack] = useState(card ? startBack(card) : initialBack.slice(0, maxBack))
   const [topic, setTopic] = useState(card ? card.topicKey : topicKey)
   const save = useSaveCard(chatId)
   const frontId = useId()

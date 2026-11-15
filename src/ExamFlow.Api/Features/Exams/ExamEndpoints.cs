@@ -229,24 +229,54 @@ public static class ExamEndpoints
             return Problem(StatusCodes.Status409Conflict, "Bu sualın cavabı kilidlənib.");
         }
 
-        if (request.SelectedOptionId is { } optionId && question.Snapshot.Options.All(o => o.OptionId != optionId))
+        if (question.Snapshot.IsCoded)
         {
-            return Problem(StatusCodes.Status400BadRequest, "Variant bu suala aid deyil.");
-        }
+            var text = CodedAnswers.CleanAnswer(request.AnswerText);
+            if (request.SelectedOptionId is not null)
+            {
+                return Problem(StatusCodes.Status400BadRequest, "Bu sualda variant yoxdur, cavabı yazın.");
+            }
 
-        // Answers can be changed until the exam ends in every mode; Immediate mode only disallows clearing.
-        if (exam.RevealMode == RevealMode.Immediate && request.SelectedOptionId is null)
+            if (text is not null && CodedAnswers.Parse(text) is null)
+            {
+                return Problem(StatusCodes.Status400BadRequest, "Cavab ədəd olmalıdır (məs. 12, -3, 2,5 və ya 5/2).");
+            }
+
+            // Answers can be changed until the exam ends in every mode; Immediate mode only disallows clearing.
+            if (exam.RevealMode == RevealMode.Immediate && text is null)
+            {
+                return Problem(StatusCodes.Status400BadRequest, "Cavab yazılmayıb.");
+            }
+
+            if (question.AnswerText == text)
+            {
+                return TypedResults.Ok(ToAnswerResult(exam, question));
+            }
+
+            question.AnswerText = text;
+            question.AnsweredAt = text is null ? null : now;
+        }
+        else
         {
-            return Problem(StatusCodes.Status400BadRequest, "Variant seçilməyib.");
-        }
+            if (request.SelectedOptionId is { } optionId && question.Snapshot.Options.All(o => o.OptionId != optionId))
+            {
+                return Problem(StatusCodes.Status400BadRequest, "Variant bu suala aid deyil.");
+            }
 
-        if (question.SelectedOptionId == request.SelectedOptionId)
-        {
-            return TypedResults.Ok(ToAnswerResult(exam, question));
-        }
+            // Answers can be changed until the exam ends in every mode; Immediate mode only disallows clearing.
+            if (exam.RevealMode == RevealMode.Immediate && request.SelectedOptionId is null)
+            {
+                return Problem(StatusCodes.Status400BadRequest, "Variant seçilməyib.");
+            }
 
-        question.SelectedOptionId = request.SelectedOptionId;
-        question.AnsweredAt = request.SelectedOptionId is null ? null : now;
+            if (question.SelectedOptionId == request.SelectedOptionId)
+            {
+                return TypedResults.Ok(ToAnswerResult(exam, question));
+            }
+
+            question.SelectedOptionId = request.SelectedOptionId;
+            question.AnsweredAt = request.SelectedOptionId is null ? null : now;
+        }
         // Saved under the exam row lock: an answer is either stored before a concurrent finish grades the exam,
         // or rejected after it; it can never be stored but missing from the result. The same lock serialises it
         // with a concurrent answer/reveal of this exam, so the question's lock is re-read from the database here.
@@ -302,9 +332,10 @@ public static class ExamEndpoints
                 .ExecuteUpdateAsync(s => s.SetProperty(q => q.LockedAt, now), ct);
             // Read back under the exam lock: a concurrent answer may have changed or locked the question meanwhile.
             var stored = await db.ExamQuestions.AsNoTracking().Where(q => q.Id == question.Id)
-                .Select(q => new { q.SelectedOptionId, q.LockedAt }).FirstAsync(ct);
+                .Select(q => new { q.SelectedOptionId, q.AnswerText, q.LockedAt }).FirstAsync(ct);
             await transaction.CommitAsync(ct);
             question.SelectedOptionId = stored.SelectedOptionId;
+            question.AnswerText = stored.AnswerText;
             question.LockedAt = stored.LockedAt;
             return true;
         });
@@ -319,7 +350,7 @@ public static class ExamEndpoints
         db.ExamQuestions.AsNoTracking().AnyAsync(q => q.Id == examQuestionId && q.LockedAt != null, ct);
 
     private static AnswerResultDto ToAnswerResult(Exam exam, ExamQuestion question) =>
-        new(question.Id, question.SelectedOptionId, RevealFor(exam, question), question.LockedAt is not null);
+        new(question.Id, question.SelectedOptionId, RevealFor(exam, question), question.LockedAt is not null, question.AnswerText);
 
     private static async Task<IResult> Finish(
         Guid id, ClaimsPrincipal user, AppDbContext db, TimeProvider clock, CancellationToken ct)
@@ -427,10 +458,12 @@ public static class ExamEndpoints
             Snapshot = new QuestionSnapshot
             {
                 Text = question.Text,
+                IsCoded = question.CodedAnswer is not null && options.Count == 0,
                 Options = options.Select((o, i) => new OptionSnapshot { OptionId = o.Id, Label = ((char)('A' + i)).ToString(), Text = ExamFlow.Parsing.OptionText.Clean(o.Text) }).ToList(),
                 Visuals = visuals?.Select(v => QuestionVisuals.ToSnapshot(v, question.Options)).ToList() ?? [],
             },
             CorrectOptionId = question.VerificationStatus == VerificationStatus.Unverified ? null : options.FirstOrDefault(o => o.IsCorrect)?.Id,
+            CorrectAnswer = options.Count == 0 ? question.CodedAnswer : null,
         };
     }
 
@@ -496,13 +529,14 @@ public static class ExamEndpoints
             }
 
             var stored = await db.ExamQuestions.AsNoTracking().Where(q => q.ExamId == exam.Id)
-                .Select(q => new { q.Id, q.SelectedOptionId, q.AnsweredAt, q.Outcome })
+                .Select(q => new { q.Id, q.SelectedOptionId, q.AnswerText, q.AnsweredAt, q.Outcome })
                 .ToDictionaryAsync(q => q.Id, ct);
             foreach (var question in exam.Questions)
             {
                 if (!stored.TryGetValue(question.Id, out var row)) continue;
                 var entry = db.Entry(question);
                 entry.Property(q => q.SelectedOptionId).OriginalValue = entry.Property(q => q.SelectedOptionId).CurrentValue = row.SelectedOptionId;
+                entry.Property(q => q.AnswerText).OriginalValue = entry.Property(q => q.AnswerText).CurrentValue = row.AnswerText;
                 entry.Property(q => q.AnsweredAt).OriginalValue = entry.Property(q => q.AnsweredAt).CurrentValue = row.AnsweredAt;
                 entry.Property(q => q.Outcome).OriginalValue = entry.Property(q => q.Outcome).CurrentValue = row.Outcome;
             }
@@ -518,7 +552,10 @@ public static class ExamEndpoints
 
     private static AnswerRevealDto? RevealFor(Exam exam, ExamQuestion question) =>
         ExamEngine.MayReveal(exam, question)
-            ? new AnswerRevealDto(question.CorrectOptionId, question.CorrectOptionId is not null)
+            ? question.Snapshot.IsCoded
+                ? new AnswerRevealDto(null, question.CorrectAnswer is not null, question.CorrectAnswer,
+                    question.CorrectAnswer is null ? null : CodedAnswers.Matches(question.CorrectAnswer, question.AnswerText))
+                : new AnswerRevealDto(question.CorrectOptionId, question.CorrectOptionId is not null)
             : null;
 
     private static IReadOnlyList<ExamOptionDto> Options(ExamQuestion question) =>
@@ -531,7 +568,7 @@ public static class ExamEndpoints
         exam.Id, exam.Status, exam.RevealMode, exam.QuestionCount, exam.StartedAt, exam.ExpiresAt, now,
         exam.Questions.OrderBy(q => q.Position)
             .Select(q => new ExamSessionQuestionDto(q.Id, q.Position, q.Snapshot.Text, Options(q), q.SelectedOptionId, RevealFor(exam, q), Visuals(q),
-                q.LockedAt is not null))
+                q.LockedAt is not null, q.Snapshot.IsCoded, q.AnswerText))
             .ToList());
 
     private static ExamResultDto ToResult(Exam exam, IReadOnlyDictionary<Guid, string> documentNames)
@@ -543,7 +580,7 @@ public static class ExamEndpoints
             exam.StartedAt, completedAt, (int)Math.Round((completedAt - exam.StartedAt).TotalSeconds),
             exam.Questions.OrderBy(q => q.Position)
                 .Select(q => new ExamResultQuestionDto(q.Position, q.Snapshot.Text, Options(q), q.SelectedOptionId, q.CorrectOptionId,
-                    q.Outcome ?? ExamEngine.OutcomeOf(q), Visuals(q)))
+                    q.Outcome ?? ExamEngine.OutcomeOf(q), Visuals(q), q.Snapshot.IsCoded, q.AnswerText, q.CorrectAnswer))
                 .ToList());
     }
 

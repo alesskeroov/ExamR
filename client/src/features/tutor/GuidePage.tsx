@@ -1,13 +1,14 @@
-import { FileText, Layers, LibraryBig, ListChecks, Menu, MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRight, Plus, Trash2, X, type LucideIcon } from 'lucide-react'
+import { BookOpen, FileText, Layers, ListChecks, Menu, MessageSquareText, PanelLeftClose, PanelLeftOpen, PanelRight, Plus, Search, Trash2, X, type LucideIcon } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
 import { useConfirm } from '../../lib/use-confirm'
 import { cn } from '../../lib/utils'
-import { useChat, useChats, useCreateChat, useDeck, useDeleteChat, useTutorDocuments, type ChatSession, type ChatSource, type LearnScope, type StudyCard } from './api'
+import { useChat, useChats, useCreateChat, useDeck, useDeleteChat, useTutorDocuments, type ChatSession, type ChatSource, type LearnScope, type SearchHit, type StudyCard } from './api'
 import { FeedbackDialog } from './FeedbackDialog'
 import { GuideCardList } from './GuideCardList'
 import { GuideLearn } from './GuideLearn'
+import { GuideSearch } from './GuideSearch'
 import { GuideTopics } from './GuideTopics'
 import { TutorDocumentPicker } from './TutorDocumentPicker'
 import { TutorPreview } from './TutorPreview'
@@ -23,13 +24,14 @@ function store(key: string, value: string) {
   try { localStorage.setItem(key, value) } catch { /* private mode: keep the in-memory choice */ }
 }
 
-type Tab = 'topics' | 'learn' | 'cards'
+type Tab = 'topics' | 'learn' | 'cards' | 'search'
 const tabs: { id: Tab; label: string; icon: LucideIcon }[] = [
-  { id: 'topics', label: 'Mövzular', icon: LibraryBig },
+  { id: 'topics', label: 'Konspekt', icon: BookOpen },
   { id: 'learn', label: 'Öyrən', icon: Layers },
   { id: 'cards', label: 'Kartlarım', icon: ListChecks },
+  { id: 'search', label: 'Axtar', icon: Search },
 ]
-const tabFrom = (value: string | null): Tab => value === 'learn' || value === 'cards' ? value : 'topics'
+const tabFrom = (value: string | null): Tab => value === 'learn' || value === 'cards' || value === 'search' ? value : 'topics'
 
 function scopeFrom(params: URLSearchParams): LearnScope {
   const scope = params.get('scope')
@@ -84,6 +86,10 @@ export function GuidePage() {
   const showSource = (card: StudyCard) => setPreview({
     open: true,
     source: { number: card.source, chunkOrdinal: card.chunkOrdinal, pageFrom: card.page, pageTo: card.page, section: null, excerpt: card.front, cited: true },
+  })
+  const showHit = (hit: SearchHit) => setPreview({
+    open: true,
+    source: { number: 0, chunkOrdinal: hit.ordinal, pageFrom: hit.pageFrom, pageTo: hit.pageTo, section: hit.section, excerpt: '', cited: true },
   })
 
   const toggleSidebar = () => setSidebarOpen(open => { store(sidebarKey, open ? 'closed' : 'open'); return !open })
@@ -184,7 +190,7 @@ export function GuidePage() {
           ) : chat.isError ? (
             <div className="p-6"><Alert title="Sənəd tapılmadı" action={<button type="button" onClick={newDocument} className="text-sm font-semibold underline">Sənəd seç</button>}>Silinmiş ola bilər və ya sizə aid deyil.</Alert></div>
           ) : session ? (
-            <DeckView chatId={session.id} tab={tab} scope={scope} onLearn={learn} onSource={showSource} />
+            <DeckView chatId={session.id} documentId={session.documentId} format={format} tab={tab} scope={scope} onLearn={learn} onSource={showSource} onHit={showHit} />
           ) : (
             <Frame><Skeleton label="Yüklənir…" /></Frame>
           )}
@@ -202,8 +208,9 @@ export function GuidePage() {
   )
 }
 
-function DeckView({ chatId, tab, scope, onLearn, onSource }: {
-  chatId: string; tab: Tab; scope: LearnScope; onLearn: (scope: LearnScope) => void; onSource: (card: StudyCard) => void
+function DeckView({ chatId, documentId, format, tab, scope, onLearn, onSource, onHit }: {
+  chatId: string; documentId: string; format: string; tab: Tab; scope: LearnScope
+  onLearn: (scope: LearnScope) => void; onSource: (card: StudyCard) => void; onHit: (hit: SearchHit) => void
 }) {
   const deck = useDeck(chatId)
   if (deck.isLoading) return <Frame><Skeleton label="Kartlar hazırlanır…" /></Frame>
@@ -219,7 +226,8 @@ function DeckView({ chatId, tab, scope, onLearn, onSource }: {
   const data = deck.data!
   if (tab === 'learn') return <GuideLearn chatId={chatId} deck={data} scope={scope} onScope={onLearn} onSource={onSource} />
   if (tab === 'cards') return <GuideCardList chatId={chatId} deck={data} onSource={onSource} />
-  return <GuideTopics deck={data} onLearn={onLearn} />
+  if (tab === 'search') return <GuideSearch chatId={chatId} deck={data} documentId={documentId} format={format} onOpen={onHit} />
+  return <GuideTopics chatId={chatId} deck={data} onLearn={onLearn} />
 }
 
 interface ListProps {

@@ -39,8 +39,15 @@ export interface DimSubjectScore {
   incorrect: number
   unanswered: number
   ungraded: number
+  /** Points of the measured parts under the official formula; 0/0 when the test had no such questions. */
   closedPoints: number
   closedMaxPoints: number
+  openTotal: number
+  openCorrect: number
+  openPoints: number
+  openMaxPoints: number
+  measuredPoints: number
+  measuredMaxPoints: number
   estimatedPoints: number
   fullMaxPoints: number
 }
@@ -62,6 +69,10 @@ export interface DimReport {
     subjects: DimSubjectScore[]
     closedPoints: number
     closedMaxPoints: number
+    openPoints: number
+    openMaxPoints: number
+    measuredPoints: number
+    measuredMaxPoints: number
     estimatedPoints: number
     fullMaxPoints: number
     weakTopics: { subject: string; topic: string; total: number; correct: number; accuracy: number }[]
@@ -132,6 +143,8 @@ export interface DimSourceQuestion {
   verificationStatus: VerificationStatus
   parseWarning: string | null
   bank: { track: DimTrack; subject: string; topic: string | null } | null
+  /** Accepted answers of an open coded question (no options), e.g. "2,5; 5/2". */
+  codedAnswer: string | null
 }
 
 /** A parsed document: `valid` questions fit DİM tests; `bank` lists how many are already in the bank per subject. */
@@ -142,6 +155,8 @@ export interface DimSourceDocument {
   questionCount: number
   valid: number
   bank: { track: DimTrack; subject: string; name: string; count: number }[]
+  /** A set of questions typed in by hand (no file). */
+  isManual: boolean
 }
 
 export interface DimAdminTest {
@@ -220,7 +235,27 @@ type ApproveResult = { approved: number; rejected: { questionId: string; reason:
 export const useApproveValid = () => useDimAdminMutation(({ documentId, ...body }: { documentId: string; track: DimTrack; subject: string; topic: string | null }) =>
   api.post<ApproveResult>(`/admin/dim/documents/${documentId}/approve-valid`, body))
 
-export interface DimQuestionEdit { id: string; text: string; options: { id: string; text: string }[]; correctOptionId: string }
+/** Closed questions send `correctOptionId`; questions without options send `codedAnswer`. */
+export interface DimQuestionEdit { id: string; text: string; options: { id: string; text: string }[]; correctOptionId?: string; codedAnswer?: string }
+
+/** A question typed in by hand: no options = open coded question with `codedAnswer`. */
+export interface DimQuestionCreate {
+  documentId: string
+  track: DimTrack
+  subject: string
+  topic: string | null
+  text: string
+  options: string[]
+  correctIndex: number | null
+  codedAnswer: string | null
+}
+
+export const useCreateDimSet = () => useDimAdminMutation((title: string) => api.post<DimSourceDocument>('/admin/dim/sets', { title }))
+
+export const useCreateDimQuestion = () => useDimAdminMutation((request: DimQuestionCreate) => api.post<DimSourceQuestion>('/admin/dim/questions', request))
+
+/** Only questions of a manual set can be deleted; PDF questions are removed from the bank instead. */
+export const useDeleteDimQuestion = () => useDimAdminMutation((questionId: string) => api.delete(`/admin/dim/questions/${questionId}`))
 
 export const useEditDimQuestion = () => useDimAdminMutation(({ id, ...body }: DimQuestionEdit) => api.put<void>(`/admin/dim/questions/${id}`, body))
 

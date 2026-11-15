@@ -39,12 +39,18 @@ public enum ExamPool
 public sealed class AnswerRequest
 {
     public Guid? SelectedOptionId { get; init; }
+
+    /// <summary>The typed number of a coded question; null or blank clears the answer.</summary>
+    [StringLength(CodedAnswers.MaxAnswerLength)]
+    public string? AnswerText { get; init; }
 }
 
 public sealed record ExamOptionDto(Guid Id, string Label, string Text);
 
 /// <summary>Correct answer shown during the exam; only in Immediate mode and only after the user revealed it.</summary>
-public sealed record AnswerRevealDto(Guid? CorrectOptionId, bool IsGradable);
+/// <param name="CorrectAnswer">Coded questions: the accepted answers.</param>
+/// <param name="IsCorrect">Coded questions: whether the typed number matches (the client cannot compare numbers itself).</param>
+public sealed record AnswerRevealDto(Guid? CorrectOptionId, bool IsGradable, string? CorrectAnswer = null, bool? IsCorrect = null);
 
 public sealed record ExamSessionQuestionDto(
     Guid ExamQuestionId,
@@ -54,7 +60,9 @@ public sealed record ExamSessionQuestionDto(
     Guid? SelectedOptionId,
     AnswerRevealDto? Reveal,
     IReadOnlyList<VisualDto> Visuals,
-    bool Locked);
+    bool Locked,
+    bool IsCoded = false,
+    string? AnswerText = null);
 
 public sealed record ExamSessionDto(
     Guid Id,
@@ -66,7 +74,7 @@ public sealed record ExamSessionDto(
     DateTimeOffset ServerNow,
     IReadOnlyList<ExamSessionQuestionDto> Questions);
 
-public sealed record AnswerResultDto(Guid ExamQuestionId, Guid? SelectedOptionId, AnswerRevealDto? Reveal, bool Locked);
+public sealed record AnswerResultDto(Guid ExamQuestionId, Guid? SelectedOptionId, AnswerRevealDto? Reveal, bool Locked, string? AnswerText = null);
 
 public sealed record ExamResultQuestionDto(
     int Position,
@@ -75,7 +83,10 @@ public sealed record ExamResultQuestionDto(
     Guid? SelectedOptionId,
     Guid? CorrectOptionId,
     ExamOutcome Outcome,
-    IReadOnlyList<VisualDto> Visuals);
+    IReadOnlyList<VisualDto> Visuals,
+    bool IsCoded = false,
+    string? AnswerText = null,
+    string? CorrectAnswer = null);
 
 /// <summary>Where the exam's questions came from. DocumentName is null when the PDF was deleted.</summary>
 public sealed record ExamSourceDto(Guid? DocumentId, string? DocumentName, int? RangeFrom, int? RangeTo);
