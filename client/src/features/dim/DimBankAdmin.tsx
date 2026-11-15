@@ -1,4 +1,4 @@
-import { CheckCircle2, FileText, KeyRound, Pencil, Trash2 } from 'lucide-react'
+import { CheckCircle2, FileText, Headphones, KeyRound, Pencil, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Alert } from '../../components/common/Alert'
 import { Button } from '../../components/common/Button'
@@ -10,9 +10,11 @@ import { cn } from '../../lib/utils'
 import { MAX_FILE_SIZE_BYTES, useUploadDocument, type DocumentDto } from '../documents/api'
 import {
   useApplyAnswerKey, useApproveValid, useDimBankStats, useDimCatalog, useDimSourceDocuments, useDimSourceQuestions,
-  useEditDimQuestion, useRemoveFromBank, useDeleteDimQuestion, type DimSourceDocument, type DimSourceQuestion, type DimTrack,
+  useDimAudios, useEditDimQuestion, useRemoveFromBank, useDeleteDimQuestion, type DimSourceDocument, type DimSourceQuestion, type DimTrack,
 } from './api'
+import { DimAudioPanel, DimTopicRanges } from './DimDocumentTools'
 import { DimManualQuestion } from './DimManualQuestion'
+import { DimTextImport } from './DimTextImport'
 import { inputClass, trackLabel } from './ui'
 
 interface Classification { track: DimTrack; subject: string }
@@ -41,14 +43,14 @@ export function DimBankAdmin() {
   const [upload, setUpload] = useState<Classification>({ track: 'Buraxilis', subject: '' })
   // Subject chosen at upload time, remembered per document for the one-click "add to bank".
   const [chosen, setChosen] = useState<Record<string, Classification>>({})
-  const [source, setSource] = useState<'upload' | 'manual'>('upload')
+  const [source, setSource] = useState<'upload' | 'manual' | 'import'>('upload')
   const selected = documents.data?.find(d => d.id === documentId)
 
   return (
     <div className="flex flex-col gap-5">
       <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
         <div role="tablist" aria-label="Sualların mənbəyi" className="inline-flex rounded-lg border border-slate-200 bg-white p-1">
-          {([['upload', 'PDF / Word yüklə'], ['manual', 'Əl ilə yaz']] as const).map(([value, label]) => (
+          {([['upload', 'PDF / Word yüklə'], ['import', 'Mətni yapışdır'], ['manual', 'Əl ilə yaz']] as const).map(([value, label]) => (
             <button key={value} type="button" role="tab" aria-selected={source === value} onClick={() => setSource(value)}
               className={cn('rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap', source === value ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100')}>
               {label}
@@ -64,6 +66,14 @@ export function DimBankAdmin() {
               setDocumentId(id)
               void documents.refetch()
             }} />
+          </>
+        ) : source === 'import' ? (
+          <>
+            <p className="mt-3 text-sm text-slate-600">
+              Bütün testi Word-dan, saytdan və ya PDF-dən kopyalayıb yapışdırın: əvvəl önizləmə, sonra hamısı bir dəfəyə dəstə düşür.
+            </p>
+            <DimTextImport documents={documents.data ?? []} documentId={documentId} onDocument={setDocumentId}
+              onImported={(id, subject) => setChosen(c => ({ ...c, [id]: { track: 'Buraxilis', subject } }))} />
           </>
         ) : (
           <>
@@ -101,7 +111,8 @@ export function DimBankAdmin() {
           )}
       </section>
 
-      {selected && <DocumentPanel key={selected.id} document={selected} initial={chosen[selected.id]} />}
+      {/* Re-mounted when a subject is chosen for the document (upload or import), so "add to bank" starts with it. */}
+      {selected && <DocumentPanel key={`${selected.id}:${chosen[selected.id]?.subject ?? ''}`} document={selected} initial={chosen[selected.id]} />}
     </div>
   )
 }
@@ -135,6 +146,7 @@ function SubjectFields({ value, onChange }: { value: Classification; onChange: (
 
 function DocumentPanel({ document, initial }: { document: DimSourceDocument; initial?: Classification }) {
   const questions = useDimSourceQuestions(document.id)
+  const audios = useDimAudios(document.id)
   const approve = useApproveValid()
   const [target, setTarget] = useState<Classification>(initial ?? (document.bank[0] ? { track: document.bank[0].track, subject: document.bank[0].subject } : { track: 'Buraxilis', subject: '' }))
   const [topic, setTopic] = useState('')
@@ -146,7 +158,11 @@ function DocumentPanel({ document, initial }: { document: DimSourceDocument; ini
   const all = questions.data
   const wrong = all.filter(q => problem(q) !== null)
   const valid = all.length - wrong.length
-  const missingAnswers = wrong.filter(q => q.options.length >= 2 && q.options.length <= 5 && q.options.filter(o => o.isCorrect).length !== 1).length
+  // Closed questions without a single correct option, and open ones without a coded answer: the answer key fixes both.
+  const missingAnswers = wrong.filter(q => (q.options.length >= 2 && q.options.length <= 5 && q.options.filter(o => o.isCorrect).length !== 1)
+    || (q.options.length === 0 && !q.codedAnswer)).length
+  const unbanked = all.filter(q => problem(q) === null && !q.bank).length
+  const audioFor = (n: number) => audios.data?.find(a => n >= a.questionFrom && n <= a.questionTo)?.title ?? null
   const visible = view === 'wrong' ? wrong : all
 
   return (
@@ -157,8 +173,8 @@ function DocumentPanel({ document, initial }: { document: DimSourceDocument; ini
           {all.length} sual tapıldı: <span className="font-medium text-emerald-700">{valid} düzgün formatda</span>
           {wrong.length > 0 && <>, <span className="font-medium text-amber-700">{wrong.length} səhv</span> (aşağıda düzəldə bilərsiniz)</>}.
         </p>
-        {document.isManual ? (
-          <p className="mt-2 text-sm text-slate-500">Əl ilə yazılmış dəst: hər sual əlavə olunanda birbaşa banka düşür. Yeni sual üçün yuxarıda "Əl ilə yaz" bölməsindən istifadə edin.</p>
+        {document.isManual && unbanked === 0 ? (
+          <p className="mt-2 text-sm text-slate-500">Əl ilə yaradılmış dəst: düzgün formatda olan suallar birbaşa banka düşür.</p>
         ) : (
           <>
         <SubjectFields value={target} onChange={setTarget} />
@@ -183,6 +199,8 @@ function DocumentPanel({ document, initial }: { document: DimSourceDocument; ini
           </>
         )}
         {missingAnswers > 0 && <AnswerKey documentId={document.id} missing={missingAnswers} />}
+        <DimTopicRanges documentId={document.id} />
+        <DimAudioPanel documentId={document.id} />
       </section>
 
       <section aria-label="Sənədin sualları" className="flex flex-col gap-3">
@@ -197,7 +215,7 @@ function DocumentPanel({ document, initial }: { document: DimSourceDocument; ini
         {visible.length === 0 ? (
           <EmptyState title={view === 'wrong' ? 'Səhv sual yoxdur' : 'Sual yoxdur'} description={view === 'wrong' ? 'Bütün suallar düzgün formatdadır.' : 'Bu sənəddə sual tapılmadı.'} />
         ) : (
-          <ul className="flex flex-col gap-2">{visible.map(q => <li key={q.id}><QuestionItem question={q} manual={document.isManual} /></li>)}</ul>
+          <ul className="flex flex-col gap-2">{visible.map(q => <li key={q.id}><QuestionItem question={q} manual={document.isManual} audio={audioFor(q.sourceNumber)} /></li>)}</ul>
         )}
       </section>
     </>
@@ -213,7 +231,10 @@ function AnswerKey({ documentId, missing }: { documentId: string; missing: numbe
         <KeyRound className="size-4 text-indigo-600" aria-hidden />Cavab açarını yapışdır
         <span className="font-normal text-amber-700">— {missing} sualın cavabı tapılmadı</span>
       </summary>
-      <p className="mt-2 text-slate-600">Format: <code>1-A 2-C 3-B</code> və ya hər sətirdə bir cüt. Nömrələr PDF-dəki nömrələrdir.</p>
+      <p className="mt-2 text-slate-600">
+        Format: <code>1-A 2-C 3-B</code> və ya hər sətirdə bir cüt. Açıq (kodlaşdırılan) suallar üçün <code>14=2,5</code>, <code>15=-3</code>;
+        bir neçə düzgün yazılış: <code>16=2,5|5/2</code>. Nömrələr sənəddəki nömrələrdir.
+      </p>
       <textarea value={keyText} onChange={e => setKeyText(e.target.value)} rows={3} aria-label="Cavab açarı"
         className="mt-2 w-full rounded-lg border border-slate-300 bg-white p-3 font-mono text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none" />
       <div className="mt-2 flex flex-wrap items-center gap-3">
@@ -232,7 +253,7 @@ function AnswerKey({ documentId, missing }: { documentId: string; missing: numbe
   )
 }
 
-function QuestionItem({ question: q, manual }: { question: DimSourceQuestion; manual: boolean }) {
+function QuestionItem({ question: q, manual, audio }: { question: DimSourceQuestion; manual: boolean; audio: string | null }) {
   const catalog = useDimCatalog()
   const remove = useRemoveFromBank()
   const deleteQuestion = useDeleteDimQuestion()
@@ -244,6 +265,7 @@ function QuestionItem({ question: q, manual }: { question: DimSourceQuestion; ma
     <article className={cn('rounded-xl border bg-white p-3 sm:p-4', issue ? 'border-amber-200' : 'border-slate-200')}>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-semibold text-slate-500 tabular-nums">#{q.sourceNumber}</span>
+        {audio && <span className="inline-flex items-center gap-1 text-xs text-indigo-700"><Headphones className="size-3.5" aria-hidden />{audio}</span>}
         {issue ? <StatusBadge tone="warning">{issue}</StatusBadge>
           : q.bank ? <StatusBadge tone="success">{`${trackLabel[q.bank.track]} · ${subjectName(q.bank.subject)}${q.bank.topic ? ` · ${q.bank.topic}` : ''}`}</StatusBadge>
           : <StatusBadge tone="info">Düzgün, bankda deyil</StatusBadge>}

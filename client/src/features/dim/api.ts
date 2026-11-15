@@ -277,3 +277,45 @@ export function useDeleteDimTest() {
     },
   })
 }
+
+// ---- Admin: fast entry ----
+
+export interface DimImportedQuestion { number: number; text: string; options: string[]; correctIndex: number | null; warning: string | null }
+export interface DimImportResult { questions: DimImportedQuestion[]; warnings: string[]; saved: number; banked: number }
+
+/** Pasted test → questions of a manual set; `preview: true` only parses. */
+export const useImportDimText = () => useDimAdminMutation(({ documentId, ...body }: {
+  documentId: string; text: string; track: DimTrack; subject: string; topic: string | null; preview: boolean
+}) => api.post<DimImportResult>(`/admin/dim/sets/${documentId}/import`, body))
+
+/** Bank topics by number ranges, one per line: "1-5: Fonetika". */
+export const useSetDimTopics = () => useDimAdminMutation(({ documentId, text }: { documentId: string; text: string }) =>
+  api.post<{ updated: number; notInBank: number[]; unread: string[] }>(`/admin/dim/documents/${documentId}/topics`, { text }))
+
+// ---- Admin: listening recordings ----
+
+export interface DimAudio { id: string; title: string; questionFrom: number; questionTo: number; contentType: string; sizeBytes: number; createdAt: string }
+
+export const DIM_AUDIO_MAX_BYTES = 30 * 1024 * 1024
+
+export function useDimAudios(documentId: string) {
+  return useQuery({ queryKey: queryKeys.dim.audios(documentId), queryFn: () => api.get<DimAudio[]>(`/admin/dim/documents/${documentId}/audio`) })
+}
+
+export const useUploadDimAudio = () => useDimAdminMutation(({ documentId, file, title, questionFrom, questionTo }: {
+  documentId: string; file: File; title: string; questionFrom: number; questionTo: number
+}) => {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('title', title)
+  form.append('questionFrom', String(questionFrom))
+  form.append('questionTo', String(questionTo))
+  return api.post<DimAudio>(`/admin/dim/documents/${documentId}/audio`, form)
+})
+
+export const useUpdateDimAudio = () => useDimAdminMutation(({ id, ...body }: { id: string; title: string; questionFrom: number; questionTo: number }) =>
+  api.put<DimAudio>(`/admin/dim/audio/${id}`, body))
+
+export const useDeleteDimAudio = () => useDimAdminMutation((id: string) => api.delete(`/admin/dim/audio/${id}`))
+
+export const dimAudioAdminUrl = (id: string) => `/api/admin/dim/audio/${id}/file`

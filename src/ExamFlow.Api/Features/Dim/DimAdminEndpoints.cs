@@ -5,6 +5,7 @@ using ExamFlow.Api.Features.Exams;
 using ExamFlow.Api.Features.Questions;
 using ExamFlow.Api.Infrastructure.Data;
 using ExamFlow.Api.Infrastructure.Security;
+using ExamFlow.Parsing;
 using Microsoft.EntityFrameworkCore;
 
 namespace ExamFlow.Api.Features.Dim;
@@ -24,6 +25,8 @@ public static class DimAdminEndpoints
         group.MapGet("/documents/{documentId:guid}/questions", SourceQuestions);
         group.MapPost("/documents/{documentId:guid}/approve-valid", ApproveValid).Validate<DimApproveDocumentRequest>();
         group.MapPost("/sets", CreateSet).Validate<DimCreateSetRequest>();
+        group.MapPost("/sets/{documentId:guid}/import", ImportText).Validate<DimImportRequest>();
+        group.MapPost("/documents/{documentId:guid}/topics", SetTopics).Validate<DimTopicsRequest>();
         group.MapPost("/questions", CreateQuestion).Validate<DimCreateQuestionRequest>();
         group.MapPut("/questions/{questionId:guid}", EditQuestion).Validate<DimEditQuestionRequest>();
         group.MapDelete("/questions/{questionId:guid}", DeleteQuestion);
@@ -93,7 +96,10 @@ public static class DimAdminEndpoints
             q.VerificationStatus, q.ParseWarning, q.Bank, q.CodedAnswer)).ToList());
     }
 
-    /// <summary>Applies a typed answer key ("1-A 2-C …") to the document's questions by their original number.</summary>
+    /// <summary>
+    /// Applies a typed answer key ("1-A 2-C 14=2,5 …") to the document's questions by their original number: letters to
+    /// closed questions, numbers to questions without options (which become open coded questions).
+    /// </summary>
     private static async Task<IResult> AnswerKey(
         Guid documentId, DimAnswerKeyRequest request, ClaimsPrincipal user, AppDbContext db, CancellationToken ct)
     {
@@ -101,19 +107,32 @@ public static class DimAdminEndpoints
         if (!await db.Documents.AnyAsync(d => d.Id == documentId && d.UploadedByUserId == userId, ct))
             return Problem(StatusCodes.Status404NotFound, "Sənəd tapılmadı.");
 
-        var (key, conflicts) = DimScoring.ParseAnswerKey(request.Text);
-        if (key.Count == 0)
-            return Problem(StatusCodes.Status400BadRequest, "Cavab açarında heç bir \"nömrə-variant\" cütü tapılmadı (məs. 1-A 2-C).");
+        var parsed = DimScoring.ParseAnswerKey(request.Text);
+        var key = parsed.Letters;
+        if (key.Count == 0 && parsed.Coded.Count == 0)
+            return Problem(StatusCodes.Status400BadRequest, "Cavab açarında heç bir cüt tapılmadı (məs. 1-A 2-C, kodlaşdırılan üçün 14=2,5).");
 
-        var numbers = key.Keys.ToList();
+        var numbers = key.Keys.Concat(parsed.Coded.Keys).Distinct().ToList();
         var questions = await db.Questions.Include(q => q.Options)
             .Where(q => q.DocumentId == documentId && numbers.Contains(q.SourceNumber))
             .ToListAsync(ct);
 
-        // Duplicated source numbers (rare parser output) all receive the same key.
-        var targets = questions.Where(q => key[q.SourceNumber] < q.Options.Count).ToList();
-        var invalid = questions.Except(targets).Select(q => q.SourceNumber).ToList();
-        var applied = targets.Count;
+        // Duplicated source numbers (rare parser output) all receive the same key. A letter needs that many options;
+        // a coded answer needs a question without options and a valid number.
+        var targets = questions.Where(q => key.TryGetValue(q.SourceNumber, out var letter) && letter < q.Options.Count).ToList();
+        var codedTargets = questions
+            .Where(q => !key.ContainsKey(q.SourceNumber) && q.Options.Count == 0 && parsed.Coded.ContainsKey(q.SourceNumber))
+            .Select(q => (Question: q, Key: CodedAnswers.NormalizeKey(parsed.Coded[q.SourceNumber]).Key))
+            .Where(t => t.Key is not null)
+            .ToList();
+        var invalid = questions.Except(targets).Except(codedTargets.Select(t => t.Question)).Select(q => q.SourceNumber).ToList();
+        var applied = targets.Count + codedTargets.Count;
+        foreach (var (question, codedKey) in codedTargets)
+        {
+            question.CodedAnswer = codedKey;
+            question.VerificationStatus = VerificationStatus.Verified;
+            question.ParseWarning = null;
+        }
 
         // UX_AnswerOptions_SingleCorrect allows one correct option per question at any moment, so the old answers are
         // cleared and saved before the new ones are set, in one transaction.
@@ -134,7 +153,7 @@ public static class DimAdminEndpoints
         });
         var found = questions.Select(q => q.SourceNumber).ToHashSet();
         return TypedResults.Ok(new DimAnswerKeyResultDto(applied, numbers.Where(n => !found.Contains(n)).Order().ToList(),
-            invalid.Distinct().Order().ToList(), conflicts.Order().ToList()));
+            invalid.Distinct().Order().ToList(), parsed.Conflicts.ToList()));
     }
 
     /// <summary>
@@ -365,6 +384,104 @@ public static class DimAdminEndpoints
 
         await db.Questions.Where(q => q.Id == questionId).ExecuteDeleteAsync(ct);
         return TypedResults.NoContent();
+    }
+
+    public const int MaxImportQuestions = 300;
+
+    /// <summary>
+    /// Pasted test → questions of a manual set. With <see cref="DimImportRequest.Preview"/> nothing is saved and the
+    /// parsed questions are returned for a check; otherwise they are added and those that fit DİM tests go straight into
+    /// the bank. An empty set keeps the pasted numbering (so an answer key from the same source fits); a set that
+    /// already has questions continues after its last number.
+    /// </summary>
+    private static async Task<IResult> ImportText(
+        Guid documentId, DimImportRequest request, ClaimsPrincipal user, AppDbContext db, PdfQuestionParser parser, TimeProvider clock,
+        CancellationToken ct)
+    {
+        if (!DimCatalog.IsSubjectOf(request.Track, request.Subject))
+            return Problem(StatusCodes.Status400BadRequest, "Fənn bu imtahan növünə aid deyil.");
+
+        var userId = user.GetUserId();
+        var document = await db.Documents.FirstOrDefaultAsync(d => d.Id == documentId && d.UploadedByUserId == userId, ct);
+        if (document is null) return Problem(StatusCodes.Status404NotFound, "Dəst tapılmadı.");
+        if (!IsManualSet(document.StoredFileName))
+            return Problem(StatusCodes.Status400BadRequest, "Mətn yalnız əl ilə yaradılmış dəstə idxal oluna bilər.");
+
+        var result = DimTextTools.ParsePastedTest(parser, request.Text);
+        if (result.Questions.Count == 0)
+            return Problem(StatusCodes.Status422UnprocessableEntity,
+                "Mətndə sual tapılmadı. Hər sual nömrə ilə (1. və ya 1)), variantlar A) B) … ilə başlamalıdır.");
+        if (result.Questions.Count > MaxImportQuestions)
+            return Problem(StatusCodes.Status400BadRequest, $"Bir dəfəyə ən çox {MaxImportQuestions} sual idxal oluna bilər.");
+
+        var lastNumber = await db.Questions.Where(q => q.DocumentId == documentId).MaxAsync(q => (int?)q.SourceNumber, ct);
+        var numbered = result.Questions
+            .Select((q, i) => (Number: lastNumber is { } last ? last + i + 1 : q.Number, Parsed: q))
+            .ToList();
+        var preview = numbered.Select(n => new DimImportedQuestionDto(n.Number, n.Parsed.Text,
+            n.Parsed.Options.Select(o => o.Text).ToList(), n.Parsed.CorrectIndex, n.Parsed.Warning)).ToList();
+        if (request.Preview)
+            return TypedResults.Ok(new DimImportResultDto(preview, result.Warnings, Saved: 0, Banked: 0));
+
+        var now = clock.GetUtcNow();
+        var questions = numbered.Select(n => new Question
+        {
+            DocumentId = documentId,
+            SourceNumber = n.Number,
+            Text = n.Parsed.Text,
+            Explanation = n.Parsed.Explanation,
+            ContentHash = n.Parsed.ContentHash,
+            VerificationStatus = n.Parsed.CorrectIndex is null ? VerificationStatus.Unverified : VerificationStatus.AutoDetected,
+            ParseWarning = n.Parsed.Warning is { Length: > 500 } w ? w[..500] : n.Parsed.Warning,
+            CreatedAt = now,
+            UpdatedAt = now,
+            Options = n.Parsed.Options.Select((o, i) => new AnswerOption
+            {
+                Position = (byte)i,
+                Label = ((char)('A' + i)).ToString(),
+                Text = o.Text,
+                IsCorrect = n.Parsed.CorrectIndex == i,
+            }).ToList(),
+        }).ToList();
+        db.Questions.AddRange(questions);
+        await db.SaveChangesAsync(ct);
+
+        var rejected = await AddToBankAsync(db, questions, request.Track, request.Subject, request.Topic, userId, now, ct);
+        return TypedResults.Ok(new DimImportResultDto(preview, result.Warnings, questions.Count, questions.Count - rejected.Count));
+    }
+
+    /// <summary>
+    /// Sets bank topics by question-number ranges ("1-5: Fonetika"). Topics live on bank rows, so questions of the
+    /// range that are not in the bank yet are reported instead.
+    /// </summary>
+    private static async Task<IResult> SetTopics(
+        Guid documentId, DimTopicsRequest request, ClaimsPrincipal user, AppDbContext db, CancellationToken ct)
+    {
+        var userId = user.GetUserId();
+        if (!await db.Documents.AnyAsync(d => d.Id == documentId && d.UploadedByUserId == userId, ct))
+            return Problem(StatusCodes.Status404NotFound, "Sənəd tapılmadı.");
+
+        var (ranges, unread) = DimTextTools.ParseTopicRanges(request.Text);
+        if (ranges.Count == 0)
+            return Problem(StatusCodes.Status400BadRequest, "Heç bir aralıq oxunmadı. Format: 1-5: Fonetika (hər sətirdə bir aralıq).");
+
+        var low = ranges.Min(r => r.From);
+        var high = ranges.Max(r => r.To);
+        var questions = await db.Questions.AsNoTracking()
+            .Where(q => q.DocumentId == documentId && q.SourceNumber >= low && q.SourceNumber <= high)
+            .Select(q => new { q.Id, q.SourceNumber })
+            .ToListAsync(ct);
+        var covered = questions.Where(q => DimTextTools.TopicFor(ranges, q.SourceNumber) is not null).ToList();
+        var ids = covered.Select(q => q.Id).ToList();
+        var bank = await db.DimBankQuestions.Where(b => ids.Contains(b.QuestionId)).ToDictionaryAsync(b => b.QuestionId, ct);
+        foreach (var question in covered)
+        {
+            if (bank.TryGetValue(question.Id, out var row)) row.Topic = DimTextTools.TopicFor(ranges, question.SourceNumber);
+        }
+
+        await db.SaveChangesAsync(ct);
+        var notInBank = covered.Where(q => !bank.ContainsKey(q.Id)).Select(q => q.SourceNumber).Distinct().Order().ToList();
+        return TypedResults.Ok(new DimTopicsResultDto(bank.Count, notInBank, unread));
     }
 
     /// <summary>Adds (or re-classifies) the questions that fit DİM tests; returns the ones that do not, with the reason.</summary>

@@ -15,6 +15,7 @@ import { bodyVisuals, optionVisuals, visibleText, visualUrls } from '../../lib/v
 import { NotificationBell } from '../friends/NotificationBell'
 import {
   answerMutationKey,
+  examAudioUrl,
   useAnswerQuestion,
   useExamHistory,
   useExamSession,
@@ -25,6 +26,7 @@ import {
 } from './api'
 import { sourceName } from './examSource'
 import { isAnswered, isCodedNumber } from './coded'
+import { ListeningPlayer } from './ListeningPlayer'
 import { useSwipeNavigation } from './useSwipeNavigation'
 
 export function ExamSessionPage() {
@@ -234,6 +236,10 @@ function ExamRunner({ session }: { session: ExamSession }) {
               {finish.error.message}
               <SupportContact className="mt-1" lead="Yenidən cəhd edin. Alınmasa, bizə yazın:" topic="İmtahan bitirilmədi" reference={session.id} />
             </Alert>
+          )}
+
+          {question.audio && (
+            <ListeningPlayer key={question.audio.id} src={examAudioUrl(session.id, question.audio.id)} title={question.audio.title} />
           )}
 
           <QuestionPanel

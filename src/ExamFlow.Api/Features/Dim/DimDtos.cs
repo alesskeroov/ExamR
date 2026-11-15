@@ -87,6 +87,43 @@ public sealed class DimCreateSetRequest
     public string Title { get; init; } = string.Empty;
 }
 
+public sealed class DimImportRequest
+{
+    /// <summary>The pasted test: numbered questions, options A) B) …, optionally "Cavab: B" lines.</summary>
+    [Required, StringLength(200_000, MinimumLength = 2)]
+    public string Text { get; init; } = string.Empty;
+
+    public DimTrack Track { get; init; }
+
+    [Required, StringLength(10)]
+    public string Subject { get; init; } = string.Empty;
+
+    [StringLength(200)]
+    public string? Topic { get; init; }
+
+    /// <summary>true = only parse and return the questions; nothing is saved.</summary>
+    public bool Preview { get; init; }
+}
+
+/// <param name="Number">The number the question gets in the set.</param>
+/// <param name="CorrectIndex">Detected correct option (A = 0); null when unknown or the question has no options.</param>
+public sealed record DimImportedQuestionDto(int Number, string Text, IReadOnlyList<string> Options, int? CorrectIndex, string? Warning);
+
+/// <param name="Banked">Saved questions that fit DİM tests and went into the bank; the rest need an answer.</param>
+public sealed record DimImportResultDto(IReadOnlyList<DimImportedQuestionDto> Questions, IReadOnlyList<string> Warnings, int Saved, int Banked);
+
+public sealed class DimTopicsRequest
+{
+    /// <summary>One range per line: "1-5: Fonetika".</summary>
+    [Required, StringLength(20_000, MinimumLength = 2)]
+    public string Text { get; init; } = string.Empty;
+}
+
+/// <param name="Updated">Bank questions whose topic was set.</param>
+/// <param name="NotInBank">Numbers in the ranges whose question is not in the bank (no topic set).</param>
+/// <param name="Unread">Lines that are not a range.</param>
+public sealed record DimTopicsResultDto(int Updated, IReadOnlyList<int> NotInBank, IReadOnlyList<string> Unread);
+
 public sealed class DimCreateQuestionRequest
 {
     public Guid DocumentId { get; init; }
