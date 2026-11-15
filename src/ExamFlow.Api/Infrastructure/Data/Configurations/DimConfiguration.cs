@@ -83,3 +83,14 @@ public class DimAudioConfiguration : IEntityTypeConfiguration<DimAudio>
         builder.HasIndex(a => a.DocumentId);
     }
 }
+
+public class DimAudioPlayConfiguration : IEntityTypeConfiguration<DimAudioPlay>
+{
+    public void Configure(EntityTypeBuilder<DimAudioPlay> builder)
+    {
+        builder.ToTable("DimAudioPlays");
+        builder.HasKey(p => new { p.ExamId, p.AudioId });
+        // No foreign key to DimAudios: a deleted recording keeps the count of exams that used it harmlessly.
+        builder.HasOne<ExamFlow.Api.Features.Exams.Exam>().WithMany().HasForeignKey(p => p.ExamId).OnDelete(DeleteBehavior.Cascade);
+    }
+}

@@ -294,26 +294,35 @@ export const useSetDimTopics = () => useDimAdminMutation(({ documentId, text }: 
 
 // ---- Admin: listening recordings ----
 
-export interface DimAudio { id: string; title: string; questionFrom: number; questionTo: number; contentType: string; sizeBytes: number; createdAt: string }
+/** `maxPlays`: plays allowed per exam; null = no limit. */
+export interface DimAudio {
+  id: string; title: string; questionFrom: number; questionTo: number; contentType: string; sizeBytes: number; createdAt: string
+  maxPlays: number | null
+}
 
 export const DIM_AUDIO_MAX_BYTES = 30 * 1024 * 1024
+/** The real exam plays each recording twice. */
+export const DIM_AUDIO_DEFAULT_PLAYS = 2
 
 export function useDimAudios(documentId: string) {
   return useQuery({ queryKey: queryKeys.dim.audios(documentId), queryFn: () => api.get<DimAudio[]>(`/admin/dim/documents/${documentId}/audio`) })
 }
 
-export const useUploadDimAudio = () => useDimAdminMutation(({ documentId, file, title, questionFrom, questionTo }: {
-  documentId: string; file: File; title: string; questionFrom: number; questionTo: number
+export const useUploadDimAudio = () => useDimAdminMutation(({ documentId, file, title, questionFrom, questionTo, maxPlays }: {
+  documentId: string; file: File; title: string; questionFrom: number; questionTo: number; maxPlays: number | null
 }) => {
   const form = new FormData()
   form.append('file', file)
   form.append('title', title)
   form.append('questionFrom', String(questionFrom))
   form.append('questionTo', String(questionTo))
+  form.append('maxPlays', maxPlays === null ? '' : String(maxPlays))
   return api.post<DimAudio>(`/admin/dim/documents/${documentId}/audio`, form)
 })
 
-export const useUpdateDimAudio = () => useDimAdminMutation(({ id, ...body }: { id: string; title: string; questionFrom: number; questionTo: number }) =>
+export const useUpdateDimAudio = () => useDimAdminMutation(({ id, ...body }: {
+  id: string; title: string; questionFrom: number; questionTo: number; maxPlays: number | null
+}) =>
   api.put<DimAudio>(`/admin/dim/audio/${id}`, body))
 
 export const useDeleteDimAudio = () => useDimAdminMutation((id: string) => api.delete(`/admin/dim/audio/${id}`))

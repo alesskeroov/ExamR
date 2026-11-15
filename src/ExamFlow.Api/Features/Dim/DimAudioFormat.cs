@@ -5,6 +5,11 @@ public static class DimAudioFormat
 {
     public const long MaxSizeBytes = 30 * 1024 * 1024;
 
+    /// <summary>Plays per exam for a new recording: the real exam plays each recording twice.</summary>
+    public const int DefaultMaxPlays = 2;
+
+    public const int MaxPlaysLimit = 10;
+
     /// <summary>(content type, file extension) of a supported recording; null for anything else.</summary>
     public static (string ContentType, string Extension)? Detect(ReadOnlySpan<byte> head)
     {

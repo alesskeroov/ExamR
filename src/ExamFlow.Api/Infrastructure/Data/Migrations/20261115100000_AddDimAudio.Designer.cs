@@ -414,6 +414,9 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.Property<Guid>("DocumentId")
                         .HasColumnType("uuid");
 
+                    b.Property<int?>("MaxPlays")
+                        .HasColumnType("integer");
+
                     b.Property<int>("QuestionFrom")
                         .HasColumnType("integer");
 
@@ -445,6 +448,22 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                         {
                             t.HasCheckConstraint("CK_DimAudios_Range", "\"QuestionFrom\" >= 1 AND \"QuestionTo\" >= \"QuestionFrom\"");
                         });
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Dim.DimAudioPlay", b =>
+                {
+                    b.Property<Guid>("ExamId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AudioId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Count")
+                        .HasColumnType("integer");
+
+                    b.HasKey("ExamId", "AudioId");
+
+                    b.ToTable("DimAudioPlays", (string)null);
                 });
 
             modelBuilder.Entity("ExamFlow.Api.Features.Dim.DimBankQuestion", b =>
@@ -2295,6 +2314,15 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.Navigation("Document");
                 });
 
+            modelBuilder.Entity("ExamFlow.Api.Features.Dim.DimAudioPlay", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Exams.Exam", null)
+                        .WithMany()
+                        .HasForeignKey("ExamId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ExamFlow.Api.Features.Dim.DimBankQuestion", b =>
                 {
                     b.HasOne("ExamFlow.Api.Features.Questions.Question", "Question")
@@ -2422,6 +2450,9 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
 
                             b1.Property<Guid?>("AudioId")
                                 .HasColumnType("uuid");
+
+                            b1.Property<int?>("AudioMaxPlays")
+                                .HasColumnType("integer");
 
                             b1.Property<string>("AudioTitle")
                                 .HasColumnType("text");

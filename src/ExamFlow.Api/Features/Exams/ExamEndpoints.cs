@@ -2,6 +2,7 @@ using ExamFlow.Api.Features.Usage;
 using System.Security.Claims;
 using ExamFlow.Api.Common;
 using ExamFlow.Api.Features.Questions;
+using ExamFlow.Api.Features.Dim;
 using ExamFlow.Api.Features.Documents;
 using ExamFlow.Api.Infrastructure.Data;
 using ExamFlow.Api.Infrastructure.Security;
@@ -28,6 +29,7 @@ public static class ExamEndpoints
         group.MapGet("/{id:guid}/result", Result);
         group.MapGet("/{id:guid}/visuals/{visualId:guid}", Visual);
         group.MapGet("/{id:guid}/audio/{audioId:guid}", Audio);
+        group.MapPost("/{id:guid}/audio/{audioId:guid}/play", PlayAudio);
     }
 
     /// <summary>
@@ -205,7 +207,9 @@ public static class ExamEndpoints
 
         var now = clock.GetUtcNow();
         await FinalizeIfExpiredAsync(db, exam, now, options.Value, ct);
-        return TypedResults.Ok(ToSession(exam, now));
+        var plays = await db.DimAudioPlays.AsNoTracking().Where(p => p.ExamId == exam.Id)
+            .ToDictionaryAsync(p => p.AudioId, p => p.Count, ct);
+        return TypedResults.Ok(ToSession(exam, now, plays));
     }
 
     private static async Task<IResult> Answer(
@@ -406,10 +410,56 @@ public static class ExamEndpoints
         Guid id, Guid audioId, ClaimsPrincipal user, AppDbContext db, IFileStorage storage, HttpResponse response, CancellationToken ct)
     {
         var exam = await LoadAsync(db, id, user.GetUserId(), ct);
-        if (exam is null || exam.Questions.All(q => q.Snapshot.AudioId != audioId))
+        var snapshot = exam?.Questions.Select(q => q.Snapshot).FirstOrDefault(s => s.AudioId == audioId);
+        if (exam is null || snapshot is null)
             return Problem(StatusCodes.Status404NotFound, "Səs faylı tapılmadı.");
+        // A limited recording is served only after a play was counted, so it cannot be heard without using one.
+        if (exam.Status == ExamStatus.InProgress && snapshot.AudioMaxPlays is not null
+            && !await db.DimAudioPlays.AnyAsync(p => p.ExamId == id && p.AudioId == audioId && p.Count > 0, ct))
+            return Problem(StatusCodes.Status403Forbidden, "Dinləməni pleyerdən başladın.");
         var audio = await db.DimAudios.AsNoTracking().FirstOrDefaultAsync(a => a.Id == audioId, ct);
         return Dim.DimAudioEndpoints.Stream(storage, response, audio);
+    }
+
+    /// <summary>
+    /// Counts one play of a recording while the exam runs. Refused once its limit is used up; under the exam row
+    /// lock, so two quick clicks cannot both pass the limit.
+    /// </summary>
+    private static async Task<IResult> PlayAudio(
+        Guid id, Guid audioId, ClaimsPrincipal user, AppDbContext db, TimeProvider clock, IOptions<ExamOptions> options, CancellationToken ct)
+    {
+        var exam = await LoadAsync(db, id, user.GetUserId(), ct);
+        var snapshot = exam?.Questions.Select(q => q.Snapshot).FirstOrDefault(s => s.AudioId == audioId);
+        if (exam is null || snapshot is null) return Problem(StatusCodes.Status404NotFound, "Səs faylı tapılmadı.");
+        if (exam.Status == ExamStatus.Completed || await FinalizeIfExpiredAsync(db, exam, clock.GetUtcNow(), options.Value, ct))
+            return Problem(StatusCodes.Status409Conflict, "İmtahan artıq bitib.");
+
+        var max = snapshot.AudioMaxPlays;
+        var result = await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            if (await LockInProgressAsync(db, id, ct) == 0) return (Used: -1, Allowed: false);
+            var row = await db.DimAudioPlays.FirstOrDefaultAsync(p => p.ExamId == id && p.AudioId == audioId, ct);
+            if (row is null)
+            {
+                row = new DimAudioPlay { ExamId = id, AudioId = audioId };
+                db.DimAudioPlays.Add(row);
+            }
+
+            if (max is { } limit && row.Count >= limit) return (Used: row.Count, Allowed: false);
+            row.Count++;
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return (Used: row.Count, Allowed: true);
+        });
+
+        return result switch
+        {
+            { Used: -1 } => Problem(StatusCodes.Status409Conflict, "İmtahan artıq bitib."),
+            { Allowed: false } => Problem(StatusCodes.Status409Conflict, "Bu səsin dinləmə limiti bitib.",
+                new() { ["playsUsed"] = result.Used, ["maxPlays"] = max }),
+            _ => TypedResults.Ok(new ExamAudioPlayDto(result.Used, max)),
+        };
     }
 
     /// <summary>Usable questions of one PDF whose original number lies in [from, to].</summary>
@@ -573,17 +623,19 @@ public static class ExamEndpoints
     private static IReadOnlyList<ExamOptionDto> Options(ExamQuestion question) =>
         question.Snapshot.Options.Select(o => new ExamOptionDto(o.OptionId, o.Label, o.Text)).ToList();
 
-    private static ExamAudioDto? AudioOf(ExamQuestion question) =>
-        question.Snapshot.AudioId is { } audioId ? new ExamAudioDto(audioId, question.Snapshot.AudioTitle ?? "Dinləmə") : null;
+    private static ExamAudioDto? AudioOf(ExamQuestion question, IReadOnlyDictionary<Guid, int>? plays = null) =>
+        question.Snapshot.AudioId is { } audioId
+            ? new ExamAudioDto(audioId, question.Snapshot.AudioTitle ?? "Dinləmə", question.Snapshot.AudioMaxPlays, plays?.GetValueOrDefault(audioId) ?? 0)
+            : null;
 
     internal static IReadOnlyList<VisualDto> Visuals(ExamQuestion question) =>
         question.Snapshot.Visuals?.Select(QuestionVisuals.ToDto).ToList() ?? [];
 
-    private static ExamSessionDto ToSession(Exam exam, DateTimeOffset now) => new(
+    private static ExamSessionDto ToSession(Exam exam, DateTimeOffset now, IReadOnlyDictionary<Guid, int>? plays = null) => new(
         exam.Id, exam.Status, exam.RevealMode, exam.QuestionCount, exam.StartedAt, exam.ExpiresAt, now,
         exam.Questions.OrderBy(q => q.Position)
             .Select(q => new ExamSessionQuestionDto(q.Id, q.Position, q.Snapshot.Text, Options(q), q.SelectedOptionId, RevealFor(exam, q), Visuals(q),
-                q.LockedAt is not null, q.Snapshot.IsCoded, q.AnswerText, AudioOf(q)))
+                q.LockedAt is not null, q.Snapshot.IsCoded, q.AnswerText, AudioOf(q, plays)))
             .ToList());
 
     private static ExamResultDto ToResult(Exam exam, IReadOnlyDictionary<Guid, string> documentNames)

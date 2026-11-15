@@ -26,7 +26,7 @@ import {
 } from './api'
 import { sourceName } from './examSource'
 import { isAnswered, isCodedNumber } from './coded'
-import { ListeningPlayer } from './ListeningPlayer'
+import { LimitedListeningPlayer, ListeningPlayer } from './ListeningPlayer'
 import { useSwipeNavigation } from './useSwipeNavigation'
 
 export function ExamSessionPage() {
@@ -95,6 +95,14 @@ function ExamRunner({ session }: { session: ExamSession }) {
   const title = summary ? sourceName(summary.source) : null
 
   const answered = session.questions.filter(isAnswered).length
+
+  // The current question's recording; while one plays it stays on screen on other questions too, so moving on during
+  // a listening (as in the real exam) does not stop it.
+  const [playingAudioId, setPlayingAudioId] = useState<string | null>(null)
+  const shownAudio = question.audio
+    ?? (playingAudioId ? session.questions.find(q => q.audio?.id === playingAudioId)?.audio ?? null : null)
+  const playingChange = (audioId: string) => (playing: boolean) =>
+    setPlayingAudioId(current => (playing ? audioId : current === audioId ? null : current))
   const isShown = (q: ExamSessionQuestion) => immediate && q.locked
   const isRevealed = isShown(question)
   // Offered on every question of an Immediate exam, answered or not, until its answer has been shown.
@@ -238,8 +246,10 @@ function ExamRunner({ session }: { session: ExamSession }) {
             </Alert>
           )}
 
-          {question.audio && (
-            <ListeningPlayer key={question.audio.id} src={examAudioUrl(session.id, question.audio.id)} title={question.audio.title} />
+          {shownAudio && (shownAudio.maxPlays
+            ? <LimitedListeningPlayer key={shownAudio.id} examId={session.id} audio={shownAudio} onPlayingChange={playingChange(shownAudio.id)} />
+            : <ListeningPlayer key={shownAudio.id} src={examAudioUrl(session.id, shownAudio.id)} title={shownAudio.title}
+                onPlayingChange={playingChange(shownAudio.id)} />
           )}
 
           <QuestionPanel

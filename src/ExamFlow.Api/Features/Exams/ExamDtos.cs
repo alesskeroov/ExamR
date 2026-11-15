@@ -66,7 +66,11 @@ public sealed record ExamSessionQuestionDto(
     ExamAudioDto? Audio = null);
 
 /// <summary>Listening recording of a question; the file is at <c>/api/exams/{examId}/audio/{Id}</c>.</summary>
-public sealed record ExamAudioDto(Guid Id, string Title);
+/// <param name="MaxPlays">Plays allowed during the exam; null = no limit.</param>
+/// <param name="PlaysUsed">Plays already started in this exam.</param>
+public sealed record ExamAudioDto(Guid Id, string Title, int? MaxPlays = null, int PlaysUsed = 0);
+
+public sealed record ExamAudioPlayDto(int PlaysUsed, int? MaxPlays);
 
 public sealed record ExamSessionDto(
     Guid Id,
