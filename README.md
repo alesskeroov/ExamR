@@ -1,175 +1,208 @@
+<div align="center">
+
 # ExamR
 
-**PDF və Word sənədlərini imtahana, fərdi məşqə və dostlarla canlı yarışa çevirən Azərbaycan dilli platforma.**
+**PDF, Word və PowerPoint sənədlərini imtahana, fərdi məşqə və dostlarla canlı yarışa çevirən Azərbaycan dilli platforma**
 
-ExamR sənəddən sualları çıxarır, şəxsi kitabxanada saxlayır və hazırlığı bir yerdən idarə etməyə imkan verir: vaxtlı imtahan, cavabların təhlili, sənədə əsaslanan AI Tutor, Battle və fokus sessiyaları.
+![.NET](https://img.shields.io/badge/.NET-9.0-512BD4?logo=dotnet&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-7-3178C6?logo=typescript&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Neon-4169E1?logo=postgresql&logoColor=white)
+![SignalR](https://img.shields.io/badge/SignalR-real--time-512BD4?logo=dotnet&logoColor=white)
+![OpenAI](https://img.shields.io/badge/AI%20Tutor-OpenAI-412991?logo=openai&logoColor=white)
 
-![ExamR ana səhifəsi](docs/screenshots/home.png)
+[**🌐 Canlı sayt — examr.pages.dev**](https://examr.pages.dev/)
 
-## İmkanlar
+</div>
+
+---
+
+## 📌 Haqqında
+
+**ExamR** sənəddən sualları avtomatik çıxarır, şəxsi kitabxanada saxlayır və imtahana hazırlığı bir yerdən idarə etməyə imkan verir:
+vaxtlı imtahanlar, cavabların təhlili, sənədə əsaslanan **AI Tutor**, DİM formatlı sınaqlar, dostlarla canlı **Battle** və fokus sessiyaları.
+
+<div align="center">
+  <img src="docs/screenshots/home.png" alt="ExamR ana səhifəsi" width="760">
+</div>
+
+> Daxili layihə və namespace adları `ExamFlow`, istifadəçiyə görünən məhsul adı `ExamR`-dir.
+
+---
+
+## ✨ İmkanlar
 
 | Modul | İstifadəçi nə edə bilir? |
 |---|---|
-| Sənəd kitabxanası | PDF/DOCX yükləmək, emal vəziyyətini və hesabatını görmək, şəxsi sənədləri idarə etmək |
-| Sual bankı | Çıxarılmış suallara baxmaq, axtarmaq, cavabları yoxlamaq və mövcud redaktə alətlərindən istifadə etmək |
-| Sınaq imtahanı | Sənəd və sual nömrələri aralığı seçmək, təsadüfi sualları taymerlə cavablamaq, nəticəni dərhal və ya sonda görmək |
-| Tarixçə | Əvvəlki imtahanları, cavabları və nəticələri yenidən nəzərdən keçirmək |
-| Study | Sənəd əsaslı məşqlər, açıq və variantlı cavablar, zəif mövzular və təkrar axını |
-| AI Tutor — Öyrən | Sənədlə bağlı sual vermək, axınla cavab almaq və mənbə səhifələrinə baxmaq |
-| AI Tutor — Məni yoxla | Açıq suala cavab vermək, düzgün/qismən/səhv qiymət və mənbəyə əsaslanan izah almaq |
-| AI Tutor — Ortaq cavab | Açıq sualları mövzu üzrə qruplaşdırmaq, qısa/uzun ortaq cavab və hər suala xüsusi əlavələri görmək; sualları əl ilə seçmək |
-| AI Tutor — Son dəqiqə | 15/30/60 dəqiqəlik sənəd konspekti, mövzular və yadda saxlanmalı açar anlayışlar hazırlamaq |
-| Battle | SignalR ilə canlı otaq, dost dəvəti, taymer, chat, sürətə əsaslanan xal, sıralama və reytinq |
-| Sosial | Nickname, avatar, profil, dostluq, bloklama və real vaxt bildirişləri |
-| Qruplar və admin | Qrup üzvləri ilə sənəd paylaşmaq, istifadəçi/rol və sənəd idarəetməsi |
-| Fokus | Hazırlıq üçün fokus sessiyaları və vaxt izləmə |
-| İnterfeys | Mobil və masaüstü görünüş, açıq/tünd tema, Azərbaycan dilində mətnlər |
+| 📚 **Sənəd kitabxanası** | PDF/DOCX yükləmək, emal vəziyyətini və hesabatını görmək, şəxsi sənədləri idarə etmək |
+| ❓ **Sual bankı** | Çıxarılmış suallara baxmaq, axtarmaq, cavabları yoxlamaq və redaktə etmək |
+| 📝 **Sınaq imtahanı** | Sənəd və sual aralığı seçmək, təsadüfi sualları taymerlə cavablamaq, nəticəni dərhal və ya sonda görmək |
+| 🎓 **DİM sınaqları** | Buraxılış və blok formatında sınaqlar: qapalı (A–E) və açıq kodlaşdırılan suallar, hesabat kartı |
+| 🕓 **Tarixçə** | Əvvəlki imtahanları, cavabları və nəticələri yenidən nəzərdən keçirmək |
+| 📖 **Study** | Sənəd əsaslı məşqlər, açıq və variantlı cavablar, zəif mövzular və təkrar axını |
+| 🤖 **AI Tutor — Öyrən** | Sənədlə bağlı sual vermək, axınla (streaming) cavab almaq, mənbə səhifələrinə baxmaq |
+| ✅ **AI Tutor — Məni yoxla** | Açıq suala cavab vermək, düzgün/qismən/səhv qiymət və mənbəyə əsaslanan izah almaq |
+| 🧩 **AI Tutor — Ortaq cavab** | Açıq sualları mövzu üzrə qruplaşdırmaq, qısa/uzun ortaq cavab hazırlamaq |
+| ⏱️ **AI Tutor — Son dəqiqə** | 15/30/60 dəqiqəlik konspekt, mövzular və açar anlayışlar |
+| 🗂️ **Öyrənmə bələdçisi** | PDF, DOCX və PPTX-dən slayd və açar termin kartları, qeydlər, axtarış |
+| ⚔️ **Battle** | SignalR ilə canlı otaq, dost dəvəti, taymer, chat, sürətə əsaslanan xal və reytinq |
+| 👥 **Sosial** | Nickname, avatar, profil, dostluq, bloklama və real vaxt bildirişləri |
+| 🛡️ **Qruplar və admin** | Qrup üzvləri ilə sənəd paylaşmaq, istifadəçi/rol və sənəd idarəetməsi |
+| 🎯 **Fokus** | Hazırlıq üçün fokus sessiyaları və vaxt izləmə |
+| 🎨 **İnterfeys** | Mobil və masaüstü görünüş, açıq/tünd tema, Azərbaycan dilində mətnlər |
 
-### Ekran görüntüləri
-
-Aşağıdakılar lokal tətbiqdən götürülmüş görüntülərdir. Ana səhifənin içindəki sual kartı məhsulun öz nümayiş nümunəsidir.
+### 🖼️ Ekran görüntüləri
 
 | Giriş | Mobil ana səhifə |
 |---|---|
 | ![Hesaba giriş](docs/screenshots/sign-in.png) | ![Mobil görünüş](docs/screenshots/home-mobile.png) |
 
-**AI Tutor — ortaq cavab seçimi**
+| AI Tutor — ortaq cavab | AI Tutor — son dəqiqə |
+|---|---|
+| ![Ortaq cavab](docs/screenshots/tutor-shared.png) | ![Son dəqiqə hazırlığı](docs/screenshots/tutor-last-minute.png) |
 
-![Açıq suallara ortaq cavab hazırlama ekranı](docs/screenshots/tutor-shared.png)
+---
 
-**AI Tutor — son dəqiqə hazırlığı**
+## 🏗️ Arxitektura
 
-![15, 30 və 60 dəqiqəlik konspekt seçimi](docs/screenshots/tutor-last-minute.png)
-
-Tutor görüntüləri ayrıca lokal QA hesabından götürülüb; bunlar material yaratmazdan əvvəlki seçim ekranlarıdır.
-
-## İstifadə axını
-
-1. Hesab yaradın və email təsdiqini tamamlayın; konfiqurasiya olunubsa Google ilə də daxil olmaq mümkündür.
-2. **Sənəd yüklə** bölməsindən mətn əsaslı PDF və ya DOCX əlavə edin, emalın tamamlanmasını gözləyin.
-3. Çıxarılmış sualları və cavabları nəzərdən keçirin. Avtomatik parsing nəticəsi sənədin formatından asılıdır.
-4. **İmtahan** üçün sənədi, nömrə aralığını və sual sayını seçin; yaxud **Study / AI Tutor** ilə məşq edin.
-5. Dostlarla yarış üçün **Battle** otağı yaradın və dəvət göndərin.
-6. Nəticələri tarixçədə izləyin və səhv cavabları təkrar edin.
-
-AI Tutor-da “Ortaq cavab” açıq suallı sənədlər üçündür. Variantlı test aşkar ediləndə bu funksiya uyğun xəbərdarlıq göstərir. Sənəddə cavab olmayan suallar üçün yalnız sənədin başqa hissələrində tapılan məlumat istifadə edilir; dəstəklənməyən cavablar ayrıca göstərilir. Eyni sənəd versiyası və eyni parametrlər üçün hazırlanmış material keşdən qaytarılır.
-
-## Texnologiyalar və quruluş
-
-- **API:** ASP.NET Core 9 Minimal APIs, EF Core 9, SQL Server, Identity və JWT.
-- **Real vaxt:** ASP.NET Core SignalR (`/hubs/battle`, `/hubs/social`).
-- **Parsing:** PdfPig və əlavə Word paketi tələb etməyən ZIP/XML DOCX oxuyucusu.
-- **Frontend:** React 19, TypeScript, Vite, Tailwind CSS v4, TanStack Query və React Router.
-- **AI:** backend-dən OpenAI çağırışları, sənəd hissələrinin leksik retrieval-ı, strukturlaşdırılmış JSON nəticələri və SSE chat.
-- **Testlər:** xUnit ilə parser və API-nin saf domen məntiqi.
-
-```text
-client/                          React SPA
-src/ExamFlow.Api/
-  Features/                      Auth, Documents, Questions, Exams, Battles,
-                                 Friends, Groups, Study, Learning, Focus…
-  Infrastructure/                EF Core, migrations, security, email, storage
-src/ExamFlow.Parsing/             PDF/DOCX parsing; HTTP və EF-dən asılı deyil
-tests/ExamFlow.Api.Tests/         API məntiqi və müqavilə testləri
-tests/ExamFlow.Parsing.Tests/     Generasiya edilmiş və lokal nümunə sənədlər
-docs/screenshots/                README ekran görüntüləri
+```mermaid
+flowchart LR
+    U([👤 İstifadəçi]) --> CF[Cloudflare Pages<br/>React SPA]
+    CF -->|"/api, /hubs proxy"| API[ASP.NET Core 9 API<br/>Render · Docker]
+    API --> DB[(PostgreSQL<br/>Neon)]
+    API --> ST[(Fayl saxlama<br/>Cloudflare R2 / S3)]
+    API -->|SignalR| U
+    API -->|AI Tutor| AI[OpenAI]
+    API --> P[ExamFlow.Parsing<br/>PDF / DOCX]
 ```
 
-Brauzer → Vite `/api` və `/hubs` proxy → ASP.NET Core → SQL Server. Ağır sənəd emalı arxa plan növbəsində aparılır. AI açarı brauzerə ötürülmür. Daxili layihə və namespace adları `ExamFlow`, görünən məhsul adı `ExamR`-dir.
+- **Vertical slice** quruluşu: hər funksiya `Features/<Modul>` qovluğunda — endpoint, məntiq və DTO bir yerdə
+- Ağır sənəd emalı **arxa plan növbəsində** aparılır
+- AI açarı **heç vaxt brauzerə ötürülmür** — bütün model çağırışları backend-dədir
+- Parsing ayrıca layihədir və HTTP/EF Core-dan asılı deyil
 
-## Lokal quraşdırma
+---
+
+## 🧰 Texnologiyalar
+
+| Sahə | Texnologiya |
+|---|---|
+| Backend | ASP.NET Core 9 Minimal APIs, EF Core 9, ASP.NET Core Identity, JWT (HttpOnly cookie) |
+| Verilənlər bazası | PostgreSQL (Neon) — `Npgsql`, ICU `az-x-icu` collation |
+| Real vaxt | ASP.NET Core SignalR (`/hubs/battle`, `/hubs/social`) |
+| Parsing | PdfPig, əlavə paket tələb etməyən DOCX (ZIP/XML) oxuyucusu |
+| AI | OpenAI, sənəd hissələrinin leksik retrieval-ı, strukturlaşdırılmış JSON, SSE chat |
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS v4, TanStack Query, React Router |
+| Saxlama | Lokal disk, Cloudflare R2 və ya S3-uyğun xidmət |
+| Autentifikasiya | Email/şifrə, istəyə bağlı Google OAuth |
+| Testlər | xUnit (parser və API domen məntiqi) |
+| Deploy | Docker (Render), Cloudflare Pages + Functions, GitHub Actions |
+
+---
+
+## 📁 Layihə strukturu
+
+```text
+ExamR/
+├── client/                         React SPA (Vite)
+│   ├── src/features/               auth, documents, exams, battle, tutor, dim, friends...
+│   └── functions/                  Cloudflare Pages Functions — /api və /hubs proxy
+├── src/
+│   ├── ExamFlow.Api/
+│   │   ├── Features/               Auth, Documents, Questions, Exams, Battles, Dim,
+│   │   │                           Friends, Groups, Study, Learning, Focus, Usage...
+│   │   └── Infrastructure/         EF Core, migrations, security, email, storage
+│   └── ExamFlow.Parsing/           PDF/DOCX parsing (HTTP və EF-dən asılı deyil)
+├── tests/
+│   ├── ExamFlow.Api.Tests/         API məntiqi və müqavilə testləri
+│   └── ExamFlow.Parsing.Tests/     Parser testləri
+├── scripts/migrate-to-postgres/    Azure SQL → PostgreSQL köçürmə aləti
+├── docs/                           Ekran görüntüləri, DİM və Neon sənədləri
+└── Dockerfile                      API image-i (Render)
+```
+
+---
+
+## 🚀 Lokal quraşdırma
 
 ### Tələblər
 
-- .NET **9 SDK** və SQL Server instansı.
-- Vite 8 ilə uyğun Node.js: **20.19+ və ya 22.12+**.
-- npm və Git.
-- EF Core CLI **9.x** (`dotnet-ef`).
+- [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0) və EF Core CLI 9.x (`dotnet-ef`)
+- PostgreSQL 17 (lokal və ya Docker)
+- Node.js **20.19+** və ya **22.12+** (Vite 8 üçün), npm
 
-### 1. Repozitoriyanı götürün
+### 1. Repozitoriyanı götür
 
 ```powershell
 git clone https://github.com/alesskeroov/ExamR.git
 cd ExamR
 npm ci --prefix client
 dotnet restore
-# Yalnız dotnet-ef quraşdırılmayıbsa:
-dotnet tool install --global dotnet-ef --version "9.*"
 ```
 
-### 2. Gizli konfiqurasiyanı yazın
-
-Aşağıdakı əmrlər repo kökündən icra olunur. Yer tutucuları öz lokal dəyərlərinizlə əvəz edin.
+### 2. Gizli konfiqurasiya (user-secrets)
 
 ```powershell
-dotnet user-secrets set "ConnectionStrings:Default" "Server=.;Database=ExamFlow;Trusted_Connection=True;TrustServerCertificate=True" --project src/ExamFlow.Api
-dotnet user-secrets set "Jwt:SigningKey" "<ən azı 32 bayt təsadüfi gizli açar>" --project src/ExamFlow.Api
+dotnet user-secrets set "ConnectionStrings:Default" "Host=localhost;Port=5432;Database=examflow;Username=postgres;Password=<şifrə>" --project src/ExamFlow.Api
+dotnet user-secrets set "Jwt:SigningKey" "<ən azı 32 bayt təsadüfi açar>" --project src/ExamFlow.Api
 ```
 
-Connection string və signing key olmadan API başlamır. `.env`, şifrələr və API açarları Git-ə daxil edilməməlidir.
+> [!IMPORTANT]
+> Connection string və signing key olmadan API başlamır. `.env`, şifrələr və API açarları Git-ə daxil edilməməlidir.
 
-### 3. Bazanı yaradın / yeniləyin
+### 3. Bazanı yarat
 
 ```powershell
 dotnet ef database update --project src/ExamFlow.Api
 ```
 
-Bu əmr konfiqurasiya edilmiş bazaya migration tətbiq edir. Lokal instans seçdiyinizi yoxlayın; production migration-larını ayrıca deploy prosesi ilə idarə edin.
-
-### 4. İki terminalda başladın
+### 4. İşə sal (iki terminal)
 
 ```powershell
-# Terminal 1 — API
-dotnet run --project src/ExamFlow.Api
+dotnet run --project src/ExamFlow.Api      # Terminal 1 — API
+npm run dev --prefix client                # Terminal 2 — frontend
 ```
 
-```powershell
-# Terminal 2 — frontend
-cd client
-npm run dev
-```
+| Xidmət | URL |
+|---|---|
+| UI | http://localhost:5190 |
+| API | http://localhost:5180 |
+| Sağlamlıq | http://localhost:5180/api/health |
+| OpenAPI (Development) | http://localhost:5180/openapi/v1.json |
 
-- UI: **http://localhost:5190**
-- API: **http://localhost:5180**
-- Sağlamlıq: **http://localhost:5180/api/health**
-- Development OpenAPI: **http://localhost:5180/openapi/v1.json**
+Lokal emaillər `src/ExamFlow.Api/App_Data/mail/` qovluğuna `.eml` kimi yazılır — qeydiyyat təsdiqi və şifrə bərpası linklərini oradan aç.
 
-Lokal emaillər `src/ExamFlow.Api/App_Data/mail/` altında `.eml` kimi yazılır. Qeydiyyat təsdiqi və şifrə bərpası linkini həmin məktubdan açın. Real email çatdırılması üçün SMTP və ya mövcud Gmail konfiqurasiyasını qurmaq lazımdır.
-
-### 5. AI Tutor-u aktivləşdirin (istəyə bağlı)
+### 5. AI Tutor (istəyə bağlı)
 
 ```powershell
-dotnet user-secrets set "OpenAI:ApiKey" "<OpenAI API açarınız>" --project src/ExamFlow.Api
+dotnet user-secrets set "OpenAI:ApiKey" "<OpenAI API açarı>" --project src/ExamFlow.Api
 dotnet user-secrets set "LearningAi:Enabled" "true" --project src/ExamFlow.Api
 ```
 
-API-ni yenidən başladın. Alternativ açar: `OPENAI_API_KEY` mühit dəyişəni. Standart olaraq Tutor AI söndürülüb. Cari konfiqurasiyada əsas model `gpt-4.1-mini`, yüngül qruplaşdırma modeli `gpt-4o-mini`-dir. Model adları və token/xərc əmsalları `appsettings.json` ilə dəyişdirilir; oradakı əmsallar tətbiqin xərc hesablaması üçündür.
+Standart olaraq Tutor söndürülüb. Büdcə (`LearningAi:TotalBudgetUsd`, standart 4 USD) və gündəlik limit (`DailyRequestsPerUser`, standart 40) `appsettings.json`-da tənzimlənir.
+AI ilə işləyərkən əlaqəli sənəd mətnləri xarici model xidmətinə göndərilir.
 
-`LearningAi:TotalBudgetUsd` standart **4 USD**, `DailyRequestsPerUser` **40**-dır. Büdcə bütün Tutor istifadəsi üzrə uçota alınır; ayrıca Study modulunun gündəlik limiti və uçotu var. Bir material hazırlamaq bir neçə model çağırışı tələb edə bilər. AI ilə işləyərkən əlaqəli sənəd mətnləri xarici model xidmətinə göndərilir.
+---
 
-İlk admin üçün lokal user-secrets-də `Seed:Admin:Email` və `Seed:Admin:Password` təyin edilə bilər. Şifrəni mənbə fayllarına yazmayın.
-
-## Əsas konfiqurasiya
+## ⚙️ Əsas konfiqurasiya
 
 | Açar / bölmə | Məqsəd |
 |---|---|
-| `ConnectionStrings:Default` | SQL Server / Azure SQL bağlantısı; secret |
-| `Jwt:SigningKey` | JWT imzası; secret, minimum 32 bayt |
-| `Jwt:AccessTokenMinutes` | Standart sessiya müddəti, 60 dəqiqə |
-| `App:FrontendBaseUrl` | Email linklərinin frontend bazası |
-| `App:PublicOrigin` | Reverse proxy arxasında açıq origin və OAuth URL-ləri |
-| `Authentication:Google:*` | İstəyə bağlı Google giriş konfiqurasiyası |
-| `Documents:*` | Standart upload: 20 MB, 300 səhifə, 60 saniyə parsing limiti |
-| `Learning:*` | Tutor sənəd emalı və retrieval limitləri |
-| `LearningAi:*` | Tutor aktivliyi, modellər, büdcə, token və vaxt limitləri |
-| `StudyAi:*` | Study modulunun ayrıca AI konfiqurasiyası |
-| `Smtp:*` | SMTP və ya lokal mail pickup |
-| `Storage:RootPath` | Lokal sənəd saxlama qovluğu |
-| `DataProtection:KeysPath` | Restart-lar arasında Data Protection açarlarının qalıcı saxlanması |
+| `ConnectionStrings:Default` | PostgreSQL bağlantısı (secret) |
+| `Jwt:SigningKey` | JWT imzası (secret, minimum 32 bayt) |
+| `App:FrontendBaseUrl`, `App:PublicOrigin` | Email linkləri, OAuth redirect və cookie origin-i |
+| `Authentication:Google:*` | İstəyə bağlı Google giriş |
+| `Documents:*` | Upload limitləri (standart: 20 MB, 300 səhifə, 60 saniyə parsing) |
+| `Learning:*`, `LearningAi:*`, `StudyAi:*` | Tutor/Study emalı, modellər, büdcə və limitlər |
+| `Storage:*` | Lokal, Cloudflare R2 və ya S3 saxlama |
+| `Email:*`, `Smtp:*` | Gmail API, Brevo və ya SMTP |
 
-Production-da nested açarlar iki alt xəttlə yazılır: `ConnectionStrings__Default`, `Jwt__SigningKey`, `LearningAi__Enabled`, `OpenAI__ApiKey`.
+Production-da iç-içə açarlar `__` ilə yazılır: `ConnectionStrings__Default`, `Jwt__SigningKey`, `OpenAI__ApiKey`.
+Bütün production dəyişənlərinin siyahısı: [`.env.example`](.env.example).
 
-## Build və yoxlama
+---
+
+## 🧪 Build və yoxlama
 
 ```powershell
 dotnet build
@@ -178,40 +211,52 @@ npm run build --prefix client
 npm run lint --prefix client
 ```
 
-Build üçün .NET tərəfində 0 xəta və 0 xəbərdarlıq gözlənilir. Frontend build TypeScript yoxlamasını da aparır. Real PDF nümunələri `samples/` altında lokal saxlanır və paylaşılmır; bu fayllar olmadan real nümunə testləri tam format əhatəsi vermir. Bəzi şrift testləri Windows Arial istifadə edir. Unit testlər real SQL Server, brauzer və OpenAI ilə inteqrasiya yoxlamasını əvəz etmir.
+---
 
-## Deploy
+## ☁️ Deploy
 
-Repo kökündəki `Dockerfile` **yalnız API-ni** publish edir; frontend-i özünə daxil etmir.
-
-```powershell
-docker build -t examr-api .
+```mermaid
+flowchart LR
+    GH[GitHub] -->|Docker build| R[Render<br/>API]
+    GH -->|npm run build| CP[Cloudflare Pages<br/>client/dist]
+    R --> N[(Neon PostgreSQL)]
+    R --> R2[(Cloudflare R2)]
 ```
 
-Frontend üçün `npm ci` və `npm run build` nəticəsi `client/dist/`-dir. SPA hostunda frontend route-larını `index.html`-ə yönləndirin, `/api` və `/hubs` trafikini API-yə ötürün, SignalR üçün WebSocket dəstəyini aktiv saxlayın. `client/public/_headers` hostun dəstəklədiyi təhlükəsizlik başlıqlarını saxlayır. Ayrı origin istifadə edilirsə cookie, CORS və OAuth redirect konfiqurasiyası həmin yerləşdirməyə uyğun olmalıdır.
+- **Backend:** kökdəki `Dockerfile` yalnız API-ni publish edir; Render `PORT` dəyişənini ötürür
+- **Frontend:** Cloudflare Pages — build `npm run build`, nəticə `client/dist`; Pages Functions `/api` və `/hubs` trafikini API-yə ötürür (WebSocket daxil)
+- **Keep-alive:** GitHub Actions workflow-u pulsuz Render hostunu oyaq saxlayır
+- Migration-lar deploy-dan əvvəl ayrıca mərhələdə tətbiq olunur; upload-lar və Data Protection açarları üçün qalıcı saxlama istifadə olunur
 
-SQL migration-ları deploy-dan əvvəl idarə olunan mərhələdə tətbiq edilməlidir. Upload-lar və Data Protection açarları üçün qalıcı saxlama qurun; container-in müvəqqəti fayl sisteminə güvənməyin. Repo həm lokal saxlama, həm də mövcud S3 konfiqurasiya yolunu ehtiva edir.
+---
 
-## Təhlükəsizlik və sərhədlər
+## 🔒 Təhlükəsizlik və məhdudiyyətlər
 
-- İstifadəçi resursları ownership və paylaşım icazəsi ilə yoxlanılır; başqasının şəxsi resursu `404` qaytarır.
-- Düzgün imtahan cavabı yalnız seçilmiş reveal qaydası icazə verdikdə göndərilir; qiymətləndirmə serverdədir.
-- JWT sessiyası HttpOnly cookie ilə daşınır; aktiv cookie sessiyası müddətin yarısından sonra sürüşən yenilənmə ilə uzadılır. Təhlükəsizlik möhürü dəyişdikdə köhnə tokenlər ləğv edilir. Ayrı refresh token yoxdur.
-- PDF parsing mətn əsaslıdır, OCR yoxdur. Cavabın avtomatik aşkarlanması mənbənin formatına bağlıdır.
-- AI cavabı mənbəyə bağlansa da, səhv edə bilər; imtahan hazırlığında orijinal sənədlə müqayisə edin.
-- Battle otaqları və snapshot-lar bazada qalır, oyun dövrü və online presence bir serverin yaddaşındadır. Çox instans üçün ayrıca koordinasiya lazımdır.
-- .NET 10 LTS keçidi ayrıca planlaşdırılmalıdır; cari layihələr `net9.0` hədəfləyir.
+- İstifadəçi resursları sahiblik və paylaşım icazəsi ilə yoxlanılır; başqasının şəxsi resursu `404` qaytarır
+- Düzgün cavab yalnız seçilmiş reveal qaydası icazə verdikdə göndərilir; qiymətləndirmə serverdə aparılır
+- JWT HttpOnly cookie ilə daşınır və sürüşən yenilənmə ilə uzadılır; təhlükəsizlik möhürü dəyişəndə köhnə tokenlər ləğv olunur
+- PDF parsing mətn əsaslıdır — **OCR yoxdur**; cavabların avtomatik aşkarlanması sənədin formatından asılıdır
+- AI cavabları mənbəyə bağlansa da səhv edə bilər — orijinal sənədlə müqayisə edin
+- Battle oyun dövrü və online vəziyyət bir serverin yaddaşındadır; çox instans üçün ayrıca koordinasiya lazımdır
 
-## Tez-tez rast gəlinən problemlər
+---
+
+## 🛠️ Tez-tez rast gəlinən problemlər
 
 | Problem | Yoxlanacaq yer |
 |---|---|
-| API başlamır | İki məcburi secret, SQL Server instansı və bağlantı icazəsi |
-| Yeni endpoint `404` verir | İşləyən API-nin cari build olduğunu yoxlayın və köhnə prosesi dayandırıb başladın |
-| `dotnet build` fayl kilidi verir | İşləyən API-ni dayandırın; `bin/` fayllarını proses kilidləyə bilər |
-| Email gəlmir | Development `.eml` qovluğu və SMTP/provider konfiqurasiyası |
-| Tutor `503` verir | `LearningAi:Enabled`, OpenAI açarı və API restart |
+| API başlamır | İki məcburi secret və PostgreSQL bağlantısı |
+| `dotnet build` fayl kilidi verir | İşləyən API prosesini dayandır |
+| Email gəlmir | Development `.eml` qovluğu və email provider konfiqurasiyası |
+| Tutor `503` verir | `LearningAi:Enabled`, OpenAI açarı, API restart |
 | Tutor `429` verir | Gündəlik limit, IP rate limit və ya bitməmiş paralel sorğu |
-| Sənəddən sual çıxmır | PDF-də seçilə bilən mətn, nömrələmə, variant və cavab formatı |
+| Sənəddən sual çıxmır | PDF-də seçilə bilən mətn, nömrələmə və variant formatı |
 | Battle canlı yenilənmir | `/hubs` proxy-si və WebSocket dəstəyi |
-| Vite 5190 portunda başlamır | Portu tutan əvvəlki frontend prosesini yoxlayın; `strictPort` aktivdir |
+| Vite 5190 portunda başlamır | Portu tutan köhnə frontend prosesi (`strictPort` aktivdir) |
+
+---
+
+## 📄 Əlavə sənədlər
+
+- [DİM sınaqlarının strukturu və qiymətləndirmə](docs/DIM_EXAMS.md)
+- [Azure SQL → Neon PostgreSQL köçürməsi](docs/NEON_MIGRATION.md)

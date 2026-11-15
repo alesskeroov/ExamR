@@ -10,6 +10,8 @@ export function DimReportCard({ examId }: { examId: string }) {
 
   const { score, notice } = report.data
   const max = report.data.track === 'Buraxilis' ? 300 : 400
+  const hasOpen = score.openMaxPoints > 0
+  const hasClosed = score.closedMaxPoints > 0
 
   return (
     <section aria-label="DİM nəticəsi" className="mb-5 rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
@@ -21,8 +23,8 @@ export function DimReportCard({ examId }: { examId: string }) {
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <Metric label="Qapalı hissə balı" value={score.closedPoints} max={score.closedMaxPoints}
-          hint="Qapalı tapşırıqların rəsmi düsturla gətirdiyi bal" />
+        <Metric label="Ölçülən bal" value={score.measuredPoints} max={score.measuredMaxPoints}
+          hint={score.openMaxPoints > 0 ? 'Qapalı və açıq (kodlaşdırılan) tapşırıqların rəsmi düsturla gətirdiyi bal' : 'Qapalı tapşırıqların rəsmi düsturla gətirdiyi bal'} />
         <Metric label="Təxmini bal" value={score.estimatedPoints} max={score.fullMaxPoints}
           hint={score.fullMaxPoints === max ? `${max} ballıq şkala üzrə təxmin` : 'Seçilmiş fənlər üzrə təxmin'} />
       </div>
@@ -41,7 +43,8 @@ export function DimReportCard({ examId }: { examId: string }) {
               <th scope="col" className="px-2 py-2 text-right font-medium">Düzgün</th>
               <th scope="col" className="px-2 py-2 text-right font-medium">Səhv</th>
               <th scope="col" className="px-2 py-2 text-right font-medium">Boş</th>
-              <th scope="col" className="px-2 py-2 text-right font-medium">Qapalı bal</th>
+              {hasClosed && <th scope="col" className="px-2 py-2 text-right font-medium">Qapalı bal</th>}
+              {hasOpen && <th scope="col" className="px-2 py-2 text-right font-medium">Açıq bal</th>}
               <th scope="col" className="py-2 pl-2 text-right font-medium">Təxmini</th>
             </tr>
           </thead>
@@ -54,7 +57,13 @@ export function DimReportCard({ examId }: { examId: string }) {
                 <td className="px-2 py-2.5 text-right text-emerald-700">{s.correct}</td>
                 <td className="px-2 py-2.5 text-right text-rose-700">{s.incorrect}</td>
                 <td className="px-2 py-2.5 text-right text-slate-500">{s.unanswered}</td>
-                <td className="px-2 py-2.5 text-right">{formatNumber(s.closedPoints)} <span className="text-slate-400">/ {formatNumber(s.closedMaxPoints)}</span></td>
+                {hasClosed && <td className="px-2 py-2.5 text-right">{s.closedMaxPoints > 0 ? <>{formatNumber(s.closedPoints)} <span className="text-slate-400">/ {formatNumber(s.closedMaxPoints)}</span></> : '—'}</td>}
+                {hasOpen && (
+                  <td className="px-2 py-2.5 text-right">
+                    {s.openMaxPoints > 0 ? <>{formatNumber(s.openPoints)} <span className="text-slate-400">/ {formatNumber(s.openMaxPoints)}</span>
+                      <span className="block text-xs text-slate-500">{s.openCorrect}/{s.openTotal} düzgün</span></> : '—'}
+                  </td>
+                )}
                 <td className="py-2.5 pl-2 text-right font-medium">{formatNumber(s.estimatedPoints)} <span className="font-normal text-slate-400">/ {formatNumber(s.fullMaxPoints)}</span></td>
               </tr>
             ))}

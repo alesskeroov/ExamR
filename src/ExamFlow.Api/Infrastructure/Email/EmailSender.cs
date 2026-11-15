@@ -36,6 +36,8 @@ public sealed class EmailOptions
     public string? From { get; set; }
     /// <summary>Display name for the HTTPS providers.</summary>
     public string? FromName { get; set; }
+    /// <summary>Support mailbox that receives replies to every email (the sender is often a no-reply address).</summary>
+    public string? ReplyTo { get; set; }
     public string? BrevoApiKey { get; set; }
     public GmailApiOptions Gmail { get; set; } = new();
 
@@ -118,6 +120,7 @@ public sealed class SmtpTransport(IOptions<EmailOptions> email, IOptions<SmtpOpt
             mail.AlternateViews.Add(AlternateView.CreateAlternateViewFromString(message.TextBody, System.Text.Encoding.UTF8, "text/plain"));
         mail.AlternateViews.Add(AlternateView.CreateAlternateViewFromString(message.HtmlBody, System.Text.Encoding.UTF8, "text/html"));
         mail.To.Add(message.To);
+        if (!string.IsNullOrWhiteSpace(e.ReplyTo)) mail.ReplyToList.Add(e.ReplyTo);
 
         if (!string.IsNullOrWhiteSpace(settings.PickupDirectory))
         {

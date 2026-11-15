@@ -20,9 +20,10 @@ public sealed record DimOptionDto(Guid Id, string Label, string Text, bool IsCor
 
 public sealed record DimBankInfoDto(DimTrack Track, string Subject, string? Topic);
 
+/// <param name="CodedAnswer">Accepted answers of an open coded question (no options), e.g. "2,5; 5/2".</param>
 public sealed record DimSourceQuestionDto(
     Guid Id, int SourceNumber, string Text, IReadOnlyList<DimOptionDto> Options, VerificationStatus VerificationStatus,
-    string? ParseWarning, DimBankInfoDto? Bank);
+    string? ParseWarning, DimBankInfoDto? Bank, string? CodedAnswer = null);
 
 public sealed class DimAnswerKeyRequest
 {
@@ -72,14 +73,91 @@ public sealed class DimEditQuestionRequest
     [Required]
     public List<DimEditOptionRequest> Options { get; init; } = [];
 
-    public Guid CorrectOptionId { get; init; }
+    /// <summary>Closed questions: the option that is correct.</summary>
+    public Guid? CorrectOptionId { get; init; }
+
+    /// <summary>Questions without options: accepted answers, e.g. "2,5" or "2,5; 5/2".</summary>
+    [StringLength(CodedAnswers.MaxKeyLength)]
+    public string? CodedAnswer { get; init; }
+}
+
+public sealed class DimCreateSetRequest
+{
+    [Required, StringLength(200, MinimumLength = 2)]
+    public string Title { get; init; } = string.Empty;
+}
+
+public sealed class DimImportRequest
+{
+    /// <summary>The pasted test: numbered questions, options A) B) …, optionally "Cavab: B" lines.</summary>
+    [Required, StringLength(200_000, MinimumLength = 2)]
+    public string Text { get; init; } = string.Empty;
+
+    public DimTrack Track { get; init; }
+
+    [Required, StringLength(10)]
+    public string Subject { get; init; } = string.Empty;
+
+    [StringLength(200)]
+    public string? Topic { get; init; }
+
+    /// <summary>true = only parse and return the questions; nothing is saved.</summary>
+    public bool Preview { get; init; }
+}
+
+/// <param name="Number">The number the question gets in the set.</param>
+/// <param name="CorrectIndex">Detected correct option (A = 0); null when unknown or the question has no options.</param>
+public sealed record DimImportedQuestionDto(int Number, string Text, IReadOnlyList<string> Options, int? CorrectIndex, string? Warning);
+
+/// <param name="Banked">Saved questions that fit DİM tests and went into the bank; the rest need an answer.</param>
+public sealed record DimImportResultDto(IReadOnlyList<DimImportedQuestionDto> Questions, IReadOnlyList<string> Warnings, int Saved, int Banked);
+
+public sealed class DimTopicsRequest
+{
+    /// <summary>One range per line: "1-5: Fonetika".</summary>
+    [Required, StringLength(20_000, MinimumLength = 2)]
+    public string Text { get; init; } = string.Empty;
+}
+
+/// <param name="Updated">Bank questions whose topic was set.</param>
+/// <param name="NotInBank">Numbers in the ranges whose question is not in the bank (no topic set).</param>
+/// <param name="Unread">Lines that are not a range.</param>
+public sealed record DimTopicsResultDto(int Updated, IReadOnlyList<int> NotInBank, IReadOnlyList<string> Unread);
+
+public sealed class DimCreateQuestionRequest
+{
+    public Guid DocumentId { get; init; }
+    public DimTrack Track { get; init; }
+
+    [Required, StringLength(10)]
+    public string Subject { get; init; } = string.Empty;
+
+    [StringLength(200)]
+    public string? Topic { get; init; }
+
+    [Required, StringLength(4000)]
+    public string Text { get; init; } = string.Empty;
+
+    /// <summary>Empty = open coded question; otherwise the 2–5 option texts in order (A, B, …).</summary>
+    [MaxLength(DimAdminEndpoints.MaxOptions)]
+    public List<string> Options { get; init; } = [];
+
+    /// <summary>Index of the correct option (A = 0) of a closed question.</summary>
+    [Range(0, DimAdminEndpoints.MaxOptions - 1)]
+    public int? CorrectIndex { get; init; }
+
+    /// <summary>Accepted answers of a coded question, e.g. "2,5" or "2,5; 5/2".</summary>
+    [StringLength(CodedAnswers.MaxKeyLength)]
+    public string? CodedAnswer { get; init; }
 }
 
 public sealed record DimDocumentBankDto(DimTrack Track, string Subject, string Name, int Count);
 
 /// <summary>An uploaded document with how many of its questions fit DİM tests and how many are already in the bank.</summary>
+/// <param name="IsManual">A set of questions typed in by hand (no file), see <see cref="DimAdminEndpoints.ManualSetSuffix"/>.</param>
 public sealed record DimSourceDocumentDto(
-    Guid Id, string OriginalFileName, DateTimeOffset CreatedAt, int QuestionCount, int Valid, IReadOnlyList<DimDocumentBankDto> Bank);
+    Guid Id, string OriginalFileName, DateTimeOffset CreatedAt, int QuestionCount, int Valid, IReadOnlyList<DimDocumentBankDto> Bank,
+    bool IsManual = false);
 
 public sealed record DimBankStatDto(DimTrack Track, string Subject, string Name, int Count, int Topics);
 

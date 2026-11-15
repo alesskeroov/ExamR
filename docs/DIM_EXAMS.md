@@ -1,6 +1,7 @@
 # DİM sınaqları (Buraxılış və Blok)
 
-Abituriyentlər üçün DİM formatlı sınaqlar. İlk versiya: yalnız Azərbaycan bölməsi, yalnız qapalı (A–E) suallar.
+Abituriyentlər üçün DİM formatlı sınaqlar: Azərbaycan bölməsi, qapalı (A–E) və açıq kodlaşdırılan (ədədlə cavab) suallar.
+Yazılı tapşırıqlar (imtahançı yoxlayır) hələ yoxdur.
 
 ## Struktur və qiymətləndirmə (`Features/Dim/DimCatalog.cs`)
 
@@ -18,10 +19,43 @@ Fənn balı = `100 / (qapalı + kodlaşdırılan + 2 × yazılı)` × düzgün t
 düzgünün ¼-ni silir. Blok qrupları (əmsal 1,5 / 1,5 / 1): I-RK riy-fiz-kim, I-Rİ riy-fiz-inf, II riy-coğ-tar,
 III-DT az-tar-ədb, III-TC az-tar-coğ, IV bio-kim-fiz. Maks: Buraxılış 300, Blok 400.
 
-**Yalnız qapalı suallar** olduğu üçün tam bal hesablanmır. Hesabat iki rəqəm verir:
-- *Qapalı hissə balı* — qapalı tapşırıqların rəsmi düsturla gətirdiyi bal (məs. riyaziyyat buraxılışda maks. 40,6);
-- *Təxmini bal* — açıq hissədə eyni nəticə fərziyyəsi ilə 100 × əmsal üzərindən.
-Sınaqdakı qapalı sual sayı rəsmi saydan fərqlənərsə, nəticə rəsmi saya miqyaslanır.
+Yazılı tapşırıqlar olmadığı üçün tam bal hesablanmır. Hesabat iki rəqəm verir:
+- *Ölçülən bal* — sınaqdakı hissələrin rəsmi düsturla gətirdiyi bal: qapalı (riyaziyyat buraxılışda maks. 40,6) +
+  açıq/kodlaşdırılan (riyaziyyatda 5 × 100/32 = maks. 15,6). Kodlaşdırılan tapşırığı olmayan fənndə (Azərbaycan dili,
+  xarici dil) açıq suallar yazılı tapşırıqların yerini tutur (2 × yazılı sayı);
+- *Təxmini bal* — ölçülməyən hissədə də eyni nəticə fərziyyəsi ilə 100 × əmsal üzərindən.
+Hər hissə ayrıca rəsmi saya miqyaslanır (sınaqda 3 kodlaşdırılan sual olsa da, rəsmi 5-ə çevrilir). Açıq suallarda
+səhvə görə bal çıxılmır.
+
+## Mövzular aralıqla
+
+`POST /api/admin/dim/documents/{id}/topics` (`text`: hər sətirdə `1-5: Fonetika`, `6–10 Leksika`, `11. Morfologiya`).
+Sonrakı sətir əvvəlkini dəqiqləşdirir (`1-20: Cəbr`, sonra `5: Faiz`). Mövzu `DimBankQuestions.Topic`-ə yazılır; bankda
+olmayan nömrələr cavabda `notInBank` kimi qayıdır.
+
+## Səs materialları (dinləmə)
+
+- `DimAudios` — sənədin/dəstin səs faylı: `Title`, `QuestionFrom`–`QuestionTo` (sənəddəki sual nömrələri), `StorageKey`
+  (`dimaudio_{id}.mp3`), `ContentType`, `SizeBytes`. Bir sənəddə aralıqlar üst-üstə düşə bilməz (hər sualın ən çox bir səsi).
+- Format faylın ilk baytlarına görə yoxlanır (`DimAudioFormat`): MP3, M4A (MP4/AAC), OGG, WAV; ən çox 30 MB.
+- Admin: `GET|POST /api/admin/dim/documents/{id}/audio` (multipart: `file`, `title`, `questionFrom`, `questionTo`),
+  `PUT|DELETE /api/admin/dim/audio/{id}`, `GET /api/admin/dim/audio/{id}/file` (önizləmə).
+- Sınaq başlayanda səs bağlantısı snapshot-a dondurulur (`QuestionSnapshot.AudioId/AudioTitle`). Fayl
+  `GET /api/exams/{examId}/audio/{audioId}` ilə verilir: yalnız imtahan sahibinə, Range dəstəyi ilə (irəli-geri çəkmək, Safari).
+  Səs silinərsə başlanmış imtahanlarda da çalınmır. Sənəd silinəndə səs faylları da silinir.
+- İmtahan ekranı: səs sualın üstündə pleyerdir (`ListeningPlayer`), açarı səsin id-sidir, ona görə eyni səsə aid suallar
+  arasında keçəndə dayanmır; səssiz suala keçəndə dayanır. Nəticə səhifəsində hər səs bir dəfə (qrupun ilk sualında) göstərilir.
+  Dinləmə sayına limit yoxdur.
+
+## Kodlaşdırılan suallar (`Features/Questions/CodedAnswers.cs`)
+
+- `Questions.CodedAnswer` — variantı olmayan sualın qəbul edilən cavabları, `;` ilə ayrılır (vergül onluq ayırıcıdır):
+  `2,5; 5/2`. Yalnız ədəd qəbul olunur: tam, onluq (`2,5`/`2.5`), adi kəsr (`5/2`), mənfi (`-3`, `−3`).
+- Yoxlama dəqiq rasional ədəd müqayisəsidir: `2,5` = `2.5` = `5/2` = `+2,50`; yuvarlaqlaşdırma yoxdur (`1/3` ≠ `0,333`).
+- İmtahanda: `QuestionSnapshot.IsCoded`, `ExamQuestions.CorrectAnswer` (serverdə qalır), `ExamQuestions.AnswerText`
+  (`PUT /api/exams/{id}/answers/{qid}` body `{ answerText }`; ədəd olmayan cavab 400). "Hər sualdan sonra" rejimində
+  açılan cavab `reveal.correctAnswer` + `reveal.isCorrect` qaytarır.
+- Adi imtahan və Battle variantı olmayan sualları seçmir (`Options.Count >= 2`), yəni kodlaşdırılan suallar yalnız DİM-dədir.
 
 ## Model
 
@@ -35,8 +69,18 @@ Sınaqdakı qapalı sual sayı rəsmi saydan fərqlənərsə, nəticə rəsmi sa
 ## Axın
 
 1. Admin PDF/DOCX-i adi `/api/documents` ilə yükləyir (parser sualları çıxarır, mümkünsə cavabı tanıyır).
-2. Səhv suallar: `POST /api/admin/dim/documents/{id}/answer-key` (`1-A 2-C …`) və ya tək sual üçün
-   `PUT /api/admin/dim/questions/{id}` (mətn, variant mətnləri, düzgün variant; variant sayı dəyişmir).
+1a. Əl ilə: `POST /api/admin/dim/sets` (`{ title }`) faylı olmayan "dəst" yaradır (`StoredFileName` = `{id}.manual`,
+   dərhal `IsDimSource`). `POST /api/admin/dim/questions` (`documentId`, `track`, `subject`, `topic`, `text`,
+   `options` [boş = kodlaşdırılan], `correctIndex`, `codedAnswer`) sualı yaradır və dərhal banka əlavə edir. Dəstin
+   sualı `DELETE /api/admin/dim/questions/{id}` ilə silinir (PDF sualı yalnız bankdan çıxarılır).
+1b. Mətndən idxal: `POST /api/admin/dim/sets/{id}/import` (`text`, `track`, `subject`, `topic`, `preview`) yapışdırılmış
+   testi PDF/DOCX ilə eyni parser-lə (`DimTextTools.ParsePastedTest`) suallara bölür; bir sətirdəki `A) 3 B) 4 C) 5`
+   variantları ayrılır. `preview: true` heç nə saxlamır. Boş dəstdə nömrələr mətndəki kimi qalır (cavab açarı uyğun gəlsin),
+   doluda sonuncudan davam edir. Cavabı bilinən suallar dərhal banka düşür; qalanları cavab açarı + "banka əlavə et" ilə.
+2. Səhv suallar: `POST /api/admin/dim/documents/{id}/answer-key` (`1-A 2-C 14=2,5 15=-3 16=2,5|5/2`; kodlaşdırılan cavab
+   yalnız variantı olmayan suala yazılır, `=` və ya `:` lazımdır, alternativlər `|` ilə) və ya tək sual üçün
+   `PUT /api/admin/dim/questions/{id}` (mətn, variant mətnləri, düzgün variant; variant sayı dəyişmir). Variantı olmayan PDF sualına `codedAnswer`
+   yazılsa, kodlaşdırılan sual olur.
 3. `POST /api/admin/dim/documents/{id}/approve-valid` — sənədin bütün düzgün formatlı suallarını (2–5 variant, tam 1
    düzgün, boş mətn yoxdur) fənn/mövzu ilə banka əlavə edir; səhvlər `rejected`-də qayıdır. Tək-tək: `POST /api/admin/dim/bank`.
 4. `POST /api/admin/dim/tests` — hazır (sabit suallar), bir dəfə təsadüfi və ya hər cəhddə təsadüfi sınaq. Bölmədə
@@ -56,10 +100,16 @@ Admin endpoint-ləri: `GET documents` (sənədlər + düzgün/bankda sayları), 
 - İstifadəçi: sol menyu → "DİM sınaqları" → `/dim/buraxilis`, `/dim/blok` (tam/fənn filtri, Blokda qrup filtri;
   Başla / Davam et / Son nəticə). Nəticə səhifəsində DİM kartı (`features/dim/DimReportCard.tsx`).
 - Admin: Admin Panel → "DİM sınaqları" (`?section=dim`):
-  - *Sual bankı* — əvvəl imtahan+fənn seç, PDF yüklə; sənəd kartları (X düzgün / Y səhv / Z bankda); bir düymə ilə
+  - *Sual bankı* — üç yol: "PDF / Word yüklə", "Mətni yapışdır" (önizləmə → saxla) və ya "Əl ilə yaz".
+    Sənəd panelində: cavab açarı, "Mövzuları aralıqla təyin et", "Səs materialları (dinləmə)". Əl ilə: dəst seç/yarat, fənn, mövzu, növ
+    (Qapalı A–E / Açıq — kodlaşdırılan), mətn, variantlar və ya cavab; `Ctrl+Enter` saxlayır, forma təmizlənir, dəst/fənn/növ
+    qalır. Sualı variantları ilə (`A) … B) …`) yapışdırdıqda variantlar avtomatik ayrılır. PDF yolu: əvvəl imtahan+fənn seç, PDF yüklə; sənəd kartları (X düzgün / Y səhv / Z bankda); bir düymə ilə
     bütün düzgün sualları banka əlavə et; "Səhv suallar" siyahısında sualı yerində düzəlt; cavab açarı yalnız cavabı
     tapılmayan sual olanda görünür; bankdan çıxar;
   - *Sınaqlar* — "Yeni sınaq": bankdakı sənədi seç, ad sənəd adından dolur; yalnız müddət, sual sayı, cəhd limiti;
     hər cəhddə həmin sənəddən təsadüfi suallar; qaralama kimi yaranır → "Dərc et". İkinci yol: "Tam DİM sınağı
     (bütün bankdan)". Redaktə: ad, müddət, limit (vaxt pəncərəsi UI-da yoxdur, saxlanılır). Sil: cəhdlər də silinir.
-- Hələ yoxdur: admin UI-da sualları tək-tək seçərək sınaq (API dəstəkləyir), açıq suallar, rus bölməsi.
+- İmtahan ekranı: kodlaşdırılan sualda variant əvəzinə cavab xanası (Enter, xanadan çıxış və ya 1,2 san sonra avtomatik
+  saxlanır); nəticədə "Sizin cavab / Düzgün cavab"; DİM kartında "Açıq bal" sütunu.
+- Hələ yoxdur: admin UI-da sualları tək-tək seçərək sınaq (API dəstəkləyir), yazılı tapşırıqlar, mətnə bağlı suallar,
+  dinləmə sayına limit, rus bölməsi.

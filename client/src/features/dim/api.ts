@@ -39,8 +39,15 @@ export interface DimSubjectScore {
   incorrect: number
   unanswered: number
   ungraded: number
+  /** Points of the measured parts under the official formula; 0/0 when the test had no such questions. */
   closedPoints: number
   closedMaxPoints: number
+  openTotal: number
+  openCorrect: number
+  openPoints: number
+  openMaxPoints: number
+  measuredPoints: number
+  measuredMaxPoints: number
   estimatedPoints: number
   fullMaxPoints: number
 }
@@ -62,6 +69,10 @@ export interface DimReport {
     subjects: DimSubjectScore[]
     closedPoints: number
     closedMaxPoints: number
+    openPoints: number
+    openMaxPoints: number
+    measuredPoints: number
+    measuredMaxPoints: number
     estimatedPoints: number
     fullMaxPoints: number
     weakTopics: { subject: string; topic: string; total: number; correct: number; accuracy: number }[]
@@ -132,6 +143,8 @@ export interface DimSourceQuestion {
   verificationStatus: VerificationStatus
   parseWarning: string | null
   bank: { track: DimTrack; subject: string; topic: string | null } | null
+  /** Accepted answers of an open coded question (no options), e.g. "2,5; 5/2". */
+  codedAnswer: string | null
 }
 
 /** A parsed document: `valid` questions fit DİM tests; `bank` lists how many are already in the bank per subject. */
@@ -142,6 +155,8 @@ export interface DimSourceDocument {
   questionCount: number
   valid: number
   bank: { track: DimTrack; subject: string; name: string; count: number }[]
+  /** A set of questions typed in by hand (no file). */
+  isManual: boolean
 }
 
 export interface DimAdminTest {
@@ -220,7 +235,27 @@ type ApproveResult = { approved: number; rejected: { questionId: string; reason:
 export const useApproveValid = () => useDimAdminMutation(({ documentId, ...body }: { documentId: string; track: DimTrack; subject: string; topic: string | null }) =>
   api.post<ApproveResult>(`/admin/dim/documents/${documentId}/approve-valid`, body))
 
-export interface DimQuestionEdit { id: string; text: string; options: { id: string; text: string }[]; correctOptionId: string }
+/** Closed questions send `correctOptionId`; questions without options send `codedAnswer`. */
+export interface DimQuestionEdit { id: string; text: string; options: { id: string; text: string }[]; correctOptionId?: string; codedAnswer?: string }
+
+/** A question typed in by hand: no options = open coded question with `codedAnswer`. */
+export interface DimQuestionCreate {
+  documentId: string
+  track: DimTrack
+  subject: string
+  topic: string | null
+  text: string
+  options: string[]
+  correctIndex: number | null
+  codedAnswer: string | null
+}
+
+export const useCreateDimSet = () => useDimAdminMutation((title: string) => api.post<DimSourceDocument>('/admin/dim/sets', { title }))
+
+export const useCreateDimQuestion = () => useDimAdminMutation((request: DimQuestionCreate) => api.post<DimSourceQuestion>('/admin/dim/questions', request))
+
+/** Only questions of a manual set can be deleted; PDF questions are removed from the bank instead. */
+export const useDeleteDimQuestion = () => useDimAdminMutation((questionId: string) => api.delete(`/admin/dim/questions/${questionId}`))
 
 export const useEditDimQuestion = () => useDimAdminMutation(({ id, ...body }: DimQuestionEdit) => api.put<void>(`/admin/dim/questions/${id}`, body))
 
@@ -242,3 +277,45 @@ export function useDeleteDimTest() {
     },
   })
 }
+
+// ---- Admin: fast entry ----
+
+export interface DimImportedQuestion { number: number; text: string; options: string[]; correctIndex: number | null; warning: string | null }
+export interface DimImportResult { questions: DimImportedQuestion[]; warnings: string[]; saved: number; banked: number }
+
+/** Pasted test → questions of a manual set; `preview: true` only parses. */
+export const useImportDimText = () => useDimAdminMutation(({ documentId, ...body }: {
+  documentId: string; text: string; track: DimTrack; subject: string; topic: string | null; preview: boolean
+}) => api.post<DimImportResult>(`/admin/dim/sets/${documentId}/import`, body))
+
+/** Bank topics by number ranges, one per line: "1-5: Fonetika". */
+export const useSetDimTopics = () => useDimAdminMutation(({ documentId, text }: { documentId: string; text: string }) =>
+  api.post<{ updated: number; notInBank: number[]; unread: string[] }>(`/admin/dim/documents/${documentId}/topics`, { text }))
+
+// ---- Admin: listening recordings ----
+
+export interface DimAudio { id: string; title: string; questionFrom: number; questionTo: number; contentType: string; sizeBytes: number; createdAt: string }
+
+export const DIM_AUDIO_MAX_BYTES = 30 * 1024 * 1024
+
+export function useDimAudios(documentId: string) {
+  return useQuery({ queryKey: queryKeys.dim.audios(documentId), queryFn: () => api.get<DimAudio[]>(`/admin/dim/documents/${documentId}/audio`) })
+}
+
+export const useUploadDimAudio = () => useDimAdminMutation(({ documentId, file, title, questionFrom, questionTo }: {
+  documentId: string; file: File; title: string; questionFrom: number; questionTo: number
+}) => {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('title', title)
+  form.append('questionFrom', String(questionFrom))
+  form.append('questionTo', String(questionTo))
+  return api.post<DimAudio>(`/admin/dim/documents/${documentId}/audio`, form)
+})
+
+export const useUpdateDimAudio = () => useDimAdminMutation(({ id, ...body }: { id: string; title: string; questionFrom: number; questionTo: number }) =>
+  api.put<DimAudio>(`/admin/dim/audio/${id}`, body))
+
+export const useDeleteDimAudio = () => useDimAdminMutation((id: string) => api.delete(`/admin/dim/audio/${id}`))
+
+export const dimAudioAdminUrl = (id: string) => `/api/admin/dim/audio/${id}/file`

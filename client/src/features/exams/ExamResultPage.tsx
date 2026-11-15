@@ -6,13 +6,15 @@ import { AlertTriangle, BookOpen, Check, Clock, History, RotateCcw, RotateCw, X 
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
+import { SupportContact } from '../../components/common/SupportContact'
 import { EmptyState } from '../../components/common/EmptyState'
 import { PageHeader } from '../../components/common/PageHeader'
 import { QuestionVisuals } from '../../components/common/QuestionVisuals'
 import { formatDate, formatNumber } from '../../lib/format'
 import { cn } from '../../lib/utils'
 import { bodyVisuals, optionVisuals, visibleText, visualUrls } from '../../lib/visuals'
-import { useExamResult, type ExamOutcome, type ExamResult, type ExamResultQuestion } from './api'
+import { examAudioUrl, useExamResult, type ExamOutcome, type ExamResult, type ExamResultQuestion } from './api'
+import { ListeningPlayer } from './ListeningPlayer'
 import { sourceName, sourceRange } from './examSource'
 import { DimReportCard } from '../dim/DimReportCard'
 import { DimRetakeButton } from '../dim/DimRetakeButton'
@@ -37,7 +39,7 @@ export function ExamResultPage() {
   }
 
   if (result.isError) {
-    return <Alert title="Nəticə yüklənmədi">{result.error.message}</Alert>
+    return <Alert title="Nəticə yüklənmədi">{result.error.message}<SupportContact className="mt-1" topic="Nəticə yüklənmədi" reference={id} /></Alert>
   }
 
   return <ResultView result={result.data} />
@@ -205,8 +207,12 @@ function ResultView({ result }: { result: ExamResult }) {
         {questions.length === 0 ? (
           <EmptyState title="Bu filtrə uyğun sual yoxdur" />
         ) : (
-          questions.map((q) => <ReviewCard key={q.position} question={q} visualSrc={visualUrls.exam(result.id)} highlighted={focused === q.position}
-            link={links.data?.find(l => l.position === q.position)} />)
+          questions.map((q, i) => (
+            <ReviewCard key={q.position} question={q} visualSrc={visualUrls.exam(result.id)} highlighted={focused === q.position}
+              // A recording shared by several questions is shown once, on the first of them in the list.
+              audioSrc={q.audio && questions[i - 1]?.audio?.id !== q.audio.id ? examAudioUrl(result.id, q.audio.id) : null}
+              link={links.data?.find(l => l.position === q.position)} />
+          ))
         )}
         </div>
       </section>
@@ -269,7 +275,14 @@ const outcomeBadge: Record<ExamOutcome, { label: string; className: string }> = 
   Ungraded: { label: 'Qiymətləndirilməyib', className: 'bg-amber-50 text-amber-800 ring-amber-200' },
 }
 
-function ReviewCard({ question, visualSrc, highlighted, link }: { question: ExamResultQuestion; visualSrc: (id: string) => string; highlighted: boolean; link?: ExamQuestionLink }) {
+function ReviewCard({ question, visualSrc, highlighted, audioSrc, link }: {
+  question: ExamResultQuestion
+  visualSrc: (id: string) => string
+  highlighted: boolean
+  audioSrc: string | null
+  /** Where the course lectures explain this missed question. */
+  link?: ExamQuestionLink
+}) {
   const badge = outcomeBadge[question.outcome]
   const unanswered = question.outcome === 'Unanswered'
   // Unanswered questions list every option so the student sees what they skipped.
@@ -287,12 +300,30 @@ function ReviewCard({ question, visualSrc, highlighted, link }: { question: Exam
         <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset', badge.className)}>{badge.label}</span>
       </header>
       <QuestionVisuals visuals={bodyVisuals(question.visuals)} src={visualSrc} className="mb-3" />
+      {audioSrc && question.audio && <ListeningPlayer src={audioSrc} title={question.audio.title} hint={false} className="mb-3 rounded-lg border border-indigo-200 bg-indigo-50/60 px-3 py-2.5" />}
 
       {unanswered && (
         <p className="mb-2.5 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-600">Bu suala cavab verməmisiniz.</p>
       )}
 
-      <ul className="flex flex-col gap-1.5">
+      {question.isCoded && (
+        <dl className="grid gap-1.5 text-sm sm:grid-cols-2">
+          {question.answerText && (
+            <div className={cn('rounded-lg border px-3 py-2.5', question.outcome === 'Correct' ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50')}>
+              <dt className="text-xs font-medium text-slate-500">Sizin cavab{question.outcome === 'Correct' ? ' · düzgün' : ''}</dt>
+              <dd className={cn('mt-0.5 text-base font-semibold tabular-nums', question.outcome === 'Correct' ? 'text-emerald-900' : 'text-rose-900')}>{question.answerText}</dd>
+            </div>
+          )}
+          {question.correctAnswer && question.outcome !== 'Correct' && (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+              <dt className="text-xs font-medium text-slate-500">Düzgün cavab</dt>
+              <dd className="mt-0.5 text-base font-semibold text-emerald-900 tabular-nums">{question.correctAnswer}</dd>
+            </div>
+          )}
+        </dl>
+      )}
+
+      {!question.isCoded && <ul className="flex flex-col gap-1.5">
         {options.map((option) => {
           const isCorrect = option.id === question.correctOptionId
           const isSelected = option.id === question.selectedOptionId
@@ -324,7 +355,7 @@ function ReviewCard({ question, visualSrc, highlighted, link }: { question: Exam
             </li>
           )
         })}
-      </ul>
+      </ul>}
 
       {link && (
         <Link to={`/tutor?document=${link.materialDocumentId}&at=${link.chunkOrdinal}${link.pageFrom != null ? `&page=${link.pageFrom}` : ''}`}

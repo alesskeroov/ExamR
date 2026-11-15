@@ -149,7 +149,7 @@ public static class EmailTemplates
                   {{foot}}
                   <tr><td align="center" style="padding:4px 12px 0">
                     <p class="faint" style="margin:0 0 6px;font-size:12px;line-height:18px;color:{{Faint}}"><strong class="muted" style="color:{{Muted}}">ExamR</strong> · sənədindən imtahana</p>
-                    <p class="faint" style="margin:0;font-size:11px;line-height:17px;color:{{Faint}}">Bu məktub ExamR hesabınızla bağlı əməliyyat üçün avtomatik göndərilib. Cavab yazmağa ehtiyac yoxdur.<br>&copy; {{year}} ExamR</p>
+                    <p class="faint" style="margin:0;font-size:11px;line-height:17px;color:{{Faint}}">Bu məktub ExamR hesabınızla bağlı əməliyyat üçün avtomatik göndərilib. Sualınız və ya probleminiz varsa, bu məktuba cavab yazın.<br>&copy; {{year}} ExamR</p>
                   </td></tr>
                 </table>
               </td></tr>
