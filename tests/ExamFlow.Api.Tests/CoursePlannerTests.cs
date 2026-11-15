@@ -6,7 +6,7 @@ public class CoursePlannerTests
 {
     private static readonly Guid Lecture = Guid.NewGuid();
     private static readonly Guid Bank = Guid.NewGuid();
-    private static MaterialProgress Material(int cards, int mastered, int weak) => new(Lecture, "Mühazirə 1.pptx", "pptx", null, true, cards, mastered, weak);
+    private static MaterialProgress Material(int cards, int mastered, int weak, int due = 0) => new(Lecture, "Mühazirə 1.pptx", "pptx", null, true, cards, mastered, weak, due);
     private static BankProgress Questions(int total, int answered, int correct, int wrong) => new(Bank, "Bank.pdf", total, answered, correct, wrong);
 
     [Fact]

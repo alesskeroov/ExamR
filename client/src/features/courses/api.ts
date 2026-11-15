@@ -11,7 +11,8 @@ export interface CourseDocument { documentId: string; name: string; role: Course
 export interface CourseDetail { id: string; name: string; examDate: string | null; daysLeft: number | null; documents: CourseDocument[] }
 export interface CourseCandidate { documentId: string; name: string; format: string; role: CourseRole; uploadedAt: string }
 
-export interface MaterialProgress { documentId: string; name: string; format: string; chatId: string | null; ready: boolean; cards: number; mastered: number; weak: number }
+/** due: cards waiting for review now (spaced repetition). */
+export interface MaterialProgress { documentId: string; name: string; format: string; chatId: string | null; ready: boolean; cards: number; mastered: number; weak: number; due: number }
 export interface BankProgress { documentId: string; name: string; questions: number; answered: number; correct: number; wrong: number }
 export interface WeakSpot {
   materialDocumentId: string; materialName: string; format: string; chatId: string | null; section: string | null

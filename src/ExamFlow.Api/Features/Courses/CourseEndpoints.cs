@@ -138,7 +138,8 @@ public static class CourseEndpoints
         var (materials, banks) = await FilesAsync(db, insights, userId, id, ct);
 
         var progress = new List<MaterialProgress>();
-        foreach (var material in materials) progress.Add(await insights.CardsAsync(userId, material, ct));
+        var now = clock.GetUtcNow();
+        foreach (var material in materials) progress.Add(await insights.CardsAsync(userId, material, now, ct));
         var (bankProgress, wrong) = await insights.BanksAsync(userId, banks, ct);
         var spots = await insights.WeakSpotsAsync(materials, wrong, ct);
         var daysLeft = CoursePlanner.DaysLeft(course.ExamDate, Today(clock));

@@ -30,7 +30,8 @@ public sealed record CourseDetail(Guid Id, string Name, DateOnly? ExamDate, int?
 /// <summary>A file the student may add: lecture material for the guide or a question bank.</summary>
 public sealed record CourseCandidate(Guid DocumentId, string Name, string Format, string Role, DateTimeOffset UploadedAt);
 
-public sealed record MaterialProgress(Guid DocumentId, string Name, string Format, Guid? ChatId, bool Ready, int Cards, int Mastered, int Weak);
+/// <summary>Due = cards waiting for review now (spaced repetition).</summary>
+public sealed record MaterialProgress(Guid DocumentId, string Name, string Format, Guid? ChatId, bool Ready, int Cards, int Mastered, int Weak, int Due);
 public sealed record BankProgress(Guid DocumentId, string Name, int Questions, int Answered, int Correct, int Wrong);
 
 /// <summary>A part of a lecture that the student's wrong exam answers point to.</summary>

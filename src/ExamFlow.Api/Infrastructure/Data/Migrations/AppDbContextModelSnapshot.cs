@@ -1144,6 +1144,12 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTimeOffset?>("DueAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("IntervalDays")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Lapses")
                         .HasColumnType("integer");
 
@@ -1178,6 +1184,8 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("LearningDocumentId");
+
+                    b.HasIndex("UserId", "DueAt");
 
                     b.HasIndex("UserId", "LearningDocumentId", "QuestionHash")
                         .IsUnique();

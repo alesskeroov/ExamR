@@ -7,7 +7,7 @@ import { useCourses, type CourseSummary, type GuideTarget } from '../courses/api
 import { CourseDialog } from '../courses/CourseDialog'
 import { CoursePanel } from '../courses/CoursePanel'
 import { cn } from '../../lib/utils'
-import { useChat, useChats, useCreateChat, useDeck, useDeleteChat, useTutorDocuments, type ChatSession, type ChatSource, type LearnScope, type SearchHit, type StudyCard } from './api'
+import { useChat, useChats, useCreateChat, useDeck, useDeleteChat, useReviewToday, useTutorDocuments, type ChatSession, type ChatSource, type DueDocument, type LearnScope, type ReviewToday, type SearchHit, type StudyCard } from './api'
 import { FeedbackDialog } from './FeedbackDialog'
 import { GuideCardList } from './GuideCardList'
 import { GuideLearn } from './GuideLearn'
@@ -40,7 +40,7 @@ function scopeFrom(params: URLSearchParams): LearnScope {
   const scope = params.get('scope')
   const topic = params.get('topic')
   if (scope === 'topic' && topic) return { kind: 'topic', key: topic }
-  return scope === 'weak' || scope === 'mixed' ? { kind: scope } : { kind: 'all' }
+  return scope === 'due' || scope === 'weak' || scope === 'mixed' ? { kind: scope } : { kind: 'all' }
 }
 
 /**
@@ -71,6 +71,7 @@ export function GuidePage() {
 
   const courseId = chatId ? null : params.get('course')
   const courses = useCourses()
+  const today = useReviewToday()
   const [newCourse, setNewCourse] = useState(false)
 
   // Opening a document closes the drawer; a link to a place in it ("at": indexed part, "page") opens the preview there.
@@ -145,7 +146,8 @@ export function GuidePage() {
   const list = <DocumentList items={chats.data?.items ?? []} loading={chats.isLoading} activeId={chatId}
     onSelect={id => setParams({ chat: id })} onNew={newDocument} onDelete={remove}
     courses={courses.data ?? []} activeCourseId={courseId} onSelectCourse={id => { setParams({ course: id }); setDrawerOpen(false) }}
-    onNewCourse={() => setNewCourse(true)} />
+    onNewCourse={() => setNewCourse(true)} today={today.data}
+    onOpenDue={doc => { openMaterial(doc.documentId, doc.chatId, { tab: 'learn', scope: 'due' }); setDrawerOpen(false) }} />
 
   return (
     <div ref={workspace} className="tutor-workspace tutor-surface tutor-border relative flex overflow-hidden lg:border">
@@ -275,13 +277,14 @@ interface ListProps {
   items: ChatSession[]; loading: boolean; activeId: string | null
   onSelect: (id: string) => void; onNew: () => void; onDelete: (item: ChatSession) => void
   courses: CourseSummary[]; activeCourseId: string | null; onSelectCourse: (id: string) => void; onNewCourse: () => void
+  today: ReviewToday | undefined; onOpenDue: (doc: DueDocument) => void
 }
 
 /** "İmtahana 5 gün", "Bu gün imtahan", or nothing without an upcoming exam. */
 const courseDays = (course: CourseSummary) =>
   course.daysLeft === null ? null : course.daysLeft === 0 ? 'Bu gün imtahan' : `İmtahana ${course.daysLeft} gün`
 
-function DocumentList({ items, loading, activeId, onSelect, onNew, onDelete, courses, activeCourseId, onSelectCourse, onNewCourse }: ListProps) {
+function DocumentList({ items, loading, activeId, onSelect, onNew, onDelete, courses, activeCourseId, onSelectCourse, onNewCourse, today, onOpenDue }: ListProps) {
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col">
       <div className="flex flex-col gap-2 p-3">
@@ -291,6 +294,32 @@ function DocumentList({ items, loading, activeId, onSelect, onNew, onDelete, cou
         </button>
       </div>
       <nav aria-label="Fənlərim və sənədlərim" className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+        {today && (today.due > 0 || today.reviewedToday > 0) && (
+          <section aria-label="Bu gün təkrar" className="tutor-border mx-1 mb-3 rounded-xl border bg-white p-3">
+            <p className="flex items-center justify-between gap-2 text-xs font-semibold text-slate-700">
+              <span>Bu gün təkrar</span>
+              <span className="text-slate-500 tabular-nums" aria-label={`${today.reviewedToday} / ${today.goal} kart`}>{today.reviewedToday}/{today.goal}</span>
+            </p>
+            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuemin={0} aria-valuemax={today.goal}
+              aria-valuenow={Math.min(today.reviewedToday, today.goal)} aria-label="Gündəlik hədəf">
+              <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(100, (today.reviewedToday / today.goal) * 100)}%` }} />
+            </div>
+            {today.due === 0 ? (
+              <p className="mt-2 text-xs text-emerald-700">Bu günün təkrarı bitdi.</p>
+            ) : (
+              <ul className="mt-2 flex flex-col gap-0.5">
+                {today.documents.slice(0, 5).map(doc => (
+                  <li key={doc.documentId}>
+                    <button type="button" onClick={() => onOpenDue(doc)} className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-xs text-slate-600 hover:bg-slate-100">
+                      <span className="min-w-0 flex-1 truncate">{doc.name}</span>
+                      <span className="shrink-0 rounded-full bg-amber-50 px-1.5 font-semibold text-amber-800 tabular-nums">{doc.due}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
         <div className="flex items-center justify-between px-3 pt-1 pb-1">
           <p className="text-[11px] font-semibold tracking-wide text-slate-400 uppercase">Fənlərim</p>
           <button type="button" onClick={onNewCourse} aria-label="Yeni fənn" className="grid size-7 place-items-center rounded-md text-slate-500 hover:bg-slate-200/60 hover:text-slate-800">

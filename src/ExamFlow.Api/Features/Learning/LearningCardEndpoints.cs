@@ -37,11 +37,19 @@ public sealed class CardHideRequest
 /// </summary>
 public sealed record CardDto(string Id, string Kind, string TopicKey, string Front, string Back, IReadOnlyList<string> Items, IReadOnlyList<string> Others,
     int Source, int? Page, int ChunkOrdinal, bool Seen, int Streak, bool Mastered, bool Weak, bool IsSection, string? Section,
-    bool NeedsReview, bool Own, bool Edited, bool Hidden);
+    bool NeedsReview, bool Own, bool Edited, bool Hidden, bool Due, DateTimeOffset? DueAt);
 public sealed record CardTopicDto(string Key, string Title, string? Notes);
 /// <summary>The whole private deck of one document. Required = "Bilirdim" in a row to master a card.</summary>
 public sealed record CardDeckDto(string? Warning, int Required, IReadOnlyList<CardTopicDto> Topics, IReadOnlyList<CardDto> Cards);
-public sealed record CardStateDto(string Id, int Streak, bool Mastered, bool Weak);
+/// <summary>Due: the card is waiting for review now (spaced repetition); DueAt: when it comes back.</summary>
+public sealed record CardStateDto(string Id, int Streak, bool Mastered, bool Weak, bool Due, DateTimeOffset? DueAt);
+
+/// <summary>A student's state of one card as the DTOs need it.</summary>
+/// <summary>Cards of one document waiting for review; ChatId = the student's guide entry for it, when one exists.</summary>
+public sealed record DueDocumentDto(Guid DocumentId, Guid? ChatId, string Name, int Due);
+public sealed record ReviewTodayDto(int Goal, int ReviewedToday, int Due, IReadOnlyList<DueDocumentDto> Documents);
+
+internal sealed record CardStateView(int Streak, bool Mastered, CardGrade LastGrade, DateTimeOffset? DueAt, DateTimeOffset LastReviewedAt);
 
 /// <summary>Öyrənmə bələdçisi: cards built from the document itself. No AI call, no AI quota; each student sees only their own progress.</summary>
 public static partial class LearningStudyEndpoints
@@ -54,6 +62,7 @@ public static partial class LearningStudyEndpoints
         group.MapPut("/chats/{sessionId:guid}/cards/{cardId}", EditCard).Validate<CardEditRequest>();
         group.MapPut("/chats/{sessionId:guid}/cards/{cardId}/hidden", HideCard).Validate<CardHideRequest>();
         group.MapDelete("/chats/{sessionId:guid}/cards/{cardId}", DeleteCard);
+        group.MapGet("/review/today", ReviewToday);
     }
 
     private static async Task<(StudyDoc? Doc, StudyDeck? Deck, IResult? Error)> DeckAsync(AppDbContext db, CardDeckService decks, Guid userId, Guid sessionId,
@@ -64,7 +73,7 @@ public static partial class LearningStudyEndpoints
         return deck is null ? (null, null, TypedResults.Problem(error, statusCode: StatusCodes.Status422UnprocessableEntity)) : (doc, deck, null);
     }
 
-    private static async Task<IResult> Deck(Guid sessionId, ClaimsPrincipal user, AppDbContext db, CardDeckService decks, OpenQuestionIndexer indexer,
+    private static async Task<IResult> Deck(Guid sessionId, ClaimsPrincipal user, AppDbContext db, CardDeckService decks, OpenQuestionIndexer indexer, TimeProvider clock,
         CancellationToken ct)
     {
         var userId = user.GetUserId();
@@ -72,22 +81,23 @@ public static partial class LearningStudyEndpoints
         if (error is not null) return error;
 
         var states = await db.Set<LearningCardState>().AsNoTracking().Where(c => c.UserId == userId && c.LearningDocumentId == doc!.LearningId)
-            .Select(c => new { c.QuestionHash, c.Streak, c.Mastered, c.LastGrade }).ToListAsync(ct);
-        var byId = states.GroupBy(s => s.QuestionHash).ToDictionary(g => g.Key, g => g.First());
+            .Select(c => new { c.QuestionHash, View = new CardStateView(c.Streak, c.Mastered, c.LastGrade, c.DueAt, c.LastReviewedAt) }).ToListAsync(ct);
+        var byId = states.GroupBy(s => s.QuestionHash).ToDictionary(g => g.Key, g => g.First().View);
+        var now = clock.GetUtcNow();
         var personal = await PersonalAsync(db, userId, doc!.LearningId, deck!, ct);
-        var cards = personal.Select(p => ToDto(p, byId.GetValueOrDefault(p.Card.Id) is { } s ? (s.Streak, s.Mastered, s.LastGrade) : null)).ToList();
+        var cards = personal.Select(p => ToDto(p, byId.GetValueOrDefault(p.Card.Id), now)).ToList();
         var topics = deck!.Topics.Select(t => new CardTopicDto(t.Key, t.Title, t.Notes)).ToList();
         if (cards.Any(c => c.TopicKey == PersonalDeck.OwnTopicKey)) topics.Add(new(PersonalDeck.OwnTopicKey, PersonalDeck.OwnTopicTitle, null));
         var warning = (await indexer.GetAsync(doc.LearningId, ct)) is { Supported: true } index ? index.Warning : null;
         return TypedResults.Ok(new CardDeckDto(warning, CardMastery.Required, topics, cards));
     }
 
-    private static CardDto ToDto(PersonalCard p, (int Streak, bool Mastered, CardGrade LastGrade)? s)
+    private static CardDto ToDto(PersonalCard p, CardStateView? s, DateTimeOffset now)
     {
         var c = p.Card;
         return new CardDto(c.Id, c.Kind.ToString(), c.TopicKey, c.Front, c.Back, c.Items, c.Others, c.Source, c.Page, c.ChunkOrdinal,
-            s is not null, s?.Streak ?? 0, s?.Mastered ?? false, s is not null && s.Value.LastGrade != CardGrade.Good, c.IsSection, c.Section,
-            c.NeedsReview, p.Own, p.Edited, p.Hidden);
+            s is not null, s?.Streak ?? 0, s?.Mastered ?? false, s is not null && s.LastGrade != CardGrade.Good, c.IsSection, c.Section,
+            c.NeedsReview, p.Own, p.Edited, p.Hidden, s is not null && !p.Hidden && CardSchedule.IsDue(s.DueAt, s.LastReviewedAt, now), s?.DueAt);
     }
 
     /// <summary>The document's deck as this student sees it (their edits, hidden and deleted cards, own cards).</summary>
@@ -122,7 +132,7 @@ public static partial class LearningStudyEndpoints
         db.Add(card);
         await db.SaveChangesAsync(ct);
         var created = PersonalDeck.Merge(new StudyDeck(deck!.Topics, []), [], [card])[0];
-        return TypedResults.Ok(ToDto(created, null));
+        return TypedResults.Ok(ToDto(created, null, now));
     }
 
     private static async Task<IResult> EditCard(Guid sessionId, string cardId, CardEditRequest request, ClaimsPrincipal user, AppDbContext db,
@@ -148,7 +158,7 @@ public static partial class LearningStudyEndpoints
             (change.Front, change.Back, change.UpdatedAt) = (front, back, now);
         }
         await db.SaveChangesAsync(ct);
-        return await CardResult(db, userId, doc!.LearningId, deck!, cardId, ct);
+        return await CardResult(db, userId, doc!.LearningId, deck!, cardId, clock.GetUtcNow(), ct);
     }
 
     private static async Task<IResult> HideCard(Guid sessionId, string cardId, CardHideRequest request, ClaimsPrincipal user, AppDbContext db,
@@ -163,7 +173,7 @@ public static partial class LearningStudyEndpoints
         if (change.Deleted) return CardNotFound();
         (change.Hidden, change.UpdatedAt) = (request.Hidden!.Value, clock.GetUtcNow());
         await db.SaveChangesAsync(ct);
-        return await CardResult(db, userId, doc.LearningId, deck, cardId, ct);
+        return await CardResult(db, userId, doc.LearningId, deck, cardId, clock.GetUtcNow(), ct);
     }
 
     private static async Task<IResult> DeleteCard(Guid sessionId, string cardId, ClaimsPrincipal user, AppDbContext db, CardDeckService decks,
@@ -200,13 +210,13 @@ public static partial class LearningStudyEndpoints
         return change;
     }
 
-    private static async Task<IResult> CardResult(AppDbContext db, Guid userId, Guid learningId, StudyDeck deck, string cardId, CancellationToken ct)
+    private static async Task<IResult> CardResult(AppDbContext db, Guid userId, Guid learningId, StudyDeck deck, string cardId, DateTimeOffset now, CancellationToken ct)
     {
         var card = (await PersonalAsync(db, userId, learningId, deck, ct)).FirstOrDefault(p => p.Card.Id == cardId);
         if (card is null) return CardNotFound();
         var s = await db.Set<LearningCardState>().AsNoTracking().Where(c => c.UserId == userId && c.LearningDocumentId == learningId && c.QuestionHash == cardId)
-            .Select(c => new { c.Streak, c.Mastered, c.LastGrade }).FirstOrDefaultAsync(ct);
-        return TypedResults.Ok(ToDto(card, s is null ? null : (s.Streak, s.Mastered, s.LastGrade)));
+            .Select(c => new CardStateView(c.Streak, c.Mastered, c.LastGrade, c.DueAt, c.LastReviewedAt)).FirstOrDefaultAsync(ct);
+        return TypedResults.Ok(ToDto(card, s, now));
     }
 
     private static async Task<IResult> ReviewCard(Guid sessionId, string cardId, CardReviewRequest request, ClaimsPrincipal user, AppDbContext db,
@@ -233,10 +243,12 @@ public static partial class LearningStudyEndpoints
             if (grade == CardGrade.Again) state.Lapses++;
             state.LastGrade = grade;
             state.LastReviewedAt = now;
+            (state.IntervalDays, var due) = CardSchedule.Next(state.IntervalDays, grade, now);
+            state.DueAt = due;
             try
             {
                 await db.SaveChangesAsync(ct);
-                return TypedResults.Ok(new CardStateDto(cardId, state.Streak, state.Mastered, grade != CardGrade.Good));
+                return TypedResults.Ok(new CardStateDto(cardId, state.Streak, state.Mastered, grade != CardGrade.Good, due <= now, due));
             }
             catch (DbUpdateException) when (attempt == 0)
             {
@@ -244,5 +256,35 @@ public static partial class LearningStudyEndpoints
                 db.ChangeTracker.Clear();
             }
         }
+    }
+
+    /// <summary>
+    /// "Bu gün təkrar" across all the student's guide documents: cards due now per document, and how many cards were
+    /// reviewed today against the daily goal. Hidden and deleted cards are left out.
+    /// </summary>
+    private static async Task<IResult> ReviewToday(ClaimsPrincipal user, AppDbContext db, TimeProvider clock, CancellationToken ct)
+    {
+        var userId = user.GetUserId();
+        var now = clock.GetUtcNow();
+        var dayStart = CardSchedule.DayStart(now);
+        var states = db.Set<LearningCardState>().AsNoTracking().Where(s => s.UserId == userId
+            && !db.Set<LearningCardOverride>().Any(o => o.UserId == userId && o.LearningDocumentId == s.LearningDocumentId && o.CardId == s.QuestionHash
+                && (o.Hidden || o.Deleted)));
+        var due = await states.Where(s => (s.DueAt ?? s.LastReviewedAt) <= now).GroupBy(s => s.LearningDocumentId)
+            .Select(g => new { LearningId = g.Key, Count = g.Count() }).ToListAsync(ct);
+        var reviewed = await states.CountAsync(s => s.LastReviewedAt >= dayStart, ct);
+
+        var ids = due.Select(d => d.LearningId).ToList();
+        // Only documents the student can still read.
+        var docs = await db.Set<LearningDocument>().AsNoTracking().Where(l => ids.Contains(l.Id))
+            .Join(LearningEndpoints.GuideDocuments(db, userId), l => l.DocumentId, d => d.Id, (l, d) => new { LearningId = l.Id, DocumentId = d.Id, Name = d.OriginalFileName })
+            .ToListAsync(ct);
+        var chats = await db.Set<LearningChatSession>().AsNoTracking().Where(s => s.UserId == userId && ids.Contains(s.LearningDocumentId))
+            .Select(s => new { s.Id, s.LearningDocumentId, s.UpdatedAt }).ToListAsync(ct);
+        var documents = docs
+            .Select(d => new DueDocumentDto(d.DocumentId, chats.Where(c => c.LearningDocumentId == d.LearningId).MaxBy(c => c.UpdatedAt)?.Id, d.Name,
+                due.First(x => x.LearningId == d.LearningId).Count))
+            .OrderByDescending(d => d.Due).ToList();
+        return TypedResults.Ok(new ReviewTodayDto(CardSchedule.DailyGoal, reviewed, documents.Sum(d => d.Due), documents));
     }
 }

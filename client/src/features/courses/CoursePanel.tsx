@@ -54,8 +54,9 @@ export function CoursePanel({ courseId, onOpenMaterial, onDeleted }: Props) {
     else if (task.kind === 'Test') navigate(`/exams/new?document=${task.documentId}`)
     else if (task.kind === 'Read') onOpenMaterial(task.documentId, task.chatId, { at: task.chunkOrdinal ?? undefined })
     else if (task.kind === 'Cards') {
-      const weak = plan.data?.materials.find(m => m.documentId === task.documentId)?.weak ?? 0
-      onOpenMaterial(task.documentId, task.chatId, { tab: 'learn', scope: weak > 0 ? 'weak' : undefined })
+      const material = plan.data?.materials.find(m => m.documentId === task.documentId)
+      const scope = (material?.due ?? 0) > 0 ? 'due' : (material?.weak ?? 0) > 0 ? 'weak' : undefined
+      onOpenMaterial(task.documentId, task.chatId, { tab: 'learn', scope })
     }
   }
 
@@ -153,7 +154,7 @@ export function CoursePanel({ courseId, onOpenMaterial, onDeleted }: Props) {
                       <span className="block truncate text-sm font-medium text-slate-900">{m.name}</span>
                       <span className="block text-xs text-slate-500">
                         {!m.ready ? 'Hələ hazır deyil — açın ki, emal olunsun' : m.cards === 0 ? 'Avtomatik kart yoxdur — konspektdən öz kartını yarat'
-                          : `${m.mastered}/${m.cards} kart mənimsənilib${m.weak > 0 ? ` · ${m.weak} zəif` : ''}`}
+                          : `${m.mastered}/${m.cards} kart mənimsənilib${m.due > 0 ? ` · bu gün ${m.due} təkrar` : ''}${m.weak > 0 ? ` · ${m.weak} zəif` : ''}`}
                       </span>
                     </span>
                     {m.cards > 0 && <span className="shrink-0 text-sm font-semibold text-slate-700 tabular-nums">{percent(m.mastered, m.cards)}%</span>}

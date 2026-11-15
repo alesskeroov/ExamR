@@ -48,7 +48,10 @@ public static class CoursePlanner
             tasks.Add(new("Read", spot.Section is { Length: > 0 } section ? $"«{section}» hissəsini oxu" : "Zəif hissəni oxu",
                 $"«{spot.MaterialName}» — səhv cavablarının {spot.WrongAnswers}-i buradan", spot.MaterialDocumentId, spot.ChatId, spot.WrongAnswers, spot.ChunkOrdinal));
 
-        if (materials.Where(m => m.Weak > 0).MaxBy(m => m.Weak) is { } weak)
+        // Cards whose review day has come first: that is what spaced repetition depends on.
+        if (materials.Where(m => m.Due > 0).MaxBy(m => m.Due) is { } due)
+            tasks.Add(new("Cards", "Bu günün təkrarı", $"«{due.Name}» — təkrar vaxtı çatmış {due.Due} kart", due.DocumentId, due.ChatId, due.Due, null));
+        else if (materials.Where(m => m.Weak > 0).MaxBy(m => m.Weak) is { } weak)
             tasks.Add(new("Cards", "Zəif kartları təkrarla", $"«{weak.Name}» — {weak.Weak} zəif kart", weak.DocumentId, weak.ChatId, weak.Weak, null));
         else if (materials.Where(m => m.Cards > m.Mastered).MaxBy(m => m.Cards - m.Mastered) is { } open)
         {

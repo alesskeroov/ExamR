@@ -39,9 +39,9 @@ public sealed class CourseInsights(AppDbContext db, CardDeckService decks, IChun
     }
 
     /// <summary>Cards the student studies in this material (hidden ones left out), mastered and weak among them.</summary>
-    public async Task<MaterialProgress> CardsAsync(Guid userId, CourseMaterial material, CancellationToken ct)
+    public async Task<MaterialProgress> CardsAsync(Guid userId, CourseMaterial material, DateTimeOffset now, CancellationToken ct)
     {
-        var empty = new MaterialProgress(material.DocumentId, material.Name, material.Format, material.ChatId, material.Ready, 0, 0, 0);
+        var empty = new MaterialProgress(material.DocumentId, material.Name, material.Format, material.ChatId, material.Ready, 0, 0, 0, 0);
         if (!material.Ready) return empty;
         var learningId = material.LearningId!.Value;
         var (deck, _) = await decks.GetAsync(learningId, ct);
@@ -50,9 +50,13 @@ public sealed class CourseInsights(AppDbContext db, CardDeckService decks, IChun
         var own = await db.Set<LearningUserCard>().AsNoTracking().Where(c => c.UserId == userId && c.LearningDocumentId == learningId).ToListAsync(ct);
         var visible = PersonalDeck.Merge(deck, overrides, own).Where(p => !p.Hidden).Select(p => p.Card.Id).ToHashSet();
         var states = await db.Set<LearningCardState>().AsNoTracking().Where(s => s.UserId == userId && s.LearningDocumentId == learningId)
-            .Select(s => new { s.QuestionHash, s.Mastered, s.LastGrade }).ToListAsync(ct);
+            .Select(s => new { s.QuestionHash, s.Mastered, s.LastGrade, s.DueAt, s.LastReviewedAt }).ToListAsync(ct);
         var mine = states.Where(s => visible.Contains(s.QuestionHash)).ToList();
-        return empty with { Cards = visible.Count, Mastered = mine.Count(s => s.Mastered), Weak = mine.Count(s => s.LastGrade != CardGrade.Good) };
+        return empty with
+        {
+            Cards = visible.Count, Mastered = mine.Count(s => s.Mastered), Weak = mine.Count(s => s.LastGrade != CardGrade.Good),
+            Due = mine.Count(s => CardSchedule.IsDue(s.DueAt, s.LastReviewedAt, now)),
+        };
     }
 
     /// <summary>

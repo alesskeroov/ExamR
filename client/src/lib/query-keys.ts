@@ -59,6 +59,7 @@ export const queryKeys = {
     prepare: (chatId: string, view: string, key: string) => ['tutor', 'prepare', chatId, view, key] as const,
     revision: (chatId: string) => ['tutor', 'revision', chatId] as const,
     deck: (chatId: string) => ['tutor', 'deck', chatId] as const,
+    reviewToday: ['tutor', 'review-today'] as const,
     usage: ['tutor', 'usage'] as const,
   },
   health: ['health'] as const,
