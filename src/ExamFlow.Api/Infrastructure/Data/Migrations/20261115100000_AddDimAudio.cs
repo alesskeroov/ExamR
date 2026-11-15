@@ -12,25 +12,6 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
-                name: "DimAudioPlays",
-                columns: table => new
-                {
-                    ExamId = table.Column<Guid>(type: "uuid", nullable: false),
-                    AudioId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Count = table.Column<int>(type: "integer", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_DimAudioPlays", x => new { x.ExamId, x.AudioId });
-                    table.ForeignKey(
-                        name: "FK_DimAudioPlays_Exams_ExamId",
-                        column: x => x.ExamId,
-                        principalTable: "Exams",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "DimAudios",
                 columns: table => new
                 {
@@ -42,7 +23,6 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     StorageKey = table.Column<string>(type: "character varying(100)", unicode: false, maxLength: 100, nullable: false),
                     ContentType = table.Column<string>(type: "character varying(50)", unicode: false, maxLength: 50, nullable: false),
                     SizeBytes = table.Column<long>(type: "bigint", nullable: false),
-                    MaxPlays = table.Column<int>(type: "integer", nullable: true),
                     UploadedByUserId = table.Column<Guid>(type: "uuid", nullable: false),
                     CreatedAt = table.Column<DateTimeOffset>(type: "timestamp(3) with time zone", precision: 3, nullable: false)
                 },
@@ -67,9 +47,6 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropTable(
-                name: "DimAudioPlays");
-
             migrationBuilder.DropTable(
                 name: "DimAudios");
         }

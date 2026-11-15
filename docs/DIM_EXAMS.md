@@ -64,8 +64,10 @@ olmayan nömrələr cavabda `notInBank` kimi qayıdır.
 Production-da (Neon) migration-lar ayrıca tətbiq olunur. `scripts/migrations/*.neon.sql` idempotentdir (artıq tətbiq
 olunmuş migration atlanır):
 - `AddCodedAnswers.neon.sql` — `Questions.CodedAnswer`, `ExamQuestions.CorrectAnswer/AnswerText`;
-- `AddDimAudio.neon.sql` — `DimAudios`, `DimAudioPlays`;
-- `DimCodedAndAudio.neon.sql` — ikisi birlikdə (`RemoveExplanationBank`-dan sonra).
+- `AddDimAudio.neon.sql` — `DimAudios`;
+- `AddDimAudioPlayLimit.neon.sql` — `DimAudios.MaxPlays`, `DimAudioPlays` (`IF NOT EXISTS`: əvvəlki skriptlə artıq
+  yaradılıbsa, yalnız tarixçəyə yazılır);
+- `DimCodedAndAudio.neon.sql` — üçü birlikdə (`RemoveExplanationBank`-dan sonra).
 
 ## Kodlaşdırılan suallar (`Features/Questions/CodedAnswers.cs`)
 
