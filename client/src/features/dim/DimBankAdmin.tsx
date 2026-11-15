@@ -1,4 +1,4 @@
-import { CheckCircle2, FileText, KeyRound, Pencil, Trash2 } from 'lucide-react'
+import { BookOpen, CheckCircle2, FileText, KeyRound, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Alert } from '../../components/common/Alert'
 import { Button } from '../../components/common/Button'
@@ -6,11 +6,13 @@ import { EmptyState } from '../../components/common/EmptyState'
 import { FileDropzone } from '../../components/common/FileDropzone'
 import { StatusBadge } from '../../components/common/StatusBadge'
 import { api, ApiError } from '../../lib/api-client'
+import { useConfirm } from '../../lib/use-confirm'
 import { cn } from '../../lib/utils'
 import { MAX_FILE_SIZE_BYTES, useUploadDocument, type DocumentDto } from '../documents/api'
 import {
-  useApplyAnswerKey, useApproveValid, useDimBankStats, useDimCatalog, useDimSourceDocuments, useDimSourceQuestions,
-  useEditDimQuestion, useRemoveFromBank, type DimSourceDocument, type DimSourceQuestion, type DimTrack,
+  useApplyAnswerKey, useApproveValid, useDeleteDimDocument, useDeleteDimPassage, useDimAdminTests, useDimBankStats, useDimCatalog, useDimPassages, useDimSourceDocuments,
+  useDimSourceQuestions, useEditDimQuestion, useRemoveFromBank, useSaveDimPassage,
+  type DimPassage, type DimSourceDocument, type DimSourceQuestion, type DimTrack,
 } from './api'
 import { inputClass, trackLabel } from './ui'
 
@@ -36,6 +38,21 @@ export function DimBankAdmin() {
   // Subject chosen at upload time, remembered per document for the one-click "add to bank".
   const [chosen, setChosen] = useState<Record<string, Classification>>({})
   const selected = documents.data?.find(d => d.id === documentId)
+  const tests = useDimAdminTests()
+  const removeDocument = useDeleteDimDocument()
+  const confirm = useConfirm()
+
+  async function handleDelete(d: DimSourceDocument) {
+    const banked = d.bank.reduce((sum, b) => sum + b.count, 0)
+    const usedBy = (tests.data ?? []).filter(t => t.sections.some(s => s.sourceDocumentId === d.id)).map(t => `"${t.title}"`)
+    const description = `"${d.originalFileName}" və onun ${d.questionCount} sualı birdəfəlik silinəcək`
+      + (banked > 0 ? `, ${banked} sual sual bankından çıxarılacaq` : '')
+      + '. Sınaqlarda bu sənədin sualları artıq çıxmayacaq'
+      + (usedBy.length > 0 ? ` (bu sənəddən sual götürən sınaqlar: ${usedBy.join(', ')})` : '')
+      + '. İstifadəçilərin keçmiş nəticələri qalır. Bu geri qaytarıla bilməz.'
+    if (await confirm({ title: 'Sənəd silinsin?', description, confirmLabel: 'Sil', danger: true }))
+      removeDocument.mutate(d.id, { onSuccess: () => setDocumentId(current => (current === d.id ? '' : current)) })
+  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -63,16 +80,22 @@ export function DimBankAdmin() {
           : (
             <ul className="mt-3 grid gap-2 sm:grid-cols-2">
               {documents.data.map(d => (
-                <li key={d.id}>
+                <li key={d.id} className="relative">
                   <button type="button" onClick={() => setDocumentId(d.id)} aria-pressed={d.id === documentId}
-                    className={cn('w-full rounded-lg border p-3 text-left transition-colors', d.id === documentId ? 'border-indigo-400 bg-indigo-50/60 ring-1 ring-indigo-400' : 'border-slate-200 hover:bg-slate-50')}>
+                    className={cn('w-full rounded-lg border p-3 pr-12 text-left transition-colors', d.id === documentId ? 'border-indigo-400 bg-indigo-50/60 ring-1 ring-indigo-400' : 'border-slate-200 hover:bg-slate-50')}>
                     <span className="flex items-center gap-2 font-medium break-all"><FileText className="size-4 shrink-0 text-indigo-600" aria-hidden />{d.originalFileName}</span>
                     <DocumentCounts document={d} />
+                  </button>
+                  <button type="button" onClick={() => void handleDelete(d)} disabled={removeDocument.isPending}
+                    aria-label={`${d.originalFileName} sənədini sil`} title="Sənədi sil"
+                    className="absolute top-2 right-2 inline-flex size-9 items-center justify-center rounded-md text-slate-500 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-50">
+                    <Trash2 className="size-4" aria-hidden />
                   </button>
                 </li>
               ))}
             </ul>
           )}
+        {removeDocument.isError && <div className="mt-3"><Alert title="Sənəd silinmədi">{removeDocument.error.message}</Alert></div>}
       </section>
 
       {selected && <DocumentPanel key={selected.id} document={selected} initial={chosen[selected.id]} />}
@@ -151,6 +174,7 @@ function DocumentPanel({ document, initial }: { document: DimSourceDocument; ini
         </div>
         {approve.isError && <div className="mt-2"><Alert title="Əlavə alınmadı">{approve.error.message}</Alert></div>}
         {missingAnswers > 0 && <AnswerKey documentId={document.id} missing={missingAnswers} />}
+        <Passages documentId={document.id} />
       </section>
 
       <section aria-label="Sənədin sualları" className="flex flex-col gap-3">
@@ -197,6 +221,99 @@ function AnswerKey({ documentId, missing }: { documentId: string; missing: numbe
       </div>
       {applyKey.isError && <div className="mt-2"><Alert title="Açar tətbiq edilmədi">{applyKey.error.message}</Alert></div>}
     </details>
+  )
+}
+
+/** Reading passages / listening transcripts: shown in the exam above the questions of their number range. */
+function Passages({ documentId }: { documentId: string }) {
+  const passages = useDimPassages(documentId)
+  const remove = useDeleteDimPassage()
+  const [editing, setEditing] = useState<DimPassage | 'new' | null>(null)
+  const list = passages.data ?? []
+
+  return (
+    <details className="mt-4 border-t border-slate-100 pt-3 text-sm">
+      <summary className="flex cursor-pointer items-center gap-2 font-medium text-slate-700">
+        <BookOpen className="size-4 text-indigo-600" aria-hidden />Mətnlər (oxu / dinləmə)
+        <span className="font-normal text-slate-500">— {passages.isPending ? '…' : list.length}</span>
+      </summary>
+      <p className="mt-2 text-slate-600">
+        Mətn imtahanda göstərilən nömrəli sualların üstündə çıxır və bu suallar yan-yana düşür. PDF-dəki
+        «Read the passage and answer questions 18 – 21» kimi mətnlər avtomatik tapılır; dinləmə mətnini (transkripti) özünüz əlavə edə bilərsiniz.
+      </p>
+      {passages.isError && <div className="mt-2"><Alert title="Mətnlər yüklənmədi">{passages.error.message}</Alert></div>}
+      {remove.isError && <div className="mt-2"><Alert title="Silinmədi">{remove.error.message}</Alert></div>}
+      <ul className="mt-3 flex flex-col gap-2">
+        {list.map(p => (
+          <li key={p.id} className="rounded-lg border border-slate-200 p-3">
+            {editing !== null && editing !== 'new' && editing.id === p.id ? (
+              <PassageEditor documentId={documentId} passage={p} onDone={() => setEditing(null)} />
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusBadge tone="info">{`Suallar ${p.fromNumber}–${p.toNumber}`}</StatusBadge>
+                  {p.title && <span className="min-w-0 truncate text-slate-600">{p.title}</span>}
+                  <span className="ml-auto flex gap-1">
+                    <button type="button" onClick={() => setEditing(p)} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-50">
+                      <Pencil className="size-3.5" aria-hidden />Redaktə
+                    </button>
+                    <button type="button" onClick={() => remove.mutate(p.id)} disabled={remove.isPending}
+                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50">
+                      <Trash2 className="size-3.5" aria-hidden />Sil
+                    </button>
+                  </span>
+                </div>
+                <p className="mt-1.5 line-clamp-3 whitespace-pre-line text-slate-800">{p.text}</p>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+      {editing === 'new' ? (
+        <div className="mt-2 rounded-lg border border-indigo-200 p-3"><PassageEditor documentId={documentId} onDone={() => setEditing(null)} /></div>
+      ) : (
+        <Button variant="secondary" className="mt-2" onClick={() => setEditing('new')}><Plus className="size-4" aria-hidden />Mətn əlavə et</Button>
+      )}
+    </details>
+  )
+}
+
+function PassageEditor({ documentId, passage, onDone }: { documentId: string; passage?: DimPassage; onDone: () => void }) {
+  const save = useSaveDimPassage()
+  const [from, setFrom] = useState(passage ? String(passage.fromNumber) : '')
+  const [to, setTo] = useState(passage ? String(passage.toNumber) : '')
+  const [title, setTitle] = useState(passage?.title ?? '')
+  const [text, setText] = useState(passage?.text ?? '')
+  const fromNumber = Number(from)
+  const toNumber = Number(to)
+  const ready = Number.isInteger(fromNumber) && fromNumber >= 1 && Number.isInteger(toNumber) && toNumber >= fromNumber && text.trim() !== ''
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap gap-3">
+        <label className="flex w-28 flex-col gap-1.5 font-medium text-slate-700">İlk sual
+          <input className={inputClass} type="number" min={1} inputMode="numeric" value={from} onChange={e => setFrom(e.target.value)} />
+        </label>
+        <label className="flex w-28 flex-col gap-1.5 font-medium text-slate-700">Son sual
+          <input className={inputClass} type="number" min={1} inputMode="numeric" value={to} onChange={e => setTo(e.target.value)} />
+        </label>
+        <label className="flex min-w-48 flex-1 flex-col gap-1.5 font-medium text-slate-700">Başlıq (istəyə bağlı)
+          <input className={inputClass} value={title} maxLength={300} onChange={e => setTitle(e.target.value)} placeholder="məs. Read the passage and answer questions 18 – 21." />
+        </label>
+      </div>
+      <label className="flex flex-col gap-1.5 font-medium text-slate-700">Mətn — paraqrafları boş sətirlə ayırın
+        <textarea value={text} onChange={e => setText(e.target.value)} rows={8} maxLength={20000}
+          className="w-full rounded-lg border border-slate-300 bg-white p-3 text-sm leading-6 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none" />
+      </label>
+      {save.isError && <Alert title="Yadda saxlanmadı">{save.error.message}</Alert>}
+      <div className="flex gap-2">
+        <Button loading={save.isPending} disabled={!ready}
+          onClick={() => save.mutate({ documentId, id: passage?.id, fromNumber, toNumber, title: title.trim() || null, text }, { onSuccess: onDone })}>
+          Yadda saxla
+        </Button>
+        <Button variant="ghost" onClick={onDone}>Ləğv et</Button>
+      </div>
+    </div>
   )
 }
 

@@ -62,6 +62,10 @@ public class QuestionSnapshot
 
     /// <summary>Images frozen with the question; missing (null) in exams created before visuals existed.</summary>
     public List<VisualSnapshot>? Visuals { get; set; } = [];
+
+    /// <summary>The shared text (reading passage) the question refers to; null when it has none.</summary>
+    public string? PassageTitle { get; set; }
+    public string? PassageText { get; set; }
 }
 
 /// <summary>An image of a frozen question. <see cref="StorageKey"/> never leaves the server.</summary>

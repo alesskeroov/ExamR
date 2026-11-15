@@ -127,5 +127,6 @@ export const queryKeys = {
     bankStats: ['dim', 'admin', 'bank-stats'] as const,
     sourceDocuments: ['dim', 'admin', 'documents'] as const,
     sourceQuestions: (documentId: string) => ['dim', 'admin', 'documents', documentId] as const,
+    passages: (documentId: string) => ['dim', 'admin', 'documents', documentId, 'passages'] as const,
   },
 }

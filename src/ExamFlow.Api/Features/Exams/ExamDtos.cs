@@ -43,6 +43,9 @@ public sealed class AnswerRequest
 
 public sealed record ExamOptionDto(Guid Id, string Label, string Text);
 
+/// <summary>The shared text (reading passage) a question refers to.</summary>
+public sealed record ExamPassageDto(string? Title, string Text);
+
 /// <summary>Correct answer shown during the exam; only in Immediate mode and only after the user revealed it.</summary>
 public sealed record AnswerRevealDto(Guid? CorrectOptionId, bool IsGradable);
 
@@ -54,7 +57,8 @@ public sealed record ExamSessionQuestionDto(
     Guid? SelectedOptionId,
     AnswerRevealDto? Reveal,
     IReadOnlyList<VisualDto> Visuals,
-    bool Locked);
+    bool Locked,
+    ExamPassageDto? Passage);
 
 public sealed record ExamSessionDto(
     Guid Id,
@@ -75,7 +79,8 @@ public sealed record ExamResultQuestionDto(
     Guid? SelectedOptionId,
     Guid? CorrectOptionId,
     ExamOutcome Outcome,
-    IReadOnlyList<VisualDto> Visuals);
+    IReadOnlyList<VisualDto> Visuals,
+    ExamPassageDto? Passage);
 
 /// <summary>Where the exam's questions came from. DocumentName is null when the PDF was deleted.</summary>
 public sealed record ExamSourceDto(Guid? DocumentId, string? DocumentName, int? RangeFrom, int? RangeTo);

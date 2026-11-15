@@ -48,6 +48,21 @@ public sealed class RawOption(char letter)
 
 public sealed record ParsedOption(string Label, string Text);
 
+/// <summary>
+/// A shared text (reading passage) that several questions refer to: "Read the passage and answer questions 18 – 21."
+/// Each line keeps its own text so paragraphs can be rebuilt.
+/// </summary>
+public sealed class RawPassage(int fromNumber, int toNumber, string title)
+{
+    public int FromNumber { get; } = fromNumber;
+    public int ToNumber { get; } = toNumber;
+    public string Title { get; } = title;
+    public List<string> Lines { get; } = [];
+}
+
+/// <summary>A passage for questions <see cref="FromNumber"/>…<see cref="ToNumber"/> (original numbers, inclusive).</summary>
+public sealed record ParsedPassage(int FromNumber, int ToNumber, string Title, string Text);
+
 public sealed record ParsedQuestion(
     int Number,
     string Text,
@@ -80,6 +95,9 @@ public sealed class ParseResult
     public IReadOnlyList<string> Warnings { get; init; } = [];
     public int PageCount { get; init; }
     public int DuplicatesSkipped { get; init; }
+
+    /// <summary>Reading passages found in the file; never part of a question's text or options.</summary>
+    public IReadOnlyList<ParsedPassage> Passages { get; init; } = [];
 
     /// <summary>Starts of segmented questions that were dropped (empty or duplicate); they still bound visual regions.</summary>
     public IReadOnlyList<SourceAnchor> SkippedAnchors { get; init; } = [];

@@ -157,6 +157,57 @@ public class QuestionSegmenterTests
         Assert.Equal("Sual?", Text(question.TextTokens));
     }
 
+    private static TextLine Styled(string text, bool bold, string color) =>
+        new(1, text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(t => new TextToken(t, bold, color)).ToList());
+
+    [Fact]
+    public void Reading_passage_is_kept_out_of_the_previous_option_and_collected()
+    {
+        var passages = new List<RawPassage>();
+        var questions = QuestionSegmenter.Segment([
+            L("17. Choose the correct option."), L("A) has he"), L("B) does he"),
+            Styled("Reading comprehension", bold: true, "blue"),
+            Styled("Read the passage and answer questions 18 – 19.", bold: true, TextToken.DefaultColor),
+            L("(1) Cousteau was born in 1910."),
+            L("2. He joined the Navy."),
+            L("(2) He made films."),
+            L("18. The passage is mainly about … ."), L("A) x"), L("B) y"),
+            L("19. Which is true?"), L("A) x"), L("B) y"),
+        ], passages);
+
+        Assert.Equal([17, 18, 19], questions.Select(q => q.Number));
+        Assert.Equal("does he", Text(questions[0].Options[1].TextTokens));
+        var passage = Assert.Single(passages);
+        Assert.Equal((18, 19), (passage.FromNumber, passage.ToNumber));
+        Assert.Equal(["(1) Cousteau was born in 1910.", "2. He joined the Navy.", "(2) He made films."], passage.Lines);
+    }
+
+    [Fact]
+    public void Passage_before_the_first_question_ends_at_that_question()
+    {
+        var passages = new List<RawPassage>();
+        var question = Assert.Single(QuestionSegmenter.Segment([
+            L("Listen to the passage and answer questions 1 – 4."), L("1. The passage is about … ."), L("A) x"), L("B) y"),
+        ], passages));
+
+        Assert.Equal(1, question.Number);
+        Assert.Empty(Assert.Single(passages).Lines);
+    }
+
+    [Fact]
+    public void Section_heading_after_the_last_option_is_dropped_but_wrapped_bold_option_is_kept()
+    {
+        var questions = QuestionSegmenter.Segment([
+            L("4. Which is true?"), L("A) T, T"),
+            Styled("B) a long correct", bold: true, "green"), Styled("answer ✓", bold: true, "green"),
+            Styled("Use of English", bold: true, "blue"),
+            L("5. Next?"), L("A) x"), L("B) y"),
+        ]);
+
+        Assert.Equal("a long correct answer ✓", Text(questions[0].Options[1].TextTokens));
+        Assert.Equal([4, 5], questions.Select(q => q.Number));
+    }
+
     [Fact]
     public void Content_hash_ignores_case_with_azerbaijani_rules_and_option_order()
     {

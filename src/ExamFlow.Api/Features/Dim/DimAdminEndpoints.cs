@@ -24,6 +24,10 @@ public static class DimAdminEndpoints
         group.MapGet("/documents/{documentId:guid}/questions", SourceQuestions);
         group.MapPost("/documents/{documentId:guid}/approve-valid", ApproveValid).Validate<DimApproveDocumentRequest>();
         group.MapPut("/questions/{questionId:guid}", EditQuestion).Validate<DimEditQuestionRequest>();
+        group.MapGet("/documents/{documentId:guid}/passages", Passages);
+        group.MapPost("/documents/{documentId:guid}/passages", CreatePassage).Validate<DimPassageRequest>();
+        group.MapPut("/passages/{passageId:guid}", UpdatePassage).Validate<DimPassageRequest>();
+        group.MapDelete("/passages/{passageId:guid}", DeletePassage);
         group.MapPost("/documents/{documentId:guid}/answer-key", AnswerKey).Validate<DimAnswerKeyRequest>();
         group.MapPost("/bank", Approve).Validate<DimApproveRequest>();
         group.MapDelete("/bank/{questionId:guid}", RemoveFromBank);
@@ -85,6 +89,82 @@ public static class DimAdminEndpoints
         return TypedResults.Ok(questions.Select(q => new DimSourceQuestionDto(q.Id, q.SourceNumber, q.Text,
             q.Options.Select((o, i) => new DimOptionDto(o.Id, ((char)('A' + i)).ToString(), o.Text, o.IsCorrect)).ToList(),
             q.VerificationStatus, q.ParseWarning, q.Bank)).ToList());
+    }
+
+    /// <summary>Reading passages of a document the admin uploaded, in question order.</summary>
+    private static async Task<IResult> Passages(Guid documentId, ClaimsPrincipal user, AppDbContext db, CancellationToken ct)
+    {
+        var userId = user.GetUserId();
+        if (!await db.Documents.AnyAsync(d => d.Id == documentId && d.UploadedByUserId == userId, ct))
+            return Problem(StatusCodes.Status404NotFound, "Sənəd tapılmadı.");
+
+        var passages = await db.QuestionPassages.AsNoTracking()
+            .Where(p => p.DocumentId == documentId)
+            .OrderBy(p => p.FromNumber)
+            .Select(p => new DimPassageDto(p.Id, p.FromNumber, p.ToNumber, p.Title, p.Text))
+            .ToListAsync(ct);
+        return TypedResults.Ok(passages);
+    }
+
+    private static async Task<IResult> CreatePassage(
+        Guid documentId, DimPassageRequest request, ClaimsPrincipal user, AppDbContext db, CancellationToken ct)
+    {
+        var userId = user.GetUserId();
+        if (!await db.Documents.AnyAsync(d => d.Id == documentId && d.UploadedByUserId == userId, ct))
+            return Problem(StatusCodes.Status404NotFound, "Sənəd tapılmadı.");
+        if (await PassageRangeError(db, documentId, null, request, ct) is { } error)
+            return Problem(StatusCodes.Status400BadRequest, error);
+
+        var passage = new QuestionPassage { DocumentId = documentId };
+        Apply(passage, request);
+        db.QuestionPassages.Add(passage);
+        await db.SaveChangesAsync(ct);
+        return TypedResults.Ok(new DimPassageDto(passage.Id, passage.FromNumber, passage.ToNumber, passage.Title, passage.Text));
+    }
+
+    private static async Task<IResult> UpdatePassage(
+        Guid passageId, DimPassageRequest request, ClaimsPrincipal user, AppDbContext db, CancellationToken ct)
+    {
+        var userId = user.GetUserId();
+        var passage = await db.QuestionPassages.FirstOrDefaultAsync(p => p.Id == passageId && p.Document.UploadedByUserId == userId, ct);
+        if (passage is null) return Problem(StatusCodes.Status404NotFound, "Mətn tapılmadı.");
+        if (await PassageRangeError(db, passage.DocumentId, passage.Id, request, ct) is { } error)
+            return Problem(StatusCodes.Status400BadRequest, error);
+
+        Apply(passage, request);
+        await db.SaveChangesAsync(ct);
+        return TypedResults.Ok(new DimPassageDto(passage.Id, passage.FromNumber, passage.ToNumber, passage.Title, passage.Text));
+    }
+
+    private static async Task<IResult> DeletePassage(Guid passageId, ClaimsPrincipal user, AppDbContext db, CancellationToken ct)
+    {
+        var userId = user.GetUserId();
+        var deleted = await db.QuestionPassages
+            .Where(p => p.Id == passageId && p.Document.UploadedByUserId == userId)
+            .ExecuteDeleteAsync(ct);
+        return deleted == 0 ? Problem(StatusCodes.Status404NotFound, "Mətn tapılmadı.") : TypedResults.NoContent();
+    }
+
+    /// <summary>A question belongs to at most one passage, so ranges of one document must not overlap.</summary>
+    private static async Task<string?> PassageRangeError(
+        AppDbContext db, Guid documentId, Guid? passageId, DimPassageRequest request, CancellationToken ct)
+    {
+        if (request.ToNumber < request.FromNumber) return "Son sual nömrəsi ilk nömrədən kiçik ola bilməz.";
+        if (string.IsNullOrWhiteSpace(request.Text)) return "Mətn boş ola bilməz.";
+        var overlap = await db.QuestionPassages.AsNoTracking()
+            .Where(p => p.DocumentId == documentId && p.Id != passageId
+                && p.FromNumber <= request.ToNumber && p.ToNumber >= request.FromNumber)
+            .Select(p => new { p.FromNumber, p.ToNumber })
+            .FirstOrDefaultAsync(ct);
+        return overlap is null ? null : $"Bu suallar artıq başqa mətnə aiddir ({overlap.FromNumber}–{overlap.ToNumber}).";
+    }
+
+    private static void Apply(QuestionPassage passage, DimPassageRequest request)
+    {
+        passage.FromNumber = request.FromNumber;
+        passage.ToNumber = request.ToNumber;
+        passage.Title = string.IsNullOrWhiteSpace(request.Title) ? null : request.Title.Trim();
+        passage.Text = request.Text.Trim();
     }
 
     /// <summary>Applies a typed answer key ("1-A 2-C …") to the document's questions by their original number.</summary>

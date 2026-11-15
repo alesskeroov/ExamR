@@ -75,6 +75,24 @@ public sealed class DimEditQuestionRequest
     public Guid CorrectOptionId { get; init; }
 }
 
+/// <summary>A reading passage (or listening transcript) shown above questions FromNumber…ToNumber of a document.</summary>
+public sealed record DimPassageDto(Guid Id, int FromNumber, int ToNumber, string? Title, string Text);
+
+public sealed class DimPassageRequest
+{
+    [Range(1, 100_000)]
+    public int FromNumber { get; init; }
+
+    [Range(1, 100_000)]
+    public int ToNumber { get; init; }
+
+    [StringLength(QuestionPassage.MaxTitleLength)]
+    public string? Title { get; init; }
+
+    [Required, StringLength(QuestionPassage.MaxTextLength, MinimumLength = 1)]
+    public string Text { get; init; } = string.Empty;
+}
+
 public sealed record DimDocumentBankDto(DimTrack Track, string Subject, string Name, int Count);
 
 /// <summary>An uploaded document with how many of its questions fit DİM tests and how many are already in the bank.</summary>

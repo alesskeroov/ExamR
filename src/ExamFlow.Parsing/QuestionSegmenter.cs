@@ -53,14 +53,47 @@ public static partial class QuestionSegmenter
     [GeneratedRegex(@"^[A-Fa-f]\s*[).]")]
     private static partial Regex OptionStart();
 
-    public static IReadOnlyList<RawQuestion> Segment(IEnumerable<TextLine> lines)
+    // "Read the passage and answer questions 18 – 21." / "Mətni oxuyun və 18–21-ci tapşırıqları cavablandırın."
+    [GeneratedRegex(@"^(?:read|listen|mətni|oxuyun|dinləyin)\b.{0,80}?(?<from>\d{1,4})\s*[–—-]\s*(?<to>\d{1,4})(?!\d)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex PassageIntro();
+
+    private const int MaxPassageQuestions = 30;
+    private const int MaxHeadingLength = 80;
+
+    /// <summary>
+    /// Splits lines into questions. Reading passages ("Read the passage and answer questions 18 – 21." and the text
+    /// after it) are kept out of the questions and, when <paramref name="passages"/> is given, collected there.
+    /// </summary>
+    public static IReadOnlyList<RawQuestion> Segment(IEnumerable<TextLine> lines, List<RawPassage>? passages = null)
     {
         var questions = new List<RawQuestion>();
         RawQuestion? current = null;
+        RawPassage? passage = null;
 
         foreach (var line in AttachCenteredAnchors(DropSectionLines(lines.ToList())))
         {
+            if ((current is null || current.Options.Count >= 2) && TryStartPassage(line, current, out var started))
+            {
+                passage = started;
+                passages?.Add(started);
+                continue;
+            }
+
             var match = QuestionStart().Match(line.Text);
+            if (passage is not null)
+            {
+                // Inside a passage only its first question (or, if the intro was misnumbered, the next question) ends it:
+                // "(1) …", years and numbered lists stay text.
+                if (!(match.Success && int.TryParse(match.Groups["n"].Value, out var first)
+                      && (first == passage.FromNumber || (current is not null && first == current.Number + 1))))
+                {
+                    passage.Lines.Add(line.Text);
+                    continue;
+                }
+
+                passage = null;
+            }
+
             if (match.Success
                 && int.TryParse(match.Groups["n"].Value, out var number)
                 && AcceptsNumber(current, number, match.Groups["prefix"].Success))
@@ -101,10 +134,51 @@ public static partial class QuestionSegmenter
                 continue;
             }
 
+            if (current.Options.Count >= 2 && IsSectionHeading(line, current.Options[^1]))
+            {
+                continue; // "Reading comprehension", "Writing": a heading after the last option is not part of it.
+            }
+
             Append(current.Options.Count > 0 ? current.Options[^1].TextTokens : current.TextTokens, line.Tokens);
         }
 
         return questions;
+    }
+
+    private static bool TryStartPassage(TextLine line, RawQuestion? current, out RawPassage passage)
+    {
+        passage = null!;
+        var match = PassageIntro().Match(line.Text);
+        if (!match.Success
+            || !int.TryParse(match.Groups["from"].Value, out var from)
+            || !int.TryParse(match.Groups["to"].Value, out var to)
+            || to < from || to - from >= MaxPassageQuestions
+            || (current is not null && from <= current.Number))
+        {
+            return false;
+        }
+
+        passage = new RawPassage(from, to, line.Text.Trim());
+        return true;
+    }
+
+    /// <summary>
+    /// A short line set in bold in its own colour (not the colour of the option it follows) is a section heading.
+    /// A wrapped correct option keeps its option's bold colour, so it stays part of the option.
+    /// </summary>
+    private static bool IsSectionHeading(TextLine line, RawOption option)
+    {
+        if (line.Text.Length > MaxHeadingLength
+            || line.Tokens.Any(t => !t.IsBold)
+            || line.Tokens.Select(t => t.ColorKey).Distinct().Count() != 1
+            || line.Tokens[0].ColorKey == TextToken.DefaultColor
+            || OptionStart().IsMatch(line.Text))
+        {
+            return false;
+        }
+
+        var optionStyle = option.TextTokens.Count > 0 ? option.TextTokens[^1] : option.LabelTokens[0];
+        return !(optionStyle.IsBold && optionStyle.ColorKey == line.Tokens[0].ColorKey);
     }
 
     /// <summary>

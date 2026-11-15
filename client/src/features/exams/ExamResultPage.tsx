@@ -8,6 +8,7 @@ import { Link, useParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
 import { EmptyState } from '../../components/common/EmptyState'
 import { PageHeader } from '../../components/common/PageHeader'
+import { PassageBox } from '../../components/common/PassageBox'
 import { QuestionVisuals } from '../../components/common/QuestionVisuals'
 import { formatDate, formatNumber } from '../../lib/format'
 import { cn } from '../../lib/utils'
@@ -286,6 +287,7 @@ function ReviewCard({ question, visualSrc, highlighted, link }: { question: Exam
         </h3>
         <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset', badge.className)}>{badge.label}</span>
       </header>
+      {question.passage && <PassageBox passage={question.passage} defaultOpen={false} className="mb-3" />}
       <QuestionVisuals visuals={bodyVisuals(question.visuals)} src={visualSrc} className="mb-3" />
 
       {unanswered && (

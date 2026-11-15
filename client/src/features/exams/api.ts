@@ -22,6 +22,12 @@ export interface AnswerReveal {
   isGradable: boolean
 }
 
+/** Shared text (reading passage) a question refers to. */
+export interface ExamPassage {
+  title: string | null
+  text: string
+}
+
 export interface ExamSessionQuestion {
   examQuestionId: string
   position: number
@@ -33,6 +39,8 @@ export interface ExamSessionQuestion {
   visuals?: VisualDto[]
   /** Answer locked by the server once it was shown (Immediate exams): it can no longer be changed. */
   locked: boolean
+  /** Missing in responses cached before passages were supported. */
+  passage?: ExamPassage | null
 }
 
 export interface ExamSession {
@@ -54,6 +62,7 @@ export interface ExamResultQuestion {
   correctOptionId: string | null
   outcome: ExamOutcome
   visuals?: VisualDto[]
+  passage?: ExamPassage | null
 }
 
 /** Source PDF and question range. documentName is null if the PDF was deleted; range is null on older exams. */

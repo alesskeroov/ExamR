@@ -118,6 +118,10 @@ public static class DimEndpoints
 
         var usable = picked.Select(p => p.QuestionId).ToList();
         var visuals = await QuestionVisuals.ForQuestionsAsync(db, usable, ct);
+        var passages = await QuestionPassages.ForQuestionsAsync(db, questions.Values, ct);
+        // Questions of one reading passage are placed together so the text is read once.
+        var subjects = picked.DistinctBy(p => p.QuestionId).ToDictionary(p => p.QuestionId, p => p.Subject);
+        picked = QuestionPassages.KeepTogether(usable, passages, questions).Select(id => (subjects[id], id)).ToList();
         var exam = new Exam
         {
             UserId = userId,
@@ -126,7 +130,7 @@ public static class DimEndpoints
             Status = ExamStatus.InProgress,
             StartedAt = now,
             ExpiresAt = now.AddMinutes(test.DurationMinutes),
-            Questions = picked.Select((p, i) => ExamEndpoints.Freeze(questions[p.QuestionId], i, visuals[p.QuestionId])).ToList(),
+            Questions = picked.Select((p, i) => ExamEndpoints.Freeze(questions[p.QuestionId], i, visuals[p.QuestionId], passages.GetValueOrDefault(p.QuestionId))).ToList(),
         };
         db.Exams.Add(exam);
         db.DimAttempts.Add(new DimAttempt

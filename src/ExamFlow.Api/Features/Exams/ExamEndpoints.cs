@@ -116,6 +116,8 @@ public static class ExamEndpoints
             .Where(q => pickedIds.Contains(q.Id))
             .ToDictionaryAsync(q => q.Id, ct);
         var visuals = await QuestionVisuals.ForQuestionsAsync(db, pickedIds, ct);
+        var passages = await QuestionPassages.ForQuestionsAsync(db, questions.Values, ct);
+        pickedIds = QuestionPassages.KeepTogether(pickedIds, passages, questions);
 
         return await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
         {
@@ -132,7 +134,7 @@ public static class ExamEndpoints
                 Status = ExamStatus.InProgress,
                 StartedAt = now,
                 ExpiresAt = now + ExamEngine.Duration(request.DurationMinutes, settings),
-                Questions = pickedIds.Select((id, position) => Freeze(questions[id], position, visuals[id])).ToList(),
+                Questions = pickedIds.Select((id, position) => Freeze(questions[id], position, visuals[id], passages.GetValueOrDefault(id))).ToList(),
             };
 
             exam.Id = Guid.NewGuid();
@@ -415,7 +417,7 @@ public static class ExamEndpoints
     }
 
     /// <summary>Copies the question into the exam with its options in a new random order.</summary>
-    internal static ExamQuestion Freeze(Question question, int position, IEnumerable<QuestionVisual>? visuals = null)
+    internal static ExamQuestion Freeze(Question question, int position, IEnumerable<QuestionVisual>? visuals = null, QuestionPassage? passage = null)
     {
         var options = question.Options.OrderBy(o => o.Position).ToList();
         ExamEngine.Shuffle(options, Random.Shared);
@@ -429,6 +431,8 @@ public static class ExamEndpoints
                 Text = question.Text,
                 Options = options.Select((o, i) => new OptionSnapshot { OptionId = o.Id, Label = ((char)('A' + i)).ToString(), Text = ExamFlow.Parsing.OptionText.Clean(o.Text) }).ToList(),
                 Visuals = visuals?.Select(v => QuestionVisuals.ToSnapshot(v, question.Options)).ToList() ?? [],
+                PassageTitle = passage?.Title,
+                PassageText = passage?.Text,
             },
             CorrectOptionId = question.VerificationStatus == VerificationStatus.Unverified ? null : options.FirstOrDefault(o => o.IsCorrect)?.Id,
         };
@@ -527,11 +531,14 @@ public static class ExamEndpoints
     internal static IReadOnlyList<VisualDto> Visuals(ExamQuestion question) =>
         question.Snapshot.Visuals?.Select(QuestionVisuals.ToDto).ToList() ?? [];
 
+    private static ExamPassageDto? Passage(ExamQuestion question) =>
+        string.IsNullOrWhiteSpace(question.Snapshot.PassageText) ? null : new(question.Snapshot.PassageTitle, question.Snapshot.PassageText);
+
     private static ExamSessionDto ToSession(Exam exam, DateTimeOffset now) => new(
         exam.Id, exam.Status, exam.RevealMode, exam.QuestionCount, exam.StartedAt, exam.ExpiresAt, now,
         exam.Questions.OrderBy(q => q.Position)
             .Select(q => new ExamSessionQuestionDto(q.Id, q.Position, q.Snapshot.Text, Options(q), q.SelectedOptionId, RevealFor(exam, q), Visuals(q),
-                q.LockedAt is not null))
+                q.LockedAt is not null, Passage(q)))
             .ToList());
 
     private static ExamResultDto ToResult(Exam exam, IReadOnlyDictionary<Guid, string> documentNames)
@@ -543,7 +550,7 @@ public static class ExamEndpoints
             exam.StartedAt, completedAt, (int)Math.Round((completedAt - exam.StartedAt).TotalSeconds),
             exam.Questions.OrderBy(q => q.Position)
                 .Select(q => new ExamResultQuestionDto(q.Position, q.Snapshot.Text, Options(q), q.SelectedOptionId, q.CorrectOptionId,
-                    q.Outcome ?? ExamEngine.OutcomeOf(q), Visuals(q)))
+                    q.Outcome ?? ExamEngine.OutcomeOf(q), Visuals(q), Passage(q)))
                 .ToList());
     }
 
