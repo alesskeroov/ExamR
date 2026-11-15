@@ -143,6 +143,32 @@ public class DimScoringTests
     }
 
     [Fact]
+    public void Answer_key_reads_pairs_units_and_words()
+    {
+        var parsed = DimScoring.ParseAnswerKey("1-A 21=(3; −4) 22=80° 23=40 sm² 24: feli sifət 25=8 26-C\n27=isim|ad");
+
+        Assert.Equal("(3; −4)", parsed.Coded[21]);
+        Assert.Equal("80°", parsed.Coded[22]);
+        Assert.Equal("40 sm²", parsed.Coded[23]);
+        Assert.Equal("feli sifət", parsed.Coded[24]);
+        Assert.Equal("8", parsed.Coded[25]);
+        Assert.Equal("isim; ad", parsed.Coded[27]);
+        Assert.Equal([0, 2], new[] { parsed.Letters[1], parsed.Letters[26] });
+        Assert.Empty(parsed.Conflicts);
+    }
+
+    [Fact]
+    public void Answer_table_lines_without_equals_sign_are_read()
+    {
+        var parsed = DimScoring.ParseAnswerKey("20 B\n21 (3; −4)\n22 80°\n23 40 sm²\n24 (2; 2)\n25 8\n26 mübtəda");
+
+        Assert.Equal(1, parsed.Letters[20]);
+        Assert.Equal(["(3; −4)", "80°", "40 sm²", "(2; 2)", "8", "mübtəda"],
+            new[] { 21, 22, 23, 24, 25, 26 }.Select(n => parsed.Coded[n]));
+        Assert.False(parsed.Coded.ContainsKey(20));
+    }
+
+    [Fact]
     public void A_number_with_both_a_letter_and_a_coded_answer_is_a_conflict() =>
         Assert.Equal([3], DimScoring.ParseAnswerKey("3-A 3=5").Conflicts);
 

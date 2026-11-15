@@ -127,23 +127,27 @@ public static partial class DimScoring
     private static decimal Round(decimal value) => Math.Round(value, 1, MidpointRounding.AwayFromZero);
 
     /// <summary>
-    /// Parses an answer key such as "1-A 2) C, 3.b 14=2,5 15=-3 16=2,5|5/2" into question number → option index
-    /// (A = 0 … E = 4) for closed questions and number → accepted answers ("2,5; 5/2") for open coded ones. A coded
-    /// answer needs "=" or ":" and alternatives are separated by "|". Numbers given twice with different answers are
-    /// returned as conflicts (the last one wins).
+    /// Parses an answer key such as "1-A 2) C, 3.b 14=2,5 15=-3 16=2,5|5/2 21=(3; −4) 22=80° 23=40 sm² 24=mübtəda" into
+    /// question number → option index (A = 0 … E = 4) for closed questions and number → accepted answers ("2,5; 5/2") for
+    /// open ones. An open answer needs "=" or ":", or a line of its own as in an answer table ("21 (3; −4)", "25 8");
+    /// alternatives are separated by "|". Numbers given twice with different answers are returned as conflicts (the
+    /// last one wins).
     /// </summary>
     public static DimAnswerKey ParseAnswerKey(string text)
     {
         var letters = new Dictionary<int, int>();
         var coded = new Dictionary<int, string>();
         var conflicts = new List<int>();
-        foreach (Match match in CodedPair().Matches(text))
+        void AddCoded(Match match)
         {
             var number = int.Parse(match.Groups["n"].Value);
-            var value = string.Join("; ", match.Groups["v"].Value.Split('|'));
+            var value = string.Join("; ", match.Groups["v"].Value.Split('|').Select(v => v.Trim()));
             if (coded.TryGetValue(number, out var existing) && existing != value) conflicts.Add(number);
             coded[number] = value;
         }
+
+        foreach (Match match in CodedPair().Matches(text)) AddCoded(match);
+        foreach (Match match in WordPair().Matches(text)) AddCoded(match);
 
         foreach (Match match in AnswerKeyPair().Matches(text))
         {
@@ -151,6 +155,13 @@ public static partial class DimScoring
             var option = char.ToUpperInvariant(match.Groups["o"].Value[0]) - 'A';
             if ((letters.TryGetValue(number, out var existing) && existing != option) || coded.ContainsKey(number)) conflicts.Add(number);
             letters[number] = option;
+        }
+
+        // Answer tables copied from a PDF: "21 (3; −4)" or "25 8" on a line of its own, for numbers not given otherwise.
+        foreach (Match match in TableLine().Matches(text))
+        {
+            var number = int.Parse(match.Groups["n"].Value);
+            if (!letters.ContainsKey(number) && !coded.ContainsKey(number)) AddCoded(match);
         }
 
         return new DimAnswerKey(letters, coded, conflicts.Distinct().Order().ToList());
@@ -161,7 +172,23 @@ public static partial class DimScoring
 
     private const string KeyNumber = @"[+\-−–]?(?:\d+(?:[.,]\d+)?|[.,]\d+)(?:/\d+(?:[.,]\d+)?)?";
 
-    // "14=2,5", "15: -3", "16=2,5|5/2"; a comma is a decimal separator only when a digit follows it directly.
-    [GeneratedRegex(@"(?<!\d)(?<n>\d{1,4})\s*[=:]\s*(?<v>" + KeyNumber + @"(?:\|" + KeyNumber + @")*)(?![A-Za-z])")]
+    // A number, or numbers in brackets "(3; −4)", with an optional unit "80°", "40 sm²", "15%". A single letter is not a
+    // unit (it could be an option letter), unless it carries ² or ³ ("m²").
+    private const string KeyValue = @"(?:\(\s*" + KeyNumber + @"(?:\s*[;,]\s*" + KeyNumber + @")+\s*\)|" + KeyNumber + @")"
+        + @"(?:\s?(?:[°%‰]|\p{L}{2,4}[²³]?|\p{L}[²³]))?";
+
+    // "14=2,5", "15: -3", "16=2,5|5/2", "21=(3; −4)", "23=40 sm²"; a comma is a decimal separator only when a digit follows it.
+    [GeneratedRegex(@"(?<!\d)(?<n>\d{1,4})\s*[=:]\s*(?<v>" + KeyValue + @"(?:\|" + KeyValue + @")*)(?![A-Za-z])")]
     private static partial Regex CodedPair();
+
+    // "24=mübtəda", "25: feli sifət|feili sifət": a word answer runs to the next "N=" / "N-A" pair or the end of the line.
+    // A lone A–E is an option letter, not a word.
+    [GeneratedRegex(@"(?<!\d)(?<n>\d{1,4})\s*[=:]\s*(?<v>(?![A-Ea-e](?!\p{L}))\p{L}[\p{L}\p{M}'’\-| ]*?)(?=\s*[,;]?\s*(?:\d{1,4}\s*[-–.:)=]|$))",
+        RegexOptions.Multiline)]
+    private static partial Regex WordPair();
+
+    // A line holding only "N value" (answer tables): "21 (3; −4)", "22 80°", "25 8", "26 mübtəda".
+    [GeneratedRegex(@"^[ \t]*(?<n>\d{1,4})[ \t.)]+(?<v>" + KeyValue + @"|(?![A-Ea-e][ \t]*\r?$)\p{L}[\p{L}\p{M}'’\- ]*?)[ \t]*\r?$",
+        RegexOptions.Multiline)]
+    private static partial Regex TableLine();
 }

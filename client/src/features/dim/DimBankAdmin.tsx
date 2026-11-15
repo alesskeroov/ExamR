@@ -256,8 +256,9 @@ function AnswerKey({ documentId, missing }: { documentId: string; missing: numbe
         <span className="font-normal text-amber-700">— {missing} sualın cavabı tapılmadı</span>
       </summary>
       <p className="mt-2 text-slate-600">
-        Format: <code>1-A 2-C 3-B</code> və ya hər sətirdə bir cüt. Açıq (kodlaşdırılan) suallar üçün <code>14=2,5</code>, <code>15=-3</code>;
-        bir neçə düzgün yazılış: <code>16=2,5|5/2</code>. Nömrələr sənəddəki nömrələrdir.
+        Format: <code>1-A 2-C 3-B</code> və ya hər sətirdə bir cüt. Açıq suallar üçün <code>14=2,5</code>, <code>21=(3; -4)</code>,
+        <code>22=80°</code>, <code>23=40 sm²</code>, <code>24=mübtəda</code>; bir neçə düzgün yazılış: <code>16=2,5|5/2</code>.
+        PDF-dəki cavab cədvəlini də yapışdıra bilərsiniz (hər sətirdə <code>21 (3; -4)</code>). Nömrələr sənəddəki nömrələrdir.
       </p>
       <textarea value={keyText} onChange={e => setKeyText(e.target.value)} rows={3} aria-label="Cavab açarı"
         className="mt-2 w-full rounded-lg border border-slate-300 bg-white p-3 font-mono text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none" />
@@ -447,9 +448,12 @@ function QuestionEditor({ question, onDone }: { question: DimSourceQuestion; onD
       </label>
       {coded ? (
         <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700 sm:max-w-sm">Kodlaşdırılan cavab
-          <input className={inputClass} value={codedAnswer} maxLength={100} inputMode="decimal" placeholder="məs. 2,5 və ya 2,5; 5/2"
+          <input className={inputClass} value={codedAnswer} maxLength={100} placeholder="məs. 2,5 · (3; -4) · 80° · mübtəda"
             onChange={e => setCodedAnswer(e.target.value)} />
-          <span className="text-xs font-normal text-slate-500">Variantı olmayan sual cavabı yazıldıqdan sonra açıq (kodlaşdırılan) sual kimi banka düşə bilər.</span>
+          <span className="text-xs font-normal text-slate-500">
+            Ədəd (2,5; 5/2), vahidli ədəd (80°, 40 sm² — vahid yoxlanmır), koordinat <code>(3; -4)</code> və ya söz (böyük/kiçik hərf fərqlənmir).
+            Bir neçə düzgün cavabı <code>;</code> ilə ayırın. Variantı olmayan sual cavabı yazıldıqdan sonra açıq sual kimi banka düşə bilər.
+          </span>
         </label>
       ) : (
       <fieldset className="flex flex-col gap-2">

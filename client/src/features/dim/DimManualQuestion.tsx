@@ -146,12 +146,12 @@ export function DimManualQuestion({ documents, documentId, onDocument }: {
       ) : (
         <div className="flex flex-col gap-1.5 sm:max-w-md">
           <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Düzgün cavab
-            <input className={inputClass} value={answer} maxLength={100} inputMode="decimal" placeholder="məs. 2,5" aria-describedby="dim-manual-answer-hint"
+            <input className={inputClass} value={answer} maxLength={100} placeholder="məs. 2,5 · (3; -4) · mübtəda" aria-describedby="dim-manual-answer-hint"
               onChange={e => setAnswer(e.target.value)} />
           </label>
           <p id="dim-manual-answer-hint" className="text-xs text-slate-500">
-            Tam ədəd, onluq (2,5) və ya adi kəsr (5/2). Bir neçə düzgün yazılış varsa nöqtəli vergüllə ayırın: <code>2,5; 5/2</code>.
-            Şagirdin cavabı ədəd kimi müqayisə olunur: 2,5 = 2.5 = 5/2.
+            Ədəd (2,5, 5/2, 80°, 40 sm²), koordinat <code>(3; -4)</code> və ya söz. Bir neçə düzgün yazılış varsa nöqtəli vergüllə
+            ayırın: <code>2,5; 5/2</code>. Ədədlər dəyərinə görə (2,5 = 5/2, 80° = 80), sözlər böyük/kiçik hərfə baxmadan müqayisə olunur.
           </p>
         </div>
       )}

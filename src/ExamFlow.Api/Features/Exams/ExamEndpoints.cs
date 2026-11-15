@@ -244,9 +244,9 @@ public static class ExamEndpoints
                 return Problem(StatusCodes.Status400BadRequest, "Bu sualda variant yoxdur, cavabı yazın.");
             }
 
-            if (text is not null && CodedAnswers.Parse(text) is null)
+            if (text is not null && !CodedAnswers.IsValidAnswer(text))
             {
-                return Problem(StatusCodes.Status400BadRequest, "Cavab ədəd olmalıdır (məs. 12, -3, 2,5 və ya 5/2).");
+                return Problem(StatusCodes.Status400BadRequest, "Cavabı yazın: ədəd, mötərizədə ədədlər və ya söz.");
             }
 
             // Answers can be changed until the exam ends in every mode; Immediate mode only disallows clearing.

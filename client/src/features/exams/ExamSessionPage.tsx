@@ -26,7 +26,7 @@ import {
   type ExamSessionQuestion,
 } from './api'
 import { sourceName } from './examSource'
-import { isAnswered, isCodedNumber } from './coded'
+import { isAnswered, isCodedAnswer } from './coded'
 import { LimitedListeningPlayer, ListeningPlayer } from './ListeningPlayer'
 import { useSwipeNavigation } from './useSwipeNavigation'
 
@@ -493,7 +493,7 @@ function CodedAnswerField({ question, reveal, immediate, labelledBy, onWrite }: 
       if (!immediate) onWrite(null)
       return
     }
-    if (!isCodedNumber(text)) return setInvalid(true)
+    if (!isCodedAnswer(text)) return setInvalid(true)
     setInvalid(false)
     onWrite(text)
   }
@@ -504,7 +504,7 @@ function CodedAnswerField({ question, reveal, immediate, labelledBy, onWrite }: 
       <label htmlFor={inputId} className="text-sm font-medium text-slate-700">Cavabınız</label>
       <div className="mt-1.5 flex flex-wrap items-center gap-2">
         <input id={inputId} aria-describedby={`${labelledBy} ${inputId}-hint`} aria-invalid={invalid || undefined}
-          value={draft} inputMode="decimal" autoComplete="off" maxLength={30} disabled={question.locked}
+          value={draft} inputMode="text" autoComplete="off" autoCapitalize="off" spellCheck={false} maxLength={30} disabled={question.locked}
           onChange={e => { setDraft(e.target.value); setInvalid(false) }}
           onBlur={commit}
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commit() } }}
@@ -518,7 +518,7 @@ function CodedAnswerField({ question, reveal, immediate, labelledBy, onWrite }: 
         )}
       </div>
       <p id={`${inputId}-hint`} className={cn('mt-1.5 text-xs', invalid ? 'text-rose-700' : 'text-slate-500')}>
-        {invalid ? 'Yalnız ədəd yazın: 12, -3, 2,5 və ya 5/2.' : 'Ədədi yazın (onluq kəsr üçün vergül: 2,5; adi kəsr: 5/2). Avtomatik yadda saxlanır.'}
+        {invalid ? 'Cavabı yazın: ədəd, koordinat və ya söz.' : 'Ədəd (2,5 və ya 5/2), koordinat ((3; -4)) və ya söz yazın. Avtomatik yadda saxlanır.'}
       </p>
       {result && (
         <p role="status" className={cn('mt-3 flex items-start gap-2 rounded-lg px-3 py-2 text-sm', result.isCorrect ? 'bg-emerald-50 text-emerald-900' : 'bg-rose-50 text-rose-900')}>
