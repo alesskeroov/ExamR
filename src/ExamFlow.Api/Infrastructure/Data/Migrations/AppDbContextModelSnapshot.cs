@@ -445,6 +445,77 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.ToTable("DimAttempts", (string)null);
                 });
 
+            modelBuilder.Entity("ExamFlow.Api.Features.Dim.DimAudio", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("timestamp(3) with time zone");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("MaxPlays")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("QuestionFrom")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("QuestionTo")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("UploadedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentId");
+
+                    b.ToTable("DimAudios", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_DimAudios_Range", "\"QuestionFrom\" >= 1 AND \"QuestionTo\" >= \"QuestionFrom\"");
+                        });
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Dim.DimAudioPlay", b =>
+                {
+                    b.Property<Guid>("ExamId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AudioId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Count")
+                        .HasColumnType("integer");
+
+                    b.HasKey("ExamId", "AudioId");
+
+                    b.ToTable("DimAudioPlays", (string)null);
+                });
+
             modelBuilder.Entity("ExamFlow.Api.Features.Dim.DimBankQuestion", b =>
                 {
                     b.Property<Guid>("QuestionId")
@@ -736,9 +807,17 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AnswerText")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
                     b.Property<DateTimeOffset?>("AnsweredAt")
                         .HasPrecision(3)
                         .HasColumnType("timestamp(3) with time zone");
+
+                    b.Property<string>("CorrectAnswer")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<Guid?>("CorrectOptionId")
                         .HasColumnType("uuid");
@@ -1720,6 +1799,10 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CodedAnswer")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<byte[]>("ContentHash")
                         .IsRequired()
                         .HasColumnType("bytea");
@@ -2346,6 +2429,26 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.Navigation("Test");
                 });
 
+            modelBuilder.Entity("ExamFlow.Api.Features.Dim.DimAudio", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Documents.UploadedDocument", "Document")
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Document");
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Dim.DimAudioPlay", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Exams.Exam", null)
+                        .WithMany()
+                        .HasForeignKey("ExamId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ExamFlow.Api.Features.Dim.DimBankQuestion", b =>
                 {
                     b.HasOne("ExamFlow.Api.Features.Questions.Question", "Question")
@@ -2470,6 +2573,18 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                         {
                             b1.Property<Guid>("ExamQuestionId")
                                 .HasColumnType("uuid");
+
+                            b1.Property<Guid?>("AudioId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<int?>("AudioMaxPlays")
+                                .HasColumnType("integer");
+
+                            b1.Property<string>("AudioTitle")
+                                .HasColumnType("text");
+
+                            b1.Property<bool>("IsCoded")
+                                .HasColumnType("boolean");
 
                             b1.Property<string>("PassageText")
                                 .HasColumnType("text");

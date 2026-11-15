@@ -2,6 +2,7 @@ import { BookOpenCheck, CalendarClock, ClipboardList, Clock, Layers, Play, Rotat
 import { useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { Alert } from '../../components/common/Alert'
+import { SupportContact } from '../../components/common/SupportContact'
 import { Button } from '../../components/common/Button'
 import { EmptyState } from '../../components/common/EmptyState'
 import { PageHeader } from '../../components/common/PageHeader'
@@ -65,7 +66,7 @@ export function DimTestsPage({ track }: { track: DimTrack }) {
             {[0, 1, 2, 3].map(i => <div key={i} className="h-56 animate-pulse rounded-xl bg-slate-200/60" />)}
           </div>
         ) : tests.isError ? (
-          <Alert title="Sınaqlar yüklənmədi">{tests.error.message}</Alert>
+          <Alert title="Sınaqlar yüklənmədi">{tests.error.message}<SupportContact className="mt-1" topic="DİM sınaqları yüklənmədi" /></Alert>
         ) : visible.length === 0 ? (
           <EmptyState icon={<ClipboardList className="size-6" />} title="Hələ sınaq yoxdur"
             description={tests.data.length === 0 ? 'Administrator sınaq dərc etdikdə burada görünəcək.' : 'Seçilmiş filtrə uyğun sınaq tapılmadı.'} />
@@ -145,6 +146,7 @@ function TestCard({ test }: { test: DimTest }) {
           <Alert title="Sınaq başlamadı">
             {start.error.message}
             {activeExamId && <> <Link to={`/exams/${activeExamId}`} className="font-medium underline">Davam edən imtahana keç</Link></>}
+            {!activeExamId && <SupportContact className="mt-1" topic="DİM sınağı başlamadı" reference={test.title} />}
           </Alert>
         </div>
       )}

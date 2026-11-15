@@ -142,6 +142,16 @@ public class GmailApiTransportTests
     }
 
     [Fact]
+    public void Mime_adds_reply_to_only_when_configured()
+    {
+        static string Decode(string raw) => Encoding.UTF8.GetString(Convert.FromBase64String(Base64UrlToBase64(raw)));
+
+        Assert.Contains("Reply-To: <examr.contact@gmail.com>\r\n", Decode(GmailMime.Build("a@gmail.com", "ExamR", Message, "b", "examr.contact@gmail.com")));
+        Assert.DoesNotContain("Reply-To:", Decode(GmailMime.Build("a@gmail.com", "ExamR", Message, "b")));
+        Assert.DoesNotContain("\r\nBcc:", Decode(GmailMime.Build("a@gmail.com", "ExamR", Message, "b", "a@example.test\r\nBcc: x@example.test")));
+    }
+
+    [Fact]
     public void Mime_blocks_header_injection()
     {
         var hostile = new EmailMessage("victim@example.test\r\nBcc: attacker@example.test", "Hi\r\nBcc: x@example.test", "<p>x</p>");

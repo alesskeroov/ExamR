@@ -48,6 +48,13 @@ public class ExamQuestion
     public Guid? CorrectOptionId { get; set; }
 
     public Guid? SelectedOptionId { get; set; }
+
+    /// <summary>Accepted answers of a coded question (<see cref="QuestionSnapshot.IsCoded"/>); never sent before the reveal rules allow it.</summary>
+    public string? CorrectAnswer { get; set; }
+
+    /// <summary>The number the user typed for a coded question.</summary>
+    public string? AnswerText { get; set; }
+
     public DateTimeOffset? AnsweredAt { get; set; }
     public ExamOutcome? Outcome { get; set; }
 
@@ -58,7 +65,19 @@ public class ExamQuestion
 public class QuestionSnapshot
 {
     public string Text { get; set; } = string.Empty;
+
+    /// <summary>Open coded task: the user types a number instead of picking an option; <see cref="Options"/> is empty.</summary>
+    public bool IsCoded { get; set; }
+
     public List<OptionSnapshot> Options { get; set; } = [];
+
+    /// <summary>Listening recording of the question (DİM, see <c>DimAudio</c>); null when it has none.</summary>
+    public Guid? AudioId { get; set; }
+
+    public string? AudioTitle { get; set; }
+
+    /// <summary>Play limit of the recording during the exam, frozen at start; null = no limit.</summary>
+    public int? AudioMaxPlays { get; set; }
 
     /// <summary>Images frozen with the question; missing (null) in exams created before visuals existed.</summary>
     public List<VisualSnapshot>? Visuals { get; set; } = [];

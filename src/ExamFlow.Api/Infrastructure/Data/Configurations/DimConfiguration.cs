@@ -68,3 +68,29 @@ internal static class JsonColumnExtensions
                 v => JsonSerializer.Serialize(v, Options).GetHashCode(),
                 v => JsonSerializer.Deserialize<List<T>>(JsonSerializer.Serialize(v, Options), Options)!));
 }
+
+public class DimAudioConfiguration : IEntityTypeConfiguration<DimAudio>
+{
+    public void Configure(EntityTypeBuilder<DimAudio> builder)
+    {
+        builder.ToTable("DimAudios", t => t.HasCheckConstraint("CK_DimAudios_Range", "\"QuestionFrom\" >= 1 AND \"QuestionTo\" >= \"QuestionFrom\""));
+        builder.Property(a => a.Title).HasMaxLength(200);
+        builder.Property(a => a.StorageKey).HasMaxLength(100).IsUnicode(false);
+        builder.Property(a => a.ContentType).HasMaxLength(50).IsUnicode(false);
+        builder.Property(a => a.CreatedAt).HasPrecision(3);
+        // Deleting the document removes its recordings; the files are deleted by the document delete handler.
+        builder.HasOne(a => a.Document).WithMany().HasForeignKey(a => a.DocumentId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasIndex(a => a.DocumentId);
+    }
+}
+
+public class DimAudioPlayConfiguration : IEntityTypeConfiguration<DimAudioPlay>
+{
+    public void Configure(EntityTypeBuilder<DimAudioPlay> builder)
+    {
+        builder.ToTable("DimAudioPlays");
+        builder.HasKey(p => new { p.ExamId, p.AudioId });
+        // No foreign key to DimAudios: a deleted recording keeps the count of exams that used it harmlessly.
+        builder.HasOne<ExamFlow.Api.Features.Exams.Exam>().WithMany().HasForeignKey(p => p.ExamId).OnDelete(DeleteBehavior.Cascade);
+    }
+}

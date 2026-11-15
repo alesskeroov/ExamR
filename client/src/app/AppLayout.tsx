@@ -8,6 +8,7 @@ import { cn } from '../lib/utils'
 import { Nameplate } from '../features/nameplates/Nameplate'
 import { useNameplate } from '../features/nameplates/api'
 import { ThemeToggle } from '../components/common/ThemeToggle'
+import { HelpMenu } from '../features/support/HelpMenu'
 
 const navItems: { to: string; label: string; icon: LucideIcon; group: string; end?: boolean; adminOnly?: boolean; badge?: string }[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, group: '', end: true },
@@ -53,6 +54,7 @@ export function AppLayout() {
         <Brand />
         <div className="ml-auto flex items-center gap-2">
           <ThemeToggle />
+          <HelpMenu />
           <NotificationBell />
           <button
             type="button"
@@ -104,7 +106,7 @@ export function AppLayout() {
       <div className="min-w-0 flex-1">
         <header className="app-toolbar hidden h-[72px] items-center justify-between border-b border-slate-200 px-8 lg:flex">
           <Breadcrumb />
-          <div className="flex items-center gap-3"><ThemeToggle /><NotificationBell /></div>
+          <div className="flex items-center gap-3"><ThemeToggle /><HelpMenu /><NotificationBell /></div>
         </header>
         <main className="app-content app-safe-bottom mx-auto max-w-[1200px] min-w-0 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
           <Outlet />

@@ -247,6 +247,7 @@ api.MapAdminEndpoints();
 api.MapUsageEndpoints();
 api.MapDimEndpoints();
 api.MapDimAdminEndpoints();
+api.MapDimAudioEndpoints();
 api.MapLearningEndpoints();
 api.MapLearningChatEndpoints();
 api.MapLearningStudyEndpoints();

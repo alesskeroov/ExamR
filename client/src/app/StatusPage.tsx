@@ -1,5 +1,6 @@
 import { ArrowLeft } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
+import { SupportContact } from '../components/common/SupportContact'
 import { useTheme } from '../lib/use-theme'
 
 const copy: Record<number, { title: string; text: string }> = {
@@ -27,6 +28,7 @@ export function StatusPage({ code }: { code?: number }) {
         <p className="status-code ds-num mt-4 font-bold leading-none" aria-hidden>{known}</p>
         <h1 className="mt-6 text-[28px] font-bold leading-tight tracking-[-0.035em] sm:text-[34px]"><span className="ds-mark">{title}</span></h1>
         <p className="ds-muted mt-4 max-w-[46ch] text-[16px] leading-7">{text}</p>
+        {known !== 404 && <SupportContact className="ds-muted mt-3 max-w-[46ch]" topic={`Xəta ${known}`} />}
         <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-3">
           <Link to="/" className="btn-primary inline-flex h-11 items-center rounded-[10px] px-5 text-sm font-semibold">Ana səhifəyə qayıt</Link>
           <button type="button" onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} className="ds-link inline-flex items-center gap-1.5 text-sm">

@@ -17,8 +17,13 @@ public static class DimEndpoints
 {
     public const string ClosedOnlyNotice =
         "Bu sınaq yalnız qapalı (A–E) suallardan ibarətdir. Rəsmi DİM balı açıq (kodlaşdırılan və yazılı) tapşırıqları da " +
-        "əhatə etdiyi üçün tam 300/400 ballıq nəticə hesablanmır. \"Qapalı hissə balı\" qapalı tapşırıqların rəsmi düsturla " +
+        "əhatə etdiyi üçün tam 300/400 ballıq nəticə hesablanmır. \"Ölçülən bal\" qapalı tapşırıqların rəsmi düsturla " +
         "gətirdiyi baldır; \"Təxmini bal\" isə açıq tapşırıqlarda da eyni nəticə göstərəcəyiniz fərziyyəsinə əsaslanır.";
+
+    public const string WithOpenNotice =
+        "Bu sınaqda qapalı və açıq (kodlaşdırılan) suallar var. Yazılı tapşırıqlar imtahançı tərəfindən yoxlandığı üçün sınağa " +
+        "daxil deyil, ona görə tam 300/400 ballıq nəticə hesablanmır. \"Ölçülən bal\" sınaqdakı tapşırıqların rəsmi düsturla " +
+        "gətirdiyi baldır; \"Təxmini bal\" isə yazılı tapşırıqlarda da eyni nəticə göstərəcəyiniz fərziyyəsinə əsaslanır.";
 
     public static void MapDimEndpoints(this RouteGroupBuilder api)
     {
@@ -118,6 +123,8 @@ public static class DimEndpoints
 
         var usable = picked.Select(p => p.QuestionId).ToList();
         var visuals = await QuestionVisuals.ForQuestionsAsync(db, usable, ct);
+        var documentIds = questions.Values.Select(q => q.DocumentId).Distinct().ToList();
+        var audios = await db.DimAudios.AsNoTracking().Where(a => documentIds.Contains(a.DocumentId)).ToListAsync(ct);
         var passages = await QuestionPassages.ForQuestionsAsync(db, questions.Values, ct);
         // Questions of one reading passage are placed together so the text is read once.
         var subjects = picked.DistinctBy(p => p.QuestionId).ToDictionary(p => p.QuestionId, p => p.Subject);
@@ -130,7 +137,8 @@ public static class DimEndpoints
             Status = ExamStatus.InProgress,
             StartedAt = now,
             ExpiresAt = now.AddMinutes(test.DurationMinutes),
-            Questions = picked.Select((p, i) => ExamEndpoints.Freeze(questions[p.QuestionId], i, visuals[p.QuestionId], passages.GetValueOrDefault(p.QuestionId))).ToList(),
+            Questions = picked.Select((p, i) => WithAudio(ExamEndpoints.Freeze(questions[p.QuestionId], i, visuals[p.QuestionId], passages.GetValueOrDefault(p.QuestionId)),
+                questions[p.QuestionId], audios)).ToList(),
         };
         db.Exams.Add(exam);
         db.DimAttempts.Add(new DimAttempt
@@ -155,6 +163,19 @@ public static class DimEndpoints
         return TypedResults.Created($"/api/exams/{exam.Id}", new DimStartedDto(exam.Id));
     }
 
+    /// <summary>Freezes the listening recording that covers the question's number in its document, if any.</summary>
+    internal static ExamQuestion WithAudio(ExamQuestion frozen, Question question, IReadOnlyList<DimAudio> audios)
+    {
+        if (audios.FirstOrDefault(a => a.DocumentId == question.DocumentId && a.Covers(question.SourceNumber)) is { } audio)
+        {
+            frozen.Snapshot.AudioId = audio.Id;
+            frozen.Snapshot.AudioTitle = audio.Title;
+            frozen.Snapshot.AudioMaxPlays = audio.MaxPlays;
+        }
+
+        return frozen;
+    }
+
     /// <summary>Per-subject breakdown, DİM points and weak topics; only after the exam is completed and graded.</summary>
     private static async Task<IResult> Report(
         Guid examId, ClaimsPrincipal user, AppDbContext db, TimeProvider clock, IOptions<ExamOptions> options, CancellationToken ct)
@@ -171,13 +192,14 @@ public static class DimEndpoints
         var items = attempt.Items.ToDictionary(i => i.Position);
         var graded = exam.Questions
             .Where(q => items.ContainsKey(q.Position))
-            .Select(q => new DimGradedItem(items[q.Position].Subject, items[q.Position].Topic, q.Outcome ?? ExamEngine.OutcomeOf(q)))
+            .Select(q => new DimGradedItem(items[q.Position].Subject, items[q.Position].Topic, q.Outcome ?? ExamEngine.OutcomeOf(q),
+                q.Snapshot.IsCoded))
             .ToList();
         var test = attempt.Test;
         var used = await db.DimAttempts.CountAsync(a => a.TestId == test.Id && a.UserId == userId, ct);
         return TypedResults.Ok(new DimReportDto(exam.Id, test.Id, test.Title, test.Track, test.Kind, test.GroupCode, DimCatalog.Group(test.GroupCode)?.Name,
             exam.CorrectCount ?? 0, exam.IncorrectCount ?? 0, exam.UnansweredCount ?? 0, exam.UngradedCount ?? 0, exam.ScorePercent,
-            DimScoring.Score(test.Track, test.GroupCode, graded), ClosedOnlyNotice,
+            DimScoring.Score(test.Track, test.GroupCode, graded), graded.Any(g => g.IsOpen) ? WithOpenNotice : ClosedOnlyNotice,
             test.AttemptLimit, used, test.IsPublished && IsOpen(test, clock.GetUtcNow())));
     }
 

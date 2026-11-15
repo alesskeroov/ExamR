@@ -20,6 +20,10 @@ export interface ExamOption {
 export interface AnswerReveal {
   correctOptionId: string | null
   isGradable: boolean
+  /** Coded questions: the accepted answers, e.g. "2,5; 5/2". */
+  correctAnswer?: string | null
+  /** Coded questions: whether the typed number is correct. */
+  isCorrect?: boolean | null
 }
 
 /** Shared text (reading passage) a question refers to. */
@@ -39,8 +43,31 @@ export interface ExamSessionQuestion {
   visuals?: VisualDto[]
   /** Answer locked by the server once it was shown (Immediate exams): it can no longer be changed. */
   locked: boolean
+  /** Open coded task (DİM): the user types a number instead of picking an option. */
+  isCoded?: boolean
+  answerText?: string | null
+  /** Listening recording of the question (DİM); the file is at `examAudioUrl`. */
+  audio?: ExamAudio | null
   /** Missing in responses cached before passages were supported. */
   passage?: ExamPassage | null
+}
+
+/** `maxPlays`: plays allowed during the exam (null = no limit); `playsUsed`: plays already started. */
+export interface ExamAudio { id: string; title: string; maxPlays?: number | null; playsUsed?: number }
+
+export const examAudioUrl = (examId: string, audioId: string) => `/api/exams/${examId}/audio/${audioId}`
+
+/** Counts one play of a recording on the server (refused with 409 once the limit is used up). */
+export function useStartAudioPlay(examId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (audioId: string) => api.post<{ playsUsed: number; maxPlays: number | null }>(`/exams/${examId}/audio/${audioId}/play`),
+    // Every question of the recording shows the same count, also after navigating away and back.
+    onSuccess: (result, audioId) => queryClient.setQueryData<ExamSession>(queryKeys.exams.session(examId), session => session && {
+      ...session,
+      questions: session.questions.map(q => (q.audio?.id === audioId ? { ...q, audio: { ...q.audio, playsUsed: result.playsUsed } } : q)),
+    }),
+  })
 }
 
 export interface ExamSession {
@@ -62,6 +89,11 @@ export interface ExamResultQuestion {
   correctOptionId: string | null
   outcome: ExamOutcome
   visuals?: VisualDto[]
+  isCoded?: boolean
+  answerText?: string | null
+  /** Coded questions: the accepted answers, e.g. "2,5; 5/2". */
+  correctAnswer?: string | null
+  audio?: ExamAudio | null
   passage?: ExamPassage | null
 }
 
@@ -184,9 +216,11 @@ export function useExamSession(id: string) {
   })
 }
 
+/** A choice (`selectedOptionId`) or, for a coded question, the typed number (`answerText`). */
 interface AnswerVariables {
   examQuestionId: string
   selectedOptionId: string | null
+  answerText?: string | null
 }
 
 interface AnswerResponse {
@@ -194,6 +228,7 @@ interface AnswerResponse {
   selectedOptionId: string | null
   reveal: AnswerReveal | null
   locked: boolean
+  answerText?: string | null
 }
 
 export const answerMutationKey = (examId: string) => ['exams', 'answer', examId] as const
@@ -220,17 +255,19 @@ export function useAnswerQuestion(examId: string) {
     mutationKey: answerMutationKey(examId),
     // Answer requests of one exam run one after another, so the server always stores the last pick.
     scope: { id: `exam-answer:${examId}` },
-    mutationFn: ({ examQuestionId, selectedOptionId }: AnswerVariables) =>
-      api.put<AnswerResponse>(`/exams/${examId}/answers/${examQuestionId}`, { selectedOptionId }),
-    onMutate: ({ examQuestionId, selectedOptionId }) => {
+    mutationFn: ({ examQuestionId, selectedOptionId, answerText }: AnswerVariables) =>
+      api.put<AnswerResponse>(`/exams/${examId}/answers/${examQuestionId}`, answerText === undefined ? { selectedOptionId } : { answerText }),
+    onMutate: ({ examQuestionId, selectedOptionId, answerText }) => {
       const sequence = (latest.get(examQuestionId) ?? 0) + 1
       latest.set(examQuestionId, sequence)
-      patch(examQuestionId, { selectedOptionId })
+      patch(examQuestionId, answerText === undefined ? { selectedOptionId } : { answerText })
       return { sequence }
     },
     onSuccess: (response, { examQuestionId }, context) => {
       if (latest.get(examQuestionId) !== context.sequence) return
-      patch(response.examQuestionId, { selectedOptionId: response.selectedOptionId, reveal: response.reveal, locked: response.locked })
+      patch(response.examQuestionId, {
+        selectedOptionId: response.selectedOptionId, answerText: response.answerText ?? null, reveal: response.reveal, locked: response.locked,
+      })
     },
     onError: (_error, { examQuestionId }, context) => {
       if (!context || latest.get(examQuestionId) !== context.sequence) return
@@ -253,7 +290,7 @@ export function useRevealAnswer(examId: string) {
         session && {
           ...session,
           questions: session.questions.map((q) => (q.examQuestionId === response.examQuestionId
-            ? { ...q, selectedOptionId: response.selectedOptionId, reveal: response.reveal, locked: response.locked }
+            ? { ...q, selectedOptionId: response.selectedOptionId, answerText: response.answerText ?? null, reveal: response.reveal, locked: response.locked }
             : q)),
         },
       ),

@@ -53,6 +53,38 @@ public class DimScoringTests
     }
 
     [Fact]
+    public void Open_coded_answers_fill_the_coded_part_of_mathematics()
+    {
+        var items = Items("riy", 13, ExamOutcome.Correct)
+            .Concat(Enumerable.Repeat(new DimGradedItem("riy", null, ExamOutcome.Correct, IsOpen: true), 3))
+            .Concat(Enumerable.Repeat(new DimGradedItem("riy", null, ExamOutcome.Incorrect, IsOpen: true), 2))
+            .ToList();
+
+        var riy = Assert.Single(DimScoring.Score(DimTrack.Buraxilis, null, items).Subjects);
+
+        Assert.Equal(40.6m, riy.ClosedPoints);   // 13 × 100/32
+        Assert.Equal(9.4m, riy.OpenPoints);      // 3/5 × 5 coded × 100/32
+        Assert.Equal(15.6m, riy.OpenMaxPoints);
+        Assert.Equal(5, riy.OpenTotal);
+        Assert.Equal(3, riy.OpenCorrect);
+        Assert.Equal(50m, riy.MeasuredPoints);
+        Assert.Equal(56.3m, riy.MeasuredMaxPoints);
+        Assert.Equal(88.9m, riy.EstimatedPoints); // 50 / 56.25 × 100
+    }
+
+    [Fact]
+    public void Open_answers_of_a_subject_without_coded_tasks_stand_for_its_written_tasks()
+    {
+        var items = Enumerable.Repeat(new DimGradedItem("az", null, ExamOutcome.Correct, IsOpen: true), 4).ToList();
+
+        var az = Assert.Single(DimScoring.Score(DimTrack.Buraxilis, null, items).Subjects);
+
+        Assert.Equal(0m, az.ClosedMaxPoints);
+        Assert.Equal(50m, az.OpenMaxPoints);      // 10 written × 2 × 100/40
+        Assert.Equal(100m, az.EstimatedPoints);
+    }
+
+    [Fact]
     public void Net_score_never_goes_below_zero_and_ungraded_questions_are_left_out()
     {
         var items = Items("fiz", 1, ExamOutcome.Correct).Concat(Items("fiz", 10, ExamOutcome.Incorrect))
@@ -82,7 +114,8 @@ public class DimScoringTests
     [Fact]
     public void Answer_key_accepts_common_formats_and_reports_conflicts()
     {
-        var (key, conflicts) = DimScoring.ParseAnswerKey("1-A 2) c, 3.B\n4 D 10E 11–e 12-F 13:a\n13-B");
+        var parsed = DimScoring.ParseAnswerKey("1-A 2) c, 3.B\n4 D 10E 11–e 12-F 13:a\n13-B");
+        var (key, conflicts) = (parsed.Letters, parsed.Conflicts);
 
         Assert.Equal(0, key[1]);
         Assert.Equal(2, key[2]);
@@ -93,6 +126,25 @@ public class DimScoringTests
         Assert.False(key.ContainsKey(12));
         Assert.Equal([13], conflicts);
     }
+
+    [Fact]
+    public void Answer_key_reads_coded_answers_next_to_letters()
+    {
+        var parsed = DimScoring.ParseAnswerKey("1-A 2-C, 14=2,5 15: -3, 16=2,5|5/2\n17=12 18-B 19 = ,5");
+
+        Assert.Equal([0, 2, 1], new[] { parsed.Letters[1], parsed.Letters[2], parsed.Letters[18] });
+        Assert.Equal("2,5", parsed.Coded[14]);
+        Assert.Equal("-3", parsed.Coded[15]);
+        Assert.Equal("2,5; 5/2", parsed.Coded[16]);
+        Assert.Equal("12", parsed.Coded[17]);
+        Assert.Equal(",5", parsed.Coded[19]);
+        Assert.Equal(5, parsed.Coded.Count);
+        Assert.Empty(parsed.Conflicts);
+    }
+
+    [Fact]
+    public void A_number_with_both_a_letter_and_a_coded_answer_is_a_conflict() =>
+        Assert.Equal([3], DimScoring.ParseAnswerKey("3-A 3=5").Conflicts);
 
     [Theory]
     [InlineData(DimTrack.Buraxilis, DimTestKind.Full, null, new[] { "az", "riy", "xdil" }, true)]

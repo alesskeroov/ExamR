@@ -57,6 +57,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<DimBankQuestion> DimBankQuestions => Set<DimBankQuestion>();
     public DbSet<DimTest> DimTests => Set<DimTest>();
     public DbSet<DimAttempt> DimAttempts => Set<DimAttempt>();
+    public DbSet<DimAudio> DimAudios => Set<DimAudio>();
+    public DbSet<DimAudioPlay> DimAudioPlays => Set<DimAudioPlay>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

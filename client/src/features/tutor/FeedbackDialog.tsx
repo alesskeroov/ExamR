@@ -1,13 +1,15 @@
 import { Bug, CheckCircle2, Lightbulb, Loader2, Send } from 'lucide-react'
 import { useId, useRef, useState, type FormEvent } from 'react'
 import { Alert } from '../../components/common/Alert'
+import { SupportContact } from '../../components/common/SupportContact'
 import { ApiError } from '../../lib/api-client'
 import { cn } from '../../lib/utils'
 import { useSendFeedback } from './api'
 import { GuideDialog } from './GuideDialog'
 
 const maxText = 1500
-type Kind = 'problem' | 'idea'
+export type FeedbackKind = 'problem' | 'idea'
+type Kind = FeedbackKind
 const kinds: { id: Kind; label: string; icon: typeof Bug; hint: string }[] = [
   { id: 'problem', label: 'Problem bildir', icon: Bug, hint: 'Məsələn: kartın cavabı səhvdir, düymə işləmir, sənəd oxunmadı.' },
   { id: 'idea', label: 'Təklif ver', icon: Lightbulb, hint: 'Məsələn: hansı imkan faydalı olardı, nəyi daha rahat etmək olar.' },
@@ -16,10 +18,11 @@ const kinds: { id: Kind; label: string; icon: typeof Bug; hint: string }[] = [
 interface Props {
   onClose: () => void
   documentName?: string
+  initialKind?: FeedbackKind
 }
 
-export function FeedbackDialog({ onClose, documentName }: Props) {
-  const [kind, setKind] = useState<Kind>('problem')
+export function FeedbackDialog({ onClose, documentName, initialKind = 'problem' }: Props) {
+  const [kind, setKind] = useState<Kind>(initialKind)
   const [text, setText] = useState('')
   const textId = useId()
   const feedback = useSendFeedback()
@@ -77,6 +80,7 @@ export function FeedbackDialog({ onClose, documentName }: Props) {
             {feedback.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Send className="size-4" aria-hidden />}
             {feedback.isPending ? 'Göndərilir...' : 'Göndər'}
           </button>
+          <SupportContact className="text-center text-slate-500" topic="Müraciət" lead="Və ya birbaşa email yazın:" />
         </form>
       )}
     </GuideDialog>

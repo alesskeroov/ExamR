@@ -2,6 +2,7 @@ import { Eye, EyeOff, Play } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
 import { Button } from '../../components/common/Button'
 import { ChoiceCard } from '../../components/common/ChoiceCard'
+import { SupportContact } from '../../components/common/SupportContact'
 import type { RevealMode } from '../exams/api'
 
 interface DimStartDialogProps {
@@ -38,7 +39,12 @@ export function DimStartDialog({ testId, title, questionCount, durationMinutes, 
         <ChoiceCard name={`reveal-${testId}`} checked={mode === 'Immediate'} onChange={() => setMode('Immediate')} icon={<Eye className="size-5" />}
           title="Hər sualdan sonra" description="Hər sualda göz ikonu ilə düzgün cavabı görə bilərsiniz; göstərildikdən sonra variant dəyişmir" />
       </div>
-      {error && <p role="alert" className="mt-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
+      {error && (
+        <div role="alert" className="mt-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          <p>{error}</p>
+          <SupportContact className="mt-1" topic="DİM sınağı başlamadı" reference={title} />
+        </div>
+      )}
       <div className="mt-6 flex justify-end gap-3">
         <Button variant="secondary" disabled={starting} onClick={onClose}>Ləğv et</Button>
         <Button loading={starting} onClick={() => onStart(mode)}><Play className="size-4" aria-hidden />İmtahanı başla</Button>
