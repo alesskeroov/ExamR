@@ -166,6 +166,7 @@ public static class DimEndpoints
         {
             frozen.Snapshot.AudioId = audio.Id;
             frozen.Snapshot.AudioTitle = audio.Title;
+            frozen.Snapshot.AudioMaxPlays = audio.MaxPlays;
         }
 
         return frozen;

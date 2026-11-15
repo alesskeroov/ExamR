@@ -3,7 +3,7 @@ import { useRef, useState } from 'react'
 import { Alert } from '../../components/common/Alert'
 import { Button } from '../../components/common/Button'
 import {
-  DIM_AUDIO_MAX_BYTES, dimAudioAdminUrl, useDeleteDimAudio, useDimAudios, useSetDimTopics, useUpdateDimAudio, useUploadDimAudio,
+  DIM_AUDIO_DEFAULT_PLAYS, DIM_AUDIO_MAX_BYTES, dimAudioAdminUrl, useDeleteDimAudio, useDimAudios, useSetDimTopics, useUpdateDimAudio, useUploadDimAudio,
   type DimAudio,
 } from './api'
 import { inputClass } from './ui'
@@ -22,8 +22,10 @@ export function DimAudioPanel({ documentId }: { documentId: string }) {
   const [title, setTitle] = useState('')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
+  const [plays, setPlays] = useState(String(DIM_AUDIO_DEFAULT_PLAYS))
   const [clientError, setClientError] = useState<string | null>(null)
   const range = parseRange(from, to)
+  const maxPlays = parsePlays(plays)
 
   function pick(next: File | null) {
     setClientError(null)
@@ -36,8 +38,8 @@ export function DimAudioPanel({ documentId }: { documentId: string }) {
   }
 
   function submit() {
-    if (!file || !range) return
-    upload.mutate({ documentId, file, title: title.trim(), questionFrom: range.from, questionTo: range.to }, {
+    if (!file || !range || maxPlays === undefined) return
+    upload.mutate({ documentId, file, title: title.trim(), questionFrom: range.from, questionTo: range.to, maxPlays }, {
       onSuccess: () => {
         setFile(null); setTitle(''); setFrom(''); setTo('')
         if (fileRef.current) fileRef.current.value = ''
@@ -79,7 +81,12 @@ export function DimAudioPanel({ documentId }: { documentId: string }) {
           </div>
         </fieldset>
         <div className="flex flex-wrap items-center gap-3 sm:col-span-3">
-          <Button variant="secondary" loading={upload.isPending} disabled={!file || !range} onClick={submit}>
+          <label className="flex items-center gap-2 font-medium text-slate-700">Dinləmə limiti
+            <input className={numberClass} inputMode="numeric" value={plays} placeholder="limitsiz" aria-describedby={`dim-plays-hint-${documentId}`}
+              onChange={e => setPlays(e.target.value)} />
+          </label>
+          <span id={`dim-plays-hint-${documentId}`} className="text-xs text-slate-500">Rəsmi imtahanda səs 2 dəfə səsləndirilir. Boş = limitsiz.</span>
+          <Button variant="secondary" loading={upload.isPending} disabled={!file || !range || maxPlays === undefined} onClick={submit}>
             <Upload className="size-4" aria-hidden />Səsi yüklə
           </Button>
           {upload.isPending && <span role="status" className="text-slate-500">Yüklənir…</span>}
@@ -97,7 +104,9 @@ function AudioRow({ audio }: { audio: DimAudio }) {
   const [title, setTitle] = useState(audio.title)
   const [from, setFrom] = useState(String(audio.questionFrom))
   const [to, setTo] = useState(String(audio.questionTo))
+  const [plays, setPlays] = useState(audio.maxPlays === null ? '' : String(audio.maxPlays))
   const range = parseRange(from, to)
+  const maxPlays = parsePlays(plays)
 
   return (
     <article className="rounded-lg border border-slate-200 p-3">
@@ -108,8 +117,12 @@ function AudioRow({ audio }: { audio: DimAudio }) {
           </label>
           <input className={numberClass} inputMode="numeric" value={from} aria-label="İlk sual nömrəsi" onChange={e => setFrom(e.target.value)} />
           <input className={numberClass} inputMode="numeric" value={to} aria-label="Son sual nömrəsi" onChange={e => setTo(e.target.value)} />
-          <Button className="h-10" loading={update.isPending} disabled={!range || !title.trim()}
-            onClick={() => range && update.mutate({ id: audio.id, title: title.trim(), questionFrom: range.from, questionTo: range.to }, { onSuccess: () => setEditing(false) })}>
+          <label className="flex flex-col gap-1 font-medium text-slate-700">Limit
+            <input className={numberClass} inputMode="numeric" value={plays} placeholder="limitsiz" onChange={e => setPlays(e.target.value)} />
+          </label>
+          <Button className="h-10" loading={update.isPending} disabled={!range || !title.trim() || maxPlays === undefined}
+            onClick={() => range && maxPlays !== undefined && update.mutate({ id: audio.id, title: title.trim(), questionFrom: range.from, questionTo: range.to, maxPlays },
+              { onSuccess: () => setEditing(false) })}>
             Saxla
           </Button>
           <Button variant="ghost" className="h-10" onClick={() => setEditing(false)}>Ləğv et</Button>
@@ -118,7 +131,9 @@ function AudioRow({ audio }: { audio: DimAudio }) {
         <div className="flex flex-wrap items-center gap-2">
           <Headphones className="size-4 text-indigo-600" aria-hidden />
           <span className="font-medium text-slate-800">{audio.title}</span>
-          <span className="text-slate-500 tabular-nums">suallar {audio.questionFrom}–{audio.questionTo} · {(audio.sizeBytes / 1024 / 1024).toFixed(1)} MB</span>
+          <span className="text-slate-500 tabular-nums">
+            suallar {audio.questionFrom}–{audio.questionTo} · {audio.maxPlays === null ? 'limitsiz dinləmə' : `${audio.maxPlays} dəfə dinləmə`} · {(audio.sizeBytes / 1024 / 1024).toFixed(1)} MB
+          </span>
           <span className="ml-auto flex gap-1">
             <button type="button" onClick={() => setEditing(true)} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-50">
               <Pencil className="size-3.5" aria-hidden />Düzəlt
@@ -172,4 +187,11 @@ function parseRange(from: string, to: string): { from: number; to: number } | nu
   const a = Number(from.trim())
   const b = to.trim() === '' ? a : Number(to.trim())
   return Number.isInteger(a) && Number.isInteger(b) && a >= 1 && b >= a && b <= 10_000 ? { from: a, to: b } : null
+}
+
+/** Play limit field: empty = no limit (null); undefined = invalid. */
+function parsePlays(value: string): number | null | undefined {
+  if (value.trim() === '') return null
+  const n = Number(value.trim())
+  return Number.isInteger(n) && n >= 1 && n <= 10 ? n : undefined
 }

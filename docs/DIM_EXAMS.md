@@ -45,7 +45,29 @@ olmayan nömrələr cavabda `notInBank` kimi qayıdır.
   Səs silinərsə başlanmış imtahanlarda da çalınmır. Sənəd silinəndə səs faylları da silinir.
 - İmtahan ekranı: səs sualın üstündə pleyerdir (`ListeningPlayer`), açarı səsin id-sidir, ona görə eyni səsə aid suallar
   arasında keçəndə dayanmır; səssiz suala keçəndə dayanır. Nəticə səhifəsində hər səs bir dəfə (qrupun ilk sualında) göstərilir.
-  Dinləmə sayına limit yoxdur.
+
+### Dinləmə limiti
+
+- `DimAudios.MaxPlays` — imtahanda neçə dəfə dinləmək olar (yükləmədə standart 2, rəsmi imtahandakı kimi; boş = limitsiz,
+  1–10). Sınaq başlayanda `QuestionSnapshot.AudioMaxPlays`-ə dondurulur; dəyişiklik yalnız yeni cəhdlərə aiddir.
+- `DimAudioPlays` (`ExamId`, `AudioId`, `Count`) — imtahan ərzində başladılan dinləmələr. `POST /api/exams/{id}/audio/{audioId}/play`
+  bir dinləmə sayır (imtahan sətri kilidi altında, iki sürətli klik limiti keçə bilməz); limit bitibsə 409.
+- Limitli səs faylı imtahan gedərkən yalnız ən azı bir dinləmə sayıldıqdan sonra verilir (əks halda 403); imtahan bitdikdən
+  sonra nəticə səhifəsində limitsizdir.
+- Şagird pleyeri (`LimitedListeningPlayer`): "Dinlə" / "Yenidən dinlə (N qalıb)", hər dinləmə əvvəldən, geri çəkmə yoxdur,
+  fasilə sayılmır. Səs çalarkən başqa suala keçilsə pleyer ekranda qalır və səs dayanmır.
+- Qeyd: fayl brauzerə gəldikdən sonra texniki biliyi olan istifadəçi onu brauzer alətləri ilə saxlaya bilər; limit adi
+  istifadəni məhdudlaşdırır, tam qorunma deyil.
+
+## Migration skriptləri
+
+Production-da (Neon) migration-lar ayrıca tətbiq olunur. `scripts/migrations/*.neon.sql` idempotentdir (artıq tətbiq
+olunmuş migration atlanır):
+- `AddCodedAnswers.neon.sql` — `Questions.CodedAnswer`, `ExamQuestions.CorrectAnswer/AnswerText`;
+- `AddDimAudio.neon.sql` — `DimAudios`;
+- `AddDimAudioPlayLimit.neon.sql` — `DimAudios.MaxPlays`, `DimAudioPlays` (`IF NOT EXISTS`: əvvəlki skriptlə artıq
+  yaradılıbsa, yalnız tarixçəyə yazılır);
+- `DimCodedAndAudio.neon.sql` — üçü birlikdə (`RemoveExplanationBank`-dan sonra).
 
 ## Kodlaşdırılan suallar (`Features/Questions/CodedAnswers.cs`)
 

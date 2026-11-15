@@ -76,6 +76,9 @@ public class QuestionSnapshot
 
     public string? AudioTitle { get; set; }
 
+    /// <summary>Play limit of the recording during the exam, frozen at start; null = no limit.</summary>
+    public int? AudioMaxPlays { get; set; }
+
     /// <summary>Images frozen with the question; missing (null) in exams created before visuals existed.</summary>
     public List<VisualSnapshot>? Visuals { get; set; } = [];
 }

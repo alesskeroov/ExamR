@@ -9,7 +9,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ExamFlow.Api.Features.Dim;
 
-public sealed record DimAudioDto(Guid Id, string Title, int QuestionFrom, int QuestionTo, string ContentType, long SizeBytes, DateTimeOffset CreatedAt);
+/// <param name="MaxPlays">Plays allowed per exam; null = no limit.</param>
+public sealed record DimAudioDto(
+    Guid Id, string Title, int QuestionFrom, int QuestionTo, string ContentType, long SizeBytes, DateTimeOffset CreatedAt, int? MaxPlays);
 
 public sealed class DimAudioSettingsRequest
 {
@@ -21,6 +23,10 @@ public sealed class DimAudioSettingsRequest
 
     [Range(1, 10_000)]
     public int QuestionTo { get; init; }
+
+    /// <summary>Plays allowed per exam; null = no limit.</summary>
+    [Range(1, DimAudioFormat.MaxPlaysLimit)]
+    public int? MaxPlays { get; init; }
 }
 
 /// <summary>
@@ -55,6 +61,7 @@ public static class DimAudioEndpoints
 
     private static async Task<IResult> Upload(
         Guid documentId, IFormFile? file, [FromForm] string? title, [FromForm] int questionFrom, [FromForm] int questionTo,
+        [FromForm] string? maxPlays,
         ClaimsPrincipal user, AppDbContext db, IFileStorage storage, TimeProvider clock, CancellationToken ct)
     {
         var userId = user.GetUserId();
@@ -63,6 +70,15 @@ public static class DimAudioEndpoints
         if (file is null || file.Length == 0) return Problem(StatusCodes.Status400BadRequest, "Səs faylı seçilməyib.");
         if (file.Length > DimAudioFormat.MaxSizeBytes)
             return Problem(StatusCodes.Status413PayloadTooLarge, $"Səs faylı {DimAudioFormat.MaxSizeBytes / 1024 / 1024} MB-dan böyük ola bilməz.");
+
+        // Empty = no limit; the form default is DimAudioFormat.DefaultMaxPlays.
+        int? limit = null;
+        if (!string.IsNullOrWhiteSpace(maxPlays))
+        {
+            if (!int.TryParse(maxPlays, out var parsed) || parsed < 1 || parsed > DimAudioFormat.MaxPlaysLimit)
+                return Problem(StatusCodes.Status400BadRequest, $"Dinləmə limiti 1–{DimAudioFormat.MaxPlaysLimit} arasında olmalıdır və ya boş qalmalıdır.");
+            limit = parsed;
+        }
 
         var name = string.IsNullOrWhiteSpace(title) ? Path.GetFileNameWithoutExtension(file.FileName) : title.Trim();
         if (name.Length > 200) name = name[..200];
@@ -83,6 +99,7 @@ public static class DimAudioEndpoints
             QuestionTo = questionTo,
             ContentType = format.ContentType,
             SizeBytes = file.Length,
+            MaxPlays = limit,
             UploadedByUserId = userId,
             CreatedAt = clock.GetUtcNow(),
         };
@@ -114,6 +131,8 @@ public static class DimAudioEndpoints
         audio.Title = request.Title.Trim();
         audio.QuestionFrom = request.QuestionFrom;
         audio.QuestionTo = request.QuestionTo;
+        // Applies to exams started from now on; running exams keep the limit frozen at their start.
+        audio.MaxPlays = request.MaxPlays;
         await db.SaveChangesAsync(ct);
         return TypedResults.Ok(ToDto(audio));
     }
@@ -169,7 +188,7 @@ public static class DimAudioEndpoints
         return overlap is null ? null : $"Bu aralıq \"{overlap}\" səs faylının aralığı ilə üst-üstə düşür.";
     }
 
-    private static DimAudioDto ToDto(DimAudio a) => new(a.Id, a.Title, a.QuestionFrom, a.QuestionTo, a.ContentType, a.SizeBytes, a.CreatedAt);
+    private static DimAudioDto ToDto(DimAudio a) => new(a.Id, a.Title, a.QuestionFrom, a.QuestionTo, a.ContentType, a.SizeBytes, a.CreatedAt, a.MaxPlays);
 
     private static IResult Problem(int status, string detail) => TypedResults.Problem(detail, statusCode: status);
 }

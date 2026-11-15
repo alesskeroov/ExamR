@@ -96,8 +96,20 @@ public class DimAudio
     public string StorageKey { get; set; } = string.Empty;
     public string ContentType { get; set; } = string.Empty;
     public long SizeBytes { get; set; }
+
+    /// <summary>How many times a student may play it during an exam, like the real exam (2); null = no limit.</summary>
+    public int? MaxPlays { get; set; }
+
     public Guid UploadedByUserId { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 
     public bool Covers(int number) => number >= QuestionFrom && number <= QuestionTo;
+}
+
+/// <summary>How many times the student started a recording in one exam (only counted while the exam runs).</summary>
+public class DimAudioPlay
+{
+    public Guid ExamId { get; set; }
+    public Guid AudioId { get; set; }
+    public int Count { get; set; }
 }

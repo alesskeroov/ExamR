@@ -44,9 +44,23 @@ export interface ExamSessionQuestion {
   audio?: ExamAudio | null
 }
 
-export interface ExamAudio { id: string; title: string }
+/** `maxPlays`: plays allowed during the exam (null = no limit); `playsUsed`: plays already started. */
+export interface ExamAudio { id: string; title: string; maxPlays?: number | null; playsUsed?: number }
 
 export const examAudioUrl = (examId: string, audioId: string) => `/api/exams/${examId}/audio/${audioId}`
+
+/** Counts one play of a recording on the server (refused with 409 once the limit is used up). */
+export function useStartAudioPlay(examId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (audioId: string) => api.post<{ playsUsed: number; maxPlays: number | null }>(`/exams/${examId}/audio/${audioId}/play`),
+    // Every question of the recording shows the same count, also after navigating away and back.
+    onSuccess: (result, audioId) => queryClient.setQueryData<ExamSession>(queryKeys.exams.session(examId), session => session && {
+      ...session,
+      questions: session.questions.map(q => (q.audio?.id === audioId ? { ...q, audio: { ...q.audio, playsUsed: result.playsUsed } } : q)),
+    }),
+  })
+}
 
 export interface ExamSession {
   id: string
