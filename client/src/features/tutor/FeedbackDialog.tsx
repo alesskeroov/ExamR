@@ -8,7 +8,8 @@ import { useSendFeedback } from './api'
 import { GuideDialog } from './GuideDialog'
 
 const maxText = 1500
-type Kind = 'problem' | 'idea'
+export type FeedbackKind = 'problem' | 'idea'
+type Kind = FeedbackKind
 const kinds: { id: Kind; label: string; icon: typeof Bug; hint: string }[] = [
   { id: 'problem', label: 'Problem bildir', icon: Bug, hint: 'Məsələn: kartın cavabı səhvdir, düymə işləmir, sənəd oxunmadı.' },
   { id: 'idea', label: 'Təklif ver', icon: Lightbulb, hint: 'Məsələn: hansı imkan faydalı olardı, nəyi daha rahat etmək olar.' },
@@ -17,10 +18,11 @@ const kinds: { id: Kind; label: string; icon: typeof Bug; hint: string }[] = [
 interface Props {
   onClose: () => void
   documentName?: string
+  initialKind?: FeedbackKind
 }
 
-export function FeedbackDialog({ onClose, documentName }: Props) {
-  const [kind, setKind] = useState<Kind>('problem')
+export function FeedbackDialog({ onClose, documentName, initialKind = 'problem' }: Props) {
+  const [kind, setKind] = useState<Kind>(initialKind)
   const [text, setText] = useState('')
   const textId = useId()
   const feedback = useSendFeedback()
