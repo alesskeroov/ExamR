@@ -314,7 +314,11 @@ export interface StudyCard {
 }
 export interface CardTopic { key: string; title: string; notes: string | null }
 /** The student's private deck: topics in document order and all cards. required = "Bilirdim" in a row to master a card. */
-export interface CardDeck { warning: string | null; required: number; topics: CardTopic[]; cards: StudyCard[] }
+export interface CardDeck {
+  warning: string | null; required: number; topics: CardTopic[]; cards: StudyCard[]
+  /** Slide count of a presentation that is only pictures: its slides are shown as images, cards come from the student. */
+  pictureSlides: number | null
+}
 /** What Öyrən studies: every card, weak cards, all mixed, or one topic. */
 export type LearnScope = { kind: 'all' } | { kind: 'due' } | { kind: 'weak' } | { kind: 'mixed' } | { kind: 'topic'; key: string }
 export interface CardState { id: string; streak: number; mastered: boolean; weak: boolean; due: boolean; dueAt: string | null }

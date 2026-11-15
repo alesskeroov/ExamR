@@ -4,10 +4,12 @@ import { Alert } from '../../components/common/Alert'
 import { cn } from '../../lib/utils'
 import { studyCards, topicStats, type CardDeck, type LearnScope } from './api'
 import { SelectionToCard } from './SelectionToCard'
+import { SlideGallery } from './SlideGallery'
 import { Frame } from './TutorShared'
 
 interface Props {
   chatId: string
+  documentId: string
   deck: CardDeck
   onLearn: (scope: LearnScope) => void
 }
@@ -20,7 +22,7 @@ const fold = (text: string) => text.toLocaleLowerCase('az')
  * "Konspekt": the way to study, overall progress, and the topics with their notes. A tap on a topic studies its cards;
  * text selected in the notes can become an own card.
  */
-export function GuideTopics({ chatId, deck, onLearn }: Props) {
+export function GuideTopics({ chatId, documentId, deck, onLearn }: Props) {
   const [term, setTerm] = useState('')
   const stats = useMemo(() => topicStats(deck), [deck])
   const cards = studyCards(deck)
@@ -32,6 +34,18 @@ export function GuideTopics({ chatId, deck, onLearn }: Props) {
   const query = fold(term.trim())
   const numbered = deck.topics.map((topic, i) => ({ topic, number: i + 1 }))
   const shown = query ? numbered.filter(t => fold(t.topic.title).includes(query)) : numbered
+
+  if (deck.pictureSlides) {
+    return (
+      <Frame>
+        <Alert tone="info" title="Slaydlar şəkil kimi saxlanılıb">
+          Mətn avtomatik oxunmur. Slaydlara baxın, vacib məqamı «Kart yarat» ilə öz kartınız kimi yazın, sonra «Öyrən» bölməsində təkrarlayın.
+        </Alert>
+        {total > 0 && <p className="text-sm text-slate-600">{total} öz kartınız var · {mastered} mənimsənilib</p>}
+        <SlideGallery chatId={chatId} documentId={documentId} deck={deck} count={deck.pictureSlides} />
+      </Frame>
+    )
+  }
 
   return (
     <Frame>

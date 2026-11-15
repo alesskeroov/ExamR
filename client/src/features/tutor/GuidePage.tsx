@@ -270,7 +270,7 @@ function DeckView({ chatId, documentId, format, tab, scope, onLearn, onSource, o
   if (tab === 'learn') return <GuideLearn chatId={chatId} deck={data} scope={scope} onScope={onLearn} onSource={onSource} />
   if (tab === 'cards') return <GuideCardList chatId={chatId} deck={data} onSource={onSource} />
   if (tab === 'search') return <GuideSearch chatId={chatId} deck={data} documentId={documentId} format={format} onOpen={onHit} />
-  return <GuideTopics chatId={chatId} deck={data} onLearn={onLearn} />
+  return <GuideTopics chatId={chatId} documentId={documentId} deck={data} onLearn={onLearn} />
 }
 
 interface ListProps {

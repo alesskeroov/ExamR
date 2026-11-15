@@ -7,8 +7,10 @@ using ExamFlow.Api.Features.Documents;
 using ExamFlow.Api.Infrastructure.Data;
 using ExamFlow.Api.Infrastructure.Security;
 using ExamFlow.Api.Infrastructure.Storage;
+using ExamFlow.Parsing;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 
 namespace ExamFlow.Api.Features.Learning;
@@ -41,6 +43,7 @@ public static class LearningEndpoints
         group.MapGet("/documents/{documentId:guid}", Get);
         group.MapGet("/documents/{documentId:guid}/chunks", Chunks);
         group.MapGet("/documents/{documentId:guid}/search", Search);
+        group.MapGet("/documents/{documentId:guid}/slides/{number:int}", Slide);
     }
 
     private static async Task<IResult> Search(Guid documentId, string? q, int? top, ClaimsPrincipal user, AppDbContext db, IChunkRetriever retriever,
@@ -247,6 +250,54 @@ public static class LearningEndpoints
         return name.Length > 255 ? name[^255..] : name;
     }
 
+    /// <summary>
+    /// The picture of one slide of a presentation the user can read, taken from the stored file on request (nothing
+    /// extra is stored). The file is copied to a temp file once and reused for a few minutes while the slides load.
+    /// </summary>
+    private static async Task<IResult> Slide(Guid documentId, int number, ClaimsPrincipal user, AppDbContext db, IFileStorage storage, IMemoryCache cache,
+        IOptions<LearningOptions> options, HttpResponse response, CancellationToken ct)
+    {
+        var document = await DocumentAccess.Readable(db, user.GetUserId()).Where(d => d.Id == documentId)
+            .Select(d => new { d.StoredFileName }).FirstOrDefaultAsync(ct);
+        if (document is null || !document.StoredFileName.EndsWith(".pptx", StringComparison.OrdinalIgnoreCase)) return NotFound();
+        if (number < 1 || number > options.Value.MaxPages) return SlideNotFound();
+
+        string path;
+        try { path = await SlideFileAsync(cache, storage, document.StoredFileName, ct); }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException) { return NotFound(); }
+
+        SlidePicture? picture;
+        await using (var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            picture = LearningTextExtractor.SlidePicture(file, number, options.Value.Limits);
+        if (picture is null) return SlideNotFound();
+        // Private and short-lived, like question images: access can be withdrawn.
+        response.Headers.CacheControl = "private, max-age=3600";
+        return TypedResults.File(picture.Content, picture.ContentType);
+    }
+
+    private static async Task<string> SlideFileAsync(IMemoryCache cache, IFileStorage storage, string storedFileName, CancellationToken ct)
+    {
+        var key = ("learning-slide-file", storedFileName);
+        if (cache.TryGetValue(key, out string? cached) && cached is not null && File.Exists(cached)) return cached;
+        var path = Path.GetTempFileName();
+        try
+        {
+            await using var source = storage.OpenRead(storedFileName);
+            await using var target = File.Create(path);
+            await source.CopyToAsync(target, ct);
+        }
+        catch
+        {
+            try { File.Delete(path); } catch (IOException) { /* best effort */ }
+            throw;
+        }
+        var options = new MemoryCacheEntryOptions { SlidingExpiration = TimeSpan.FromMinutes(10), Size = 1 };
+        options.RegisterPostEvictionCallback((_, value, _, _) => { try { File.Delete((string)value!); } catch (IOException) { /* in use: next start cleans temp */ } });
+        cache.Set(key, path, options);
+        return path;
+    }
+
+    private static IResult SlideNotFound() => TypedResults.Problem("Bu slaydın şəkli tapılmadı.", statusCode: StatusCodes.Status404NotFound);
     private static IResult Invalid(string detail) => TypedResults.Problem(detail, statusCode: StatusCodes.Status400BadRequest);
     private static IResult NotFound() => TypedResults.Problem("Sənəd tapılmadı.", statusCode: StatusCodes.Status404NotFound);
 }
