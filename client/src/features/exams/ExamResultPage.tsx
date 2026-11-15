@@ -13,7 +13,8 @@ import { QuestionVisuals } from '../../components/common/QuestionVisuals'
 import { formatDate, formatNumber } from '../../lib/format'
 import { cn } from '../../lib/utils'
 import { bodyVisuals, optionVisuals, visibleText, visualUrls } from '../../lib/visuals'
-import { useExamResult, type ExamOutcome, type ExamResult, type ExamResultQuestion } from './api'
+import { examAudioUrl, useExamResult, type ExamOutcome, type ExamResult, type ExamResultQuestion } from './api'
+import { ListeningPlayer } from './ListeningPlayer'
 import { sourceName, sourceRange } from './examSource'
 import { DimReportCard } from '../dim/DimReportCard'
 import { DimRetakeButton } from '../dim/DimRetakeButton'
@@ -202,7 +203,11 @@ function ResultView({ result }: { result: ExamResult }) {
         {questions.length === 0 ? (
           <EmptyState title="Bu filtrə uyğun sual yoxdur" />
         ) : (
-          questions.map((q) => <ReviewCard key={q.position} question={q} visualSrc={visualUrls.exam(result.id)} highlighted={focused === q.position} />)
+          questions.map((q, i) => (
+            <ReviewCard key={q.position} question={q} visualSrc={visualUrls.exam(result.id)} highlighted={focused === q.position}
+              // A recording shared by several questions is shown once, on the first of them in the list.
+              audioSrc={q.audio && questions[i - 1]?.audio?.id !== q.audio.id ? examAudioUrl(result.id, q.audio.id) : null} />
+          ))
         )}
         </div>
       </section>
@@ -265,7 +270,12 @@ const outcomeBadge: Record<ExamOutcome, { label: string; className: string }> = 
   Ungraded: { label: 'Qiymətləndirilməyib', className: 'bg-amber-50 text-amber-800 ring-amber-200' },
 }
 
-function ReviewCard({ question, visualSrc, highlighted }: { question: ExamResultQuestion; visualSrc: (id: string) => string; highlighted: boolean }) {
+function ReviewCard({ question, visualSrc, highlighted, audioSrc }: {
+  question: ExamResultQuestion
+  visualSrc: (id: string) => string
+  highlighted: boolean
+  audioSrc: string | null
+}) {
   const badge = outcomeBadge[question.outcome]
   const unanswered = question.outcome === 'Unanswered'
   // Unanswered questions list every option so the student sees what they skipped.
@@ -283,6 +293,7 @@ function ReviewCard({ question, visualSrc, highlighted }: { question: ExamResult
         <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset', badge.className)}>{badge.label}</span>
       </header>
       <QuestionVisuals visuals={bodyVisuals(question.visuals)} src={visualSrc} className="mb-3" />
+      {audioSrc && question.audio && <ListeningPlayer src={audioSrc} title={question.audio.title} hint={false} className="mb-3 rounded-lg border border-indigo-200 bg-indigo-50/60 px-3 py-2.5" />}
 
       {unanswered && (
         <p className="mb-2.5 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-600">Bu suala cavab verməmisiniz.</p>

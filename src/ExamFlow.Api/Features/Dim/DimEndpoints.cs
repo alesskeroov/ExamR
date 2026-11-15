@@ -123,6 +123,8 @@ public static class DimEndpoints
 
         var usable = picked.Select(p => p.QuestionId).ToList();
         var visuals = await QuestionVisuals.ForQuestionsAsync(db, usable, ct);
+        var documentIds = questions.Values.Select(q => q.DocumentId).Distinct().ToList();
+        var audios = await db.DimAudios.AsNoTracking().Where(a => documentIds.Contains(a.DocumentId)).ToListAsync(ct);
         var exam = new Exam
         {
             UserId = userId,
@@ -131,7 +133,8 @@ public static class DimEndpoints
             Status = ExamStatus.InProgress,
             StartedAt = now,
             ExpiresAt = now.AddMinutes(test.DurationMinutes),
-            Questions = picked.Select((p, i) => ExamEndpoints.Freeze(questions[p.QuestionId], i, visuals[p.QuestionId])).ToList(),
+            Questions = picked.Select((p, i) => WithAudio(ExamEndpoints.Freeze(questions[p.QuestionId], i, visuals[p.QuestionId]),
+                questions[p.QuestionId], audios)).ToList(),
         };
         db.Exams.Add(exam);
         db.DimAttempts.Add(new DimAttempt
@@ -154,6 +157,18 @@ public static class DimEndpoints
         }
 
         return TypedResults.Created($"/api/exams/{exam.Id}", new DimStartedDto(exam.Id));
+    }
+
+    /// <summary>Freezes the listening recording that covers the question's number in its document, if any.</summary>
+    internal static ExamQuestion WithAudio(ExamQuestion frozen, Question question, IReadOnlyList<DimAudio> audios)
+    {
+        if (audios.FirstOrDefault(a => a.DocumentId == question.DocumentId && a.Covers(question.SourceNumber)) is { } audio)
+        {
+            frozen.Snapshot.AudioId = audio.Id;
+            frozen.Snapshot.AudioTitle = audio.Title;
+        }
+
+        return frozen;
     }
 
     /// <summary>Per-subject breakdown, DİM points and weak topics; only after the exam is completed and graded.</summary>

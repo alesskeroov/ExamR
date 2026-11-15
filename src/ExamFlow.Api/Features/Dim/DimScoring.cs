@@ -31,6 +31,10 @@ public sealed record DimSubjectScore(
     decimal EstimatedPoints,
     decimal FullMaxPoints);
 
+/// <param name="Letters">Closed questions: number → option index (A = 0).</param>
+/// <param name="Coded">Open coded questions: number → accepted answers, e.g. "2,5; 5/2".</param>
+public sealed record DimAnswerKey(IReadOnlyDictionary<int, int> Letters, IReadOnlyDictionary<int, string> Coded, IReadOnlyList<int> Conflicts);
+
 public sealed record DimWeakTopic(string Subject, string Topic, int Total, int Correct, decimal Accuracy);
 
 public sealed record DimScore(
@@ -123,28 +127,41 @@ public static partial class DimScoring
     private static decimal Round(decimal value) => Math.Round(value, 1, MidpointRounding.AwayFromZero);
 
     /// <summary>
-    /// Parses an answer key such as "1-A 2) C, 3.b" or "1A 2C" into question number → option index (A = 0 … E = 4).
-    /// Returns the numbers that appear more than once with different letters as conflicts.
+    /// Parses an answer key such as "1-A 2) C, 3.b 14=2,5 15=-3 16=2,5|5/2" into question number → option index
+    /// (A = 0 … E = 4) for closed questions and number → accepted answers ("2,5; 5/2") for open coded ones. A coded
+    /// answer needs "=" or ":" and alternatives are separated by "|". Numbers given twice with different answers are
+    /// returned as conflicts (the last one wins).
     /// </summary>
-    public static (Dictionary<int, int> Key, List<int> Conflicts) ParseAnswerKey(string text)
+    public static DimAnswerKey ParseAnswerKey(string text)
     {
-        var key = new Dictionary<int, int>();
+        var letters = new Dictionary<int, int>();
+        var coded = new Dictionary<int, string>();
         var conflicts = new List<int>();
+        foreach (Match match in CodedPair().Matches(text))
+        {
+            var number = int.Parse(match.Groups["n"].Value);
+            var value = string.Join("; ", match.Groups["v"].Value.Split('|'));
+            if (coded.TryGetValue(number, out var existing) && existing != value) conflicts.Add(number);
+            coded[number] = value;
+        }
+
         foreach (Match match in AnswerKeyPair().Matches(text))
         {
             var number = int.Parse(match.Groups["n"].Value);
             var option = char.ToUpperInvariant(match.Groups["o"].Value[0]) - 'A';
-            if (key.TryGetValue(number, out var existing) && existing != option)
-            {
-                conflicts.Add(number);
-            }
-
-            key[number] = option;
+            if ((letters.TryGetValue(number, out var existing) && existing != option) || coded.ContainsKey(number)) conflicts.Add(number);
+            letters[number] = option;
         }
 
-        return (key, conflicts.Distinct().ToList());
+        return new DimAnswerKey(letters, coded, conflicts.Distinct().Order().ToList());
     }
 
     [GeneratedRegex(@"(?<!\d)(?<n>\d{1,4})\s*[-–.:)=]?\s*(?<o>[A-Ea-e])(?![A-Za-z])")]
     private static partial Regex AnswerKeyPair();
+
+    private const string KeyNumber = @"[+\-−–]?(?:\d+(?:[.,]\d+)?|[.,]\d+)(?:/\d+(?:[.,]\d+)?)?";
+
+    // "14=2,5", "15: -3", "16=2,5|5/2"; a comma is a decimal separator only when a digit follows it directly.
+    [GeneratedRegex(@"(?<!\d)(?<n>\d{1,4})\s*[=:]\s*(?<v>" + KeyNumber + @"(?:\|" + KeyNumber + @")*)(?![A-Za-z])")]
+    private static partial Regex CodedPair();
 }

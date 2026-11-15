@@ -114,7 +114,8 @@ public class DimScoringTests
     [Fact]
     public void Answer_key_accepts_common_formats_and_reports_conflicts()
     {
-        var (key, conflicts) = DimScoring.ParseAnswerKey("1-A 2) c, 3.B\n4 D 10E 11–e 12-F 13:a\n13-B");
+        var parsed = DimScoring.ParseAnswerKey("1-A 2) c, 3.B\n4 D 10E 11–e 12-F 13:a\n13-B");
+        var (key, conflicts) = (parsed.Letters, parsed.Conflicts);
 
         Assert.Equal(0, key[1]);
         Assert.Equal(2, key[2]);
@@ -125,6 +126,25 @@ public class DimScoringTests
         Assert.False(key.ContainsKey(12));
         Assert.Equal([13], conflicts);
     }
+
+    [Fact]
+    public void Answer_key_reads_coded_answers_next_to_letters()
+    {
+        var parsed = DimScoring.ParseAnswerKey("1-A 2-C, 14=2,5 15: -3, 16=2,5|5/2\n17=12 18-B 19 = ,5");
+
+        Assert.Equal([0, 2, 1], new[] { parsed.Letters[1], parsed.Letters[2], parsed.Letters[18] });
+        Assert.Equal("2,5", parsed.Coded[14]);
+        Assert.Equal("-3", parsed.Coded[15]);
+        Assert.Equal("2,5; 5/2", parsed.Coded[16]);
+        Assert.Equal("12", parsed.Coded[17]);
+        Assert.Equal(",5", parsed.Coded[19]);
+        Assert.Equal(5, parsed.Coded.Count);
+        Assert.Empty(parsed.Conflicts);
+    }
+
+    [Fact]
+    public void A_number_with_both_a_letter_and_a_coded_answer_is_a_conflict() =>
+        Assert.Equal([3], DimScoring.ParseAnswerKey("3-A 3=5").Conflicts);
 
     [Theory]
     [InlineData(DimTrack.Buraxilis, DimTestKind.Full, null, new[] { "az", "riy", "xdil" }, true)]
