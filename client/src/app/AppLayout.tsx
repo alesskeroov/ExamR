@@ -1,4 +1,4 @@
-import { GraduationCap, LifeBuoy, Layers, ShieldCheck, DoorOpen, FileUp, History, LayoutDashboard, Library, ListChecks, LogOut, Menu, School, Swords, Users, X, type LucideIcon } from 'lucide-react'
+import { GraduationCap, Layers, ShieldCheck, DoorOpen, FileUp, History, LayoutDashboard, Library, ListChecks, LogOut, Menu, School, Swords, Users, X, type LucideIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useSearchParams } from 'react-router'
 import { useCurrentUser, useLogout } from '../features/auth/api'
@@ -8,7 +8,7 @@ import { cn } from '../lib/utils'
 import { Nameplate } from '../features/nameplates/Nameplate'
 import { useNameplate } from '../features/nameplates/api'
 import { ThemeToggle } from '../components/common/ThemeToggle'
-import { FeedbackDialog } from '../features/tutor/FeedbackDialog'
+import { HelpMenu } from '../features/support/HelpMenu'
 
 const navItems: { to: string; label: string; icon: LucideIcon; group: string; end?: boolean; adminOnly?: boolean; badge?: string }[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, group: '', end: true },
@@ -54,6 +54,7 @@ export function AppLayout() {
         <Brand />
         <div className="ml-auto flex items-center gap-2">
           <ThemeToggle />
+          <HelpMenu />
           <NotificationBell />
           <button
             type="button"
@@ -99,34 +100,18 @@ export function AppLayout() {
             </div>
           })}
         </nav>
-        <SupportButton />
         <UserMenu />
       </aside>
 
       <div className="min-w-0 flex-1">
         <header className="app-toolbar hidden h-[72px] items-center justify-between border-b border-slate-200 px-8 lg:flex">
           <Breadcrumb />
-          <div className="flex items-center gap-3"><ThemeToggle /><NotificationBell /></div>
+          <div className="flex items-center gap-3"><ThemeToggle /><HelpMenu /><NotificationBell /></div>
         </header>
         <main className="app-content app-safe-bottom mx-auto max-w-[1200px] min-w-0 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
           <Outlet />
         </main>
       </div>
-    </div>
-  )
-}
-
-/** Reachable from every signed-in page: the in-app form, with the email address inside it as a fallback. */
-function SupportButton() {
-  const [open, setOpen] = useState(false)
-  return (
-    <div className="shrink-0 px-3 pb-2">
-      <button type="button" onClick={() => setOpen(true)}
-        className="app-nav-link flex h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] font-medium transition-colors duration-150">
-        <LifeBuoy className="size-4 shrink-0" aria-hidden />
-        <span className="truncate">Kömək və əlaqə</span>
-      </button>
-      {open && <FeedbackDialog onClose={() => setOpen(false)} />}
     </div>
   )
 }

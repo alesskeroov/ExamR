@@ -194,7 +194,7 @@ export function LandingPage() {
               <Faq q="Sual səhv tanınıbsa nə edim?">Sual bankında öz sualını redaktə edə və “yoxlanılıb” kimi təsdiqləyə bilərsən. Dəyişiklik növbəti imtahanlarda nəzərə alınır.</Faq>
               <Faq q="ExamR ödənişlidir?">Hazırda ExamR demo mərhələsindədir və pulsuzdur. Bu dövrdə bəzi funksiyalar dəyişə bilər.</Faq>
               <Faq q="Google hesabı ilə daxil ola bilərəm?">Bəli. Eyni email ilə artıq hesabın varsa, əvvəl şifrə ilə daxil ol və Google-u profilindən əlaqələndir.</Faq>
-              <Faq q="Problem yaransa, kimə yazım?">Saytda və ya imtahan zamanı problem yaranarsa, <a href={`mailto:${SUPPORT_EMAIL}`} className="font-semibold underline underline-offset-2">{SUPPORT_EMAIL}</a> ünvanına yaz. Hesabına daxil olmusansa, sol menyudakı “Kömək və əlaqə” bölməsindən də müraciət göndərə bilərsən.</Faq>
+              <Faq q="Problem yaransa, kimə yazım?">Saytda və ya imtahan zamanı problem yaranarsa, <a href={`mailto:${SUPPORT_EMAIL}`} className="font-semibold underline underline-offset-2">{SUPPORT_EMAIL}</a> ünvanına yaz. Hesabına daxil olmusansa, yuxarı paneldəki “?” (Kömək və əlaqə) düyməsindən də müraciət göndərə bilərsən.</Faq>
             </div>
           </div>
         </section>
