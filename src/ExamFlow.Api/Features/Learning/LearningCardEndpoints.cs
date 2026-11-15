@@ -39,8 +39,8 @@ public sealed record CardDto(string Id, string Kind, string TopicKey, string Fro
     int Source, int? Page, int ChunkOrdinal, bool Seen, int Streak, bool Mastered, bool Weak, bool IsSection, string? Section,
     bool NeedsReview, bool Own, bool Edited, bool Hidden, bool Due, DateTimeOffset? DueAt);
 public sealed record CardTopicDto(string Key, string Title, string? Notes);
-/// <summary>The whole private deck of one document. Required = "Bilirdim" in a row to master a card.</summary>
-public sealed record CardDeckDto(string? Warning, int Required, IReadOnlyList<CardTopicDto> Topics, IReadOnlyList<CardDto> Cards);
+/// <summary>The whole private deck of one document. Required = "Bilirdim" in a row to master a card; PictureSlides = slide count of a picture-only presentation.</summary>
+public sealed record CardDeckDto(string? Warning, int Required, IReadOnlyList<CardTopicDto> Topics, IReadOnlyList<CardDto> Cards, int? PictureSlides);
 /// <summary>Due: the card is waiting for review now (spaced repetition); DueAt: when it comes back.</summary>
 public sealed record CardStateDto(string Id, int Streak, bool Mastered, bool Weak, bool Due, DateTimeOffset? DueAt);
 
@@ -89,7 +89,7 @@ public static partial class LearningStudyEndpoints
         var topics = deck!.Topics.Select(t => new CardTopicDto(t.Key, t.Title, t.Notes)).ToList();
         if (cards.Any(c => c.TopicKey == PersonalDeck.OwnTopicKey)) topics.Add(new(PersonalDeck.OwnTopicKey, PersonalDeck.OwnTopicTitle, null));
         var warning = (await indexer.GetAsync(doc.LearningId, ct)) is { Supported: true } index ? index.Warning : null;
-        return TypedResults.Ok(new CardDeckDto(warning, CardMastery.Required, topics, cards));
+        return TypedResults.Ok(new CardDeckDto(warning, CardMastery.Required, topics, cards, deck.PictureSlides));
     }
 
     private static CardDto ToDto(PersonalCard p, CardStateView? s, DateTimeOffset now)

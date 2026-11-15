@@ -206,6 +206,25 @@ export function useDimSourceQuestions(documentId: string) {
   })
 }
 
+/** Reading passage (or listening transcript) shown above questions fromNumber…toNumber of a document. */
+export interface DimPassage {
+  id: string
+  fromNumber: number
+  toNumber: number
+  title: string | null
+  text: string
+}
+
+export type DimPassageInput = Omit<DimPassage, 'id'>
+
+export function useDimPassages(documentId: string) {
+  return useQuery({
+    queryKey: queryKeys.dim.passages(documentId),
+    queryFn: () => api.get<DimPassage[]>(`/admin/dim/documents/${documentId}/passages`),
+    enabled: documentId !== '',
+  })
+}
+
 export function useDimBankStats() {
   return useQuery({
     queryKey: queryKeys.dim.bankStats,
@@ -258,6 +277,18 @@ export const useCreateDimQuestion = () => useDimAdminMutation((request: DimQuest
 export const useDeleteDimQuestion = () => useDimAdminMutation((questionId: string) => api.delete(`/admin/dim/questions/${questionId}`))
 
 export const useEditDimQuestion = () => useDimAdminMutation(({ id, ...body }: DimQuestionEdit) => api.put<void>(`/admin/dim/questions/${id}`, body))
+
+/** Creates a passage when `id` is missing, otherwise updates it. */
+export const useSaveDimPassage = () => useDimAdminMutation(({ documentId, id, ...body }: DimPassageInput & { documentId: string; id?: string }) =>
+  id ? api.put<DimPassage>(`/admin/dim/passages/${id}`, body) : api.post<DimPassage>(`/admin/dim/documents/${documentId}/passages`, body))
+
+export const useDeleteDimPassage = () => useDimAdminMutation((id: string) => api.delete(`/admin/dim/passages/${id}`))
+
+/**
+ * Deletes an uploaded DİM source document with its questions, bank entries and passages (database cascade).
+ * Past attempts keep their frozen questions.
+ */
+export const useDeleteDimDocument = () => useDimAdminMutation((id: string) => api.delete(`/documents/${id}`))
 
 export const useRemoveFromBank = () => useDimAdminMutation((questionId: string) => api.delete(`/admin/dim/bank/${questionId}`))
 

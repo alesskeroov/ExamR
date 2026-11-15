@@ -26,6 +26,12 @@ export interface AnswerReveal {
   isCorrect?: boolean | null
 }
 
+/** Shared text (reading passage) a question refers to. */
+export interface ExamPassage {
+  title: string | null
+  text: string
+}
+
 export interface ExamSessionQuestion {
   examQuestionId: string
   position: number
@@ -42,6 +48,8 @@ export interface ExamSessionQuestion {
   answerText?: string | null
   /** Listening recording of the question (DİM); the file is at `examAudioUrl`. */
   audio?: ExamAudio | null
+  /** Missing in responses cached before passages were supported. */
+  passage?: ExamPassage | null
 }
 
 /** `maxPlays`: plays allowed during the exam (null = no limit); `playsUsed`: plays already started. */
@@ -86,6 +94,7 @@ export interface ExamResultQuestion {
   /** Coded questions: the accepted answers, e.g. "2,5; 5/2". */
   correctAnswer?: string | null
   audio?: ExamAudio | null
+  passage?: ExamPassage | null
 }
 
 /** Source PDF and question range. documentName is null if the PDF was deleted; range is null on older exams. */

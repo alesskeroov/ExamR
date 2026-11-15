@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
 import { Button } from '../../components/common/Button'
+import { PassageBox } from '../../components/common/PassageBox'
 import { SupportContact } from '../../components/common/SupportContact'
 import { supportMailto } from '../../lib/support'
 import { QuestionVisuals } from '../../components/common/QuestionVisuals'
@@ -372,6 +373,7 @@ function QuestionPanel({ question, visualSrc, number, immediate, revealed, canRe
           {flagged ? 'İşarələnib' : 'İşarələ'}
         </button>
       </div>
+      {question.passage && <PassageBox passage={question.passage} className="mb-3" />}
       <h1 id={headingId} className="exam-question-text max-w-[72ch] text-base leading-7 font-semibold text-slate-900 sm:text-[17px] min-[900px]:text-lg min-[900px]:leading-8">
         {visibleText(question.text, bodyVisuals(question.visuals).length > 0) ?? <span className="sr-only">Sual {number} (şəkilli)</span>}
       </h1>

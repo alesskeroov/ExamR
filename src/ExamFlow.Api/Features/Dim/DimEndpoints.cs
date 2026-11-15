@@ -125,6 +125,10 @@ public static class DimEndpoints
         var visuals = await QuestionVisuals.ForQuestionsAsync(db, usable, ct);
         var documentIds = questions.Values.Select(q => q.DocumentId).Distinct().ToList();
         var audios = await db.DimAudios.AsNoTracking().Where(a => documentIds.Contains(a.DocumentId)).ToListAsync(ct);
+        var passages = await QuestionPassages.ForQuestionsAsync(db, questions.Values, ct);
+        // Questions of one reading passage are placed together so the text is read once.
+        var subjects = picked.DistinctBy(p => p.QuestionId).ToDictionary(p => p.QuestionId, p => p.Subject);
+        picked = QuestionPassages.KeepTogether(usable, passages, questions).Select(id => (subjects[id], id)).ToList();
         var exam = new Exam
         {
             UserId = userId,
@@ -133,7 +137,7 @@ public static class DimEndpoints
             Status = ExamStatus.InProgress,
             StartedAt = now,
             ExpiresAt = now.AddMinutes(test.DurationMinutes),
-            Questions = picked.Select((p, i) => WithAudio(ExamEndpoints.Freeze(questions[p.QuestionId], i, visuals[p.QuestionId]),
+            Questions = picked.Select((p, i) => WithAudio(ExamEndpoints.Freeze(questions[p.QuestionId], i, visuals[p.QuestionId], passages.GetValueOrDefault(p.QuestionId)),
                 questions[p.QuestionId], audios)).ToList(),
         };
         db.Exams.Add(exam);

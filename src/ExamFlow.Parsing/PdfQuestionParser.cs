@@ -9,6 +9,7 @@ public sealed class PdfQuestionParser(IEnumerable<IAnswerDetector>? detectors = 
 {
     public const int MaxQuestionLength = 4000;
     public const int MaxOptionLength = 1000;
+    public const int MaxPassageLength = 20000;
     private const int MinCharactersPerPage = 20;
     private const double MaxUnknownGlyphRatio = 0.05;
 
@@ -104,7 +105,8 @@ public sealed class PdfQuestionParser(IEnumerable<IAnswerDetector>? detectors = 
         var duplicates = 0;
         var skippedAnchors = new List<SourceAnchor>();
 
-        var raws = QuestionSegmenter.Segment(LayoutCleaner.Clean(lines));
+        var rawPassages = new List<RawPassage>();
+        var raws = QuestionSegmenter.Segment(LayoutCleaner.Clean(lines), rawPassages);
         var visualKeys = VisualKeysByQuestion(raws, visuals ?? []);
 
         foreach (var raw in raws)
@@ -182,6 +184,7 @@ public sealed class PdfQuestionParser(IEnumerable<IAnswerDetector>? detectors = 
             Warnings = warnings,
             PageCount = pageCount,
             DuplicatesSkipped = duplicates,
+            Passages = rawPassages.Select(ToPassage).Where(p => p.Text.Length > 0).ToList(),
             SkippedAnchors = skippedAnchors,
             Failure = questions.Count == 0 ? ParseFailure.NoQuestions : ParseFailure.None,
         };
@@ -238,6 +241,24 @@ public sealed class PdfQuestionParser(IEnumerable<IAnswerDetector>? detectors = 
     }
 
     private static string Join(IEnumerable<TextToken> tokens) => string.Join(' ', tokens.Select(t => t.Text)).Trim();
+
+    /// <summary>Joins the passage lines into paragraphs; a line starting with "(2)" starts a new paragraph.</summary>
+    private static ParsedPassage ToPassage(RawPassage raw)
+    {
+        var text = new System.Text.StringBuilder();
+        foreach (var line in raw.Lines.Select(l => l.Trim()).Where(l => l.Length > 0))
+        {
+            if (text.Length > 0)
+            {
+                text.Append(Regex.IsMatch(line, @"^\(\d{1,2}\)") ? "\n\n" : " ");
+            }
+
+            text.Append(line);
+        }
+
+        var joined = text.Length > MaxPassageLength ? text.ToString(0, MaxPassageLength) : text.ToString();
+        return new ParsedPassage(raw.FromNumber, raw.ToNumber, raw.Title, joined);
+    }
 
     private static string Truncate(string text, int maxLength, string field, List<string> warnings)
     {

@@ -116,7 +116,11 @@ public sealed record StudyCardItem(string Id, CardKind Kind, string TopicKey, st
 
 public sealed record CardTopic(string Key, string Title, string? Notes = null);
 
-public sealed record StudyDeck(IReadOnlyList<CardTopic> Topics, IReadOnlyList<StudyCardItem> Cards);
+/// <summary>PictureSlides: slide count of a presentation that is only pictures (no cards from the file; shown as images).</summary>
+public sealed record StudyDeck(IReadOnlyList<CardTopic> Topics, IReadOnlyList<StudyCardItem> Cards)
+{
+    public int? PictureSlides { get; init; }
+}
 
 /// <summary>A test question as the exam parser saw it (only the parts a card needs).</summary>
 public sealed record TestQuestion(int Number, string Text, string Correct, IReadOnlyList<string> Others, string? Explanation, int? Page);
@@ -346,6 +350,9 @@ public sealed class CardDeckService(AppDbContext db, OpenQuestionIndexer indexer
     DocxQuestionParser docxParser, IMemoryCache cache, IOptions<LearningOptions> options, ILogger<CardDeckService> logger)
 {
     private static readonly TimeSpan ParseTimeout = TimeSpan.FromSeconds(180);
+    /// <summary>Topic of the own cards of a picture-only presentation.</summary>
+    public const string PictureTopicKey = "slides";
+
     /// <summary>From this many open questions on, a document is a question-and-answer file.</summary>
     private const int QaQuestions = 10;
 
@@ -353,10 +360,14 @@ public sealed class CardDeckService(AppDbContext db, OpenQuestionIndexer indexer
     public async Task<(StudyDeck? Deck, string? Error)> GetAsync(Guid learningId, CancellationToken ct)
     {
         var learning = await db.Set<LearningDocument>().AsNoTracking().Where(l => l.Id == learningId && l.Status == LearningStatus.Completed)
-            .Select(l => new { l.Format, l.ProcessedAt, l.Document.StoredFileName }).FirstOrDefaultAsync(ct);
+            .Select(l => new { l.Format, l.ProcessedAt, l.Document.StoredFileName, l.ChunkCount, l.LooksScanned, l.PageCount }).FirstOrDefaultAsync(ct);
         if (learning is null) return (null, "Sənəd hələ hazır deyil.");
         var key = $"{CardDeckBuilder.Version}:{learningId}:{learning.ProcessedAt?.UtcTicks}";
         if (cache.TryGetValue(key, out StudyDeck? hit) && hit is not null) return (hit, null);
+        // Slides that are only pictures: no cards come from the file, but the deck exists so the student can read the
+        // slides and add own cards to the "Slaydlar" topic.
+        if (learning.ChunkCount == 0 && learning.LooksScanned && OpenQuestionIndexer.IsSlides(learning.Format))
+            return (new StudyDeck([new CardTopic(PictureTopicKey, "Slaydlar")], []) { PictureSlides = learning.PageCount ?? 0 }, null);
 
         var index = await indexer.GetAsync(learningId, ct);
         if (index is null) return (null, "Sənəd hələ hazır deyil.");

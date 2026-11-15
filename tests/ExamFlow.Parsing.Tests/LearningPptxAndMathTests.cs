@@ -127,6 +127,28 @@ public class LearningPptxAndMathTests
         Assert.Equal(TextExtractionFailure.Unreadable, LearningTextExtractor.FromPptx(new MemoryStream([1, 2, 3]), Limits).Failure);
     }
 
+    [Fact]
+    public void Slide_picture_is_the_largest_browser_image_of_that_slide()
+    {
+        static string Pic(string id, long cx, long cy) =>
+            $"""<p:pic><p:blipFill><a:blip r:embed="{id}"/></p:blipFill><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm></p:spPr></p:pic>""";
+        var rels = $"""<Relationships xmlns="{Rels}"><Relationship Id="rId1" Type="t/image" Target="../media/logo.png"/><Relationship Id="rId2" Type="t/image" Target="../media/slide.jpg"/><Relationship Id="rId3" Type="t/image" Target="../media/chart.emf"/></Relationships>""";
+        var pptx = Zip(
+            ("ppt/presentation.xml", $"""<p:presentation {Ns}><p:sldIdLst><p:sldId id="256" r:id="rId10"/></p:sldIdLst></p:presentation>"""),
+            ("ppt/_rels/presentation.xml.rels", $"""<Relationships xmlns="{Rels}"><Relationship Id="rId10" Type="t/slide" Target="slides/slide1.xml"/></Relationships>"""),
+            ("ppt/slides/slide1.xml", $"""<p:sld {Ns}><p:cSld><p:spTree>{Pic("rId1", 100, 100)}{Pic("rId2", 12191996, 6858000)}{Pic("rId3", 99999999, 99999999)}</p:spTree></p:cSld></p:sld>"""),
+            ("ppt/slides/_rels/slide1.xml.rels", rels),
+            ("ppt/media/logo.png", "logo"), ("ppt/media/slide.jpg", "the slide"), ("ppt/media/chart.emf", "emf"));
+
+        var picture = LearningTextExtractor.SlidePicture(pptx, 1, Limits);
+
+        Assert.NotNull(picture);
+        Assert.Equal("image/jpeg", picture.ContentType);
+        Assert.Equal("the slide", System.Text.Encoding.UTF8.GetString(picture.Content));
+        pptx.Position = 0;
+        Assert.Null(LearningTextExtractor.SlidePicture(pptx, 2, Limits));
+    }
+
     [Theory]
     [InlineData("<m:f><m:num><m:r><m:t>a+b</m:t></m:r></m:num><m:den><m:r><m:t>2</m:t></m:r></m:den></m:f>", "(a+b)/2")]
     [InlineData("<m:sSup><m:e><m:r><m:t>x</m:t></m:r></m:e><m:sup><m:r><m:t>2</m:t></m:r></m:sup></m:sSup>", "x²")]

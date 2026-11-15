@@ -47,6 +47,9 @@ public sealed class AnswerRequest
 
 public sealed record ExamOptionDto(Guid Id, string Label, string Text);
 
+/// <summary>The shared text (reading passage) a question refers to.</summary>
+public sealed record ExamPassageDto(string? Title, string Text);
+
 /// <summary>Correct answer shown during the exam; only in Immediate mode and only after the user revealed it.</summary>
 /// <param name="CorrectAnswer">Coded questions: the accepted answers.</param>
 /// <param name="IsCorrect">Coded questions: whether the typed number matches (the client cannot compare numbers itself).</param>
@@ -63,7 +66,8 @@ public sealed record ExamSessionQuestionDto(
     bool Locked,
     bool IsCoded = false,
     string? AnswerText = null,
-    ExamAudioDto? Audio = null);
+    ExamAudioDto? Audio = null,
+    ExamPassageDto? Passage = null);
 
 /// <summary>Listening recording of a question; the file is at <c>/api/exams/{examId}/audio/{Id}</c>.</summary>
 /// <param name="MaxPlays">Plays allowed during the exam; null = no limit.</param>
@@ -95,7 +99,8 @@ public sealed record ExamResultQuestionDto(
     bool IsCoded = false,
     string? AnswerText = null,
     string? CorrectAnswer = null,
-    ExamAudioDto? Audio = null);
+    ExamAudioDto? Audio = null,
+    ExamPassageDto? Passage = null);
 
 /// <summary>Where the exam's questions came from. DocumentName is null when the PDF was deleted.</summary>
 public sealed record ExamSourceDto(Guid? DocumentId, string? DocumentName, int? RangeFrom, int? RangeTo);

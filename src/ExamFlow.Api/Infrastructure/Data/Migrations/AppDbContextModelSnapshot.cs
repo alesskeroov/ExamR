@@ -1872,6 +1872,48 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.ToTable("QuestionBookmarks", (string)null);
                 });
 
+            modelBuilder.Entity("ExamFlow.Api.Features.Questions.QuestionPassage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("timestamp(3) with time zone");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("FromNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(20000)
+                        .HasColumnType("character varying(20000)");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<int>("ToNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("timestamp(3) with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentId", "FromNumber");
+
+                    b.ToTable("QuestionPassages", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_QuestionPassages_Range", "\"FromNumber\" >= 1 AND \"ToNumber\" >= \"FromNumber\"");
+                        });
+                });
+
             modelBuilder.Entity("ExamFlow.Api.Features.Questions.QuestionVisual", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2544,6 +2586,12 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                             b1.Property<bool>("IsCoded")
                                 .HasColumnType("boolean");
 
+                            b1.Property<string>("PassageText")
+                                .HasColumnType("text");
+
+                            b1.Property<string>("PassageTitle")
+                                .HasColumnType("text");
+
                             b1.Property<string>("Text")
                                 .IsRequired()
                                 .HasColumnType("text");
@@ -2879,6 +2927,17 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Questions.QuestionPassage", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Documents.UploadedDocument", "Document")
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Document");
                 });
 
             modelBuilder.Entity("ExamFlow.Api.Features.Questions.QuestionVisual", b =>

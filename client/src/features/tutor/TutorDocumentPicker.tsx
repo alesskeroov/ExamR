@@ -67,7 +67,7 @@ export function TutorDocumentPicker({ onStart, starting, startError, resumable =
           {progress !== null ? `Yüklənir ${progress}%` : 'Yeni sənəd yüklə'}
         </button>
       </div>
-      <p className="mt-2 text-xs text-slate-500">PDF, Word (.docx) və ya PowerPoint (.pptx): konspekt, slaydlar, açıq sual–cavab və ya düzgün cavabı işarələnmiş testlər · ən çox 50 MB. Yalnız şəkildən ibarət (skan) fayllar hələ dəstəklənmir.</p>
+      <p className="mt-2 text-xs text-slate-500">PDF, Word (.docx) və ya PowerPoint (.pptx): konspekt, slaydlar, açıq sual–cavab və ya düzgün cavabı işarələnmiş testlər · ən çox 50 MB. Skan edilmiş PDF-lər hələ dəstəklənmir; şəkil kimi saxlanılmış slaydlar şəkil olaraq göstərilir.</p>
 
       {typeError && <div className="mt-4"><Alert title="Fayl növü dəstəklənmir">{typeError}</Alert></div>}
       {index.isError && <div className="mt-4"><Alert title="Sənəd hazırlana bilmədi">{index.error.message}</Alert></div>}

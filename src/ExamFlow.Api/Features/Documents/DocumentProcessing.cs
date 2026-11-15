@@ -191,6 +191,15 @@ public sealed class DocumentProcessor(
         db.Questions.RemoveRange(existing);
         var questions = result.Questions.Select(q => ToEntity(documentId, q)).ToList();
         db.Questions.AddRange(questions);
+        db.QuestionPassages.RemoveRange(await db.QuestionPassages.Where(p => p.DocumentId == documentId).ToListAsync(ct));
+        db.QuestionPassages.AddRange(result.Passages.Select(p => new QuestionPassage
+        {
+            DocumentId = documentId,
+            FromNumber = p.FromNumber,
+            ToNumber = p.ToNumber,
+            Title = p.Title.Length > QuestionPassage.MaxTitleLength ? p.Title[..QuestionPassage.MaxTitleLength] : p.Title,
+            Text = p.Text.Length > QuestionPassage.MaxTextLength ? p.Text[..QuestionPassage.MaxTextLength] : p.Text,
+        }));
 
         var visuals = VisualImport.None;
         if (!isDocx && options.Value.ExtractVisuals)
