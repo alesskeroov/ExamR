@@ -94,7 +94,7 @@ public static class DimEndpoints
         if (test.AttemptLimit is { } limit && await db.DimAttempts.CountAsync(a => a.TestId == id && a.UserId == userId, ct) >= limit)
             return Problem(StatusCodes.Status409Conflict, "Bu sınaq üçün cəhd limitiniz bitib.");
 
-        // Fixed questions keep their order inside a subject; random sections draw fresh questions for this attempt.
+        // Random sections draw fresh questions for this attempt; all are put in PDF order below.
         var picked = new List<(string Subject, Guid QuestionId)>();
         foreach (var section in test.Sections)
         {
@@ -126,9 +126,15 @@ public static class DimEndpoints
         var documentIds = questions.Values.Select(q => q.DocumentId).Distinct().ToList();
         var audios = await db.DimAudios.AsNoTracking().Where(a => documentIds.Contains(a.DocumentId)).ToListAsync(ct);
         var passages = await QuestionPassages.ForQuestionsAsync(db, questions.Values, ct);
-        // Questions of one reading passage are placed together so the text is read once.
-        var subjects = picked.DistinctBy(p => p.QuestionId).ToDictionary(p => p.QuestionId, p => p.Subject);
-        picked = QuestionPassages.KeepTogether(usable, passages, questions).Select(id => (subjects[id], id)).ToList();
+        // Like the paper exam: inside each subject the questions follow the PDF's order, so a recording or passage comes
+        // with its first question (listening 1–4 first) and its questions stay together.
+        var sectionOrder = picked.Select(p => p.Subject).Distinct().Select((s, i) => (s, i)).ToDictionary(x => x.s, x => x.i);
+        var documentOrder = picked.Select(p => questions[p.QuestionId].DocumentId).Distinct().Select((d, i) => (d, i)).ToDictionary(x => x.d, x => x.i);
+        picked = picked.DistinctBy(p => p.QuestionId)
+            .OrderBy(p => sectionOrder[p.Subject])
+            .ThenBy(p => documentOrder[questions[p.QuestionId].DocumentId])
+            .ThenBy(p => questions[p.QuestionId].SourceNumber)
+            .ToList();
         var exam = new Exam
         {
             UserId = userId,

@@ -392,18 +392,17 @@ function QuestionItem({ question: q, manual, audio }: { question: DimSourceQuest
               <Pencil className="size-3.5" aria-hidden />Düzəlt
             </button>
           )}
-          {manual ? (
-            <button type="button" disabled={deleteQuestion.isPending}
-              onClick={() => { if (window.confirm(`#${q.sourceNumber} sual silinsin?`)) deleteQuestion.mutate(q.id) }}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50">
-              <Trash2 className="size-3.5" aria-hidden />Sil
-            </button>
-          ) : q.bank && (
+          {!manual && q.bank && (
             <button type="button" onClick={() => remove.mutate(q.id)} disabled={remove.isPending}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50">
-              <Trash2 className="size-3.5" aria-hidden />Bankdan çıxar
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100">
+              Bankdan çıxar
             </button>
           )}
+          <button type="button" disabled={deleteQuestion.isPending}
+            onClick={() => { if (window.confirm(`#${q.sourceNumber} sual silinsin? Sual sınaqlara və banka bir daha düşməyəcək.`)) deleteQuestion.mutate(q.id) }}
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50">
+            <Trash2 className="size-3.5" aria-hidden />Sil
+          </button>
         </span>
       </div>
       {editing ? <QuestionEditor question={q} onDone={() => setEditing(false)} /> : (
@@ -425,6 +424,7 @@ function QuestionItem({ question: q, manual, audio }: { question: DimSourceQuest
           {q.parseWarning && <p className="mt-1 text-xs text-amber-700">{q.parseWarning}</p>}
         </>
       )}
+      {deleteQuestion.isError && <p className="mt-1 text-xs text-rose-700" role="alert">Sual silinmədi: {deleteQuestion.error.message}</p>}
     </article>
   )
 }

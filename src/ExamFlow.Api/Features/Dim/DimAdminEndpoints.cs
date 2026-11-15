@@ -448,21 +448,25 @@ public static class DimAdminEndpoints
     }
 
     /// <summary>
-    /// Deletes a question of a manual set (with its bank row). Questions of an uploaded PDF are only removed from the
-    /// bank, since the PDF would bring them back and their images belong to it. Past exams keep their snapshot.
+    /// Deletes a question of a manual set or an uploaded PDF (with its bank row and images). Reprocessing the PDF would
+    /// bring a PDF question back. Past exams keep their snapshot.
     /// </summary>
     private static async Task<IResult> DeleteQuestion(Guid questionId, ClaimsPrincipal user, AppDbContext db, CancellationToken ct)
     {
         var userId = user.GetUserId();
-        var question = await db.Questions
-            .Where(q => q.Id == questionId && q.Document.UploadedByUserId == userId)
-            .Select(q => new { q.Id, q.Document.StoredFileName })
-            .FirstOrDefaultAsync(ct);
-        if (question is null) return Problem(StatusCodes.Status404NotFound, "Sual tapılmadı.");
-        if (!IsManualSet(question.StoredFileName))
-            return Problem(StatusCodes.Status400BadRequest, "Yalnız əl ilə əlavə olunmuş suallar silinə bilər; PDF sualını bankdan çıxarın.");
+        if (!await db.Questions.AnyAsync(q => q.Id == questionId && q.Document.UploadedByUserId == userId, ct))
+            return Problem(StatusCodes.Status404NotFound, "Sual tapılmadı.");
 
-        await db.Questions.Where(q => q.Id == questionId).ExecuteDeleteAsync(ct);
+        // A wrong question of a PDF can be removed too. Its images reference it without cascade, so they go first;
+        // options, the bank entry and bookmarks cascade, and past exams keep their frozen copy. Image files stay in
+        // storage: identical images of other questions share them.
+        await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            await db.QuestionVisuals.Where(v => v.QuestionId == questionId).ExecuteDeleteAsync(ct);
+            await db.Questions.Where(q => q.Id == questionId).ExecuteDeleteAsync(ct);
+            await transaction.CommitAsync(ct);
+        });
         return TypedResults.NoContent();
     }
 
