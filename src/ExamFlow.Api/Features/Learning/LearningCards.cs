@@ -33,6 +33,10 @@ public sealed class LearningCardState
     public CardGrade LastGrade { get; set; }
     public DateTimeOffset LastReviewedAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
+    /// <summary>When the card should be reviewed again (<see cref="CardSchedule"/>); null on rows from before scheduling = due now.</summary>
+    public DateTimeOffset? DueAt { get; set; }
+    /// <summary>Days between the last review and <see cref="DueAt"/>; 0 = again today.</summary>
+    public int IntervalDays { get; set; }
 }
 
 public sealed class LearningCardStateConfiguration : IEntityTypeConfiguration<LearningCardState>
@@ -43,8 +47,42 @@ public sealed class LearningCardStateConfiguration : IEntityTypeConfiguration<Le
         builder.Property(c => c.QuestionHash).HasMaxLength(64);
         builder.Property(c => c.LastGrade).HasConversion<string>().HasMaxLength(8);
         builder.HasIndex(c => new { c.UserId, c.LearningDocumentId, c.QuestionHash }).IsUnique();
+        builder.HasIndex(c => new { c.UserId, c.DueAt });
         builder.HasOne<LearningDocument>().WithMany().HasForeignKey(c => c.LearningDocumentId).OnDelete(DeleteBehavior.Cascade);
     }
+}
+
+/// <summary>
+/// Spaced repetition (Leitner-like, no AI): "Bilmirdim" brings a card back today, "Qismən" stretches the gap a little,
+/// "Bilirdim" grows it 1 → 3 → ×2.5 days, at most <see cref="MaxIntervalDays"/>. Days start at midnight in Baku.
+/// </summary>
+public static class CardSchedule
+{
+    public const int MaxIntervalDays = 60;
+    /// <summary>Cards a day the guide suggests reviewing.</summary>
+    public const int DailyGoal = 20;
+    private static readonly TimeSpan DayOffset = TimeSpan.FromHours(4);
+
+    public static (int IntervalDays, DateTimeOffset DueAt) Next(int interval, CardGrade grade, DateTimeOffset now)
+    {
+        var next = grade switch
+        {
+            CardGrade.Again => 0,
+            CardGrade.Hard => Math.Max(1, (int)Math.Round(interval * 1.2)),
+            _ => interval switch { 0 => 1, 1 => 3, _ => (int)Math.Round(interval * 2.5) },
+        };
+        next = Math.Min(next, MaxIntervalDays);
+        return (next, next == 0 ? now : DayStart(now).AddDays(next));
+    }
+
+    /// <summary>Midnight (Baku time) of the day <paramref name="now"/> falls in.</summary>
+    public static DateTimeOffset DayStart(DateTimeOffset now)
+    {
+        var local = now.ToOffset(DayOffset);
+        return new DateTimeOffset(local.Date, DayOffset);
+    }
+
+    public static bool IsDue(DateTimeOffset? dueAt, DateTimeOffset lastReviewedAt, DateTimeOffset now) => (dueAt ?? lastReviewedAt) <= now;
 }
 
 public static class CardMastery

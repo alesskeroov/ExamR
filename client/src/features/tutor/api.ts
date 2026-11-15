@@ -305,6 +305,8 @@ export type CardKind = 'Question' | 'Term' | 'List' | 'Test' | 'Table' | 'Custom
 export interface StudyCard {
   id: string; kind: CardKind; topicKey: string; front: string; back: string; items: string[]; others: string[]
   source: number; page: number | null; chunkOrdinal: number; isSection: boolean; section: string | null; seen: boolean; streak: number; mastered: boolean; weak: boolean
+  /** Waiting for review now (spaced repetition); dueAt: when the card comes back (null = never reviewed). */
+  due: boolean; dueAt: string | null
   /** The extraction is unsure of this card ("Yoxlanmalı"). */
   needsReview: boolean
   /** own: written by the student; edited: a document card the student rewrote; hidden: kept out of study by the student. */
@@ -314,8 +316,17 @@ export interface CardTopic { key: string; title: string; notes: string | null }
 /** The student's private deck: topics in document order and all cards. required = "Bilirdim" in a row to master a card. */
 export interface CardDeck { warning: string | null; required: number; topics: CardTopic[]; cards: StudyCard[] }
 /** What Öyrən studies: every card, weak cards, all mixed, or one topic. */
-export type LearnScope = { kind: 'all' } | { kind: 'weak' } | { kind: 'mixed' } | { kind: 'topic'; key: string }
-export interface CardState { id: string; streak: number; mastered: boolean; weak: boolean }
+export type LearnScope = { kind: 'all' } | { kind: 'due' } | { kind: 'weak' } | { kind: 'mixed' } | { kind: 'topic'; key: string }
+export interface CardState { id: string; streak: number; mastered: boolean; weak: boolean; due: boolean; dueAt: string | null }
+
+/** Cards of one document waiting for review today. */
+export interface DueDocument { documentId: string; chatId: string | null; name: string; due: number }
+/** "Bu gün təkrar" across all documents: due cards and today's reviews against the daily goal. */
+export interface ReviewToday { goal: number; reviewedToday: number; due: number; documents: DueDocument[] }
+
+export function useReviewToday() {
+  return useQuery({ queryKey: queryKeys.tutor.reviewToday, queryFn: () => api.get<ReviewToday>('/learning/review/today'), staleTime: 60_000 })
+}
 
 export function useDeck(chatId: string) {
   return useQuery({ queryKey: queryKeys.tutor.deck(chatId), queryFn: () => api.get<CardDeck>(`/learning/chats/${chatId}/deck`), retry: false })
@@ -327,9 +338,14 @@ export function useReviewCard(chatId: string) {
   return useMutation({
     mutationFn: ({ id, grade }: { id: string; grade: CardGrade }) =>
       api.post<CardState>(`/learning/chats/${chatId}/cards/${id}/review`, { grade }),
-    onSuccess: state => client.setQueryData<CardDeck>(queryKeys.tutor.deck(chatId), deck => deck && {
-      ...deck, cards: deck.cards.map(c => c.id === state.id ? { ...c, ...state, seen: true } : c),
-    }),
+    onSuccess: state => {
+      client.setQueryData<CardDeck>(queryKeys.tutor.deck(chatId), deck => deck && {
+        ...deck, cards: deck.cards.map(c => c.id === state.id ? { ...c, ...state, seen: true } : c),
+      })
+      // Today's counts (sidebar, course plans) follow the grade the next time they are shown.
+      void client.invalidateQueries({ queryKey: queryKeys.tutor.reviewToday, refetchType: 'none' })
+      void client.invalidateQueries({ queryKey: queryKeys.courses.all, refetchType: 'none' })
+    },
   })
 }
 

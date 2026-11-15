@@ -36,17 +36,19 @@ function shuffle<T>(items: T[]) {
 
 function inScope(deck: CardDeck, scope: LearnScope) {
   const cards = studyCards(deck)
+  if (scope.kind === 'due') return cards.filter(c => c.due)
   if (scope.kind === 'weak') return cards.filter(c => c.weak)
   if (scope.kind === 'topic') return cards.filter(c => c.topicKey === scope.key)
   return cards
 }
 
-/** "Öyrən": flashcards the student grades themself. No dates: a card is done once it is mastered ("Bilirdim" in a row). */
+/** "Öyrən": flashcards the student grades themself. Graded cards come back on their review day ("Bu gün"); a card is mastered after "Bilirdim" in a row. */
 export function GuideLearn({ chatId, deck, scope, onScope, onSource }: Props) {
   const [session, setSession] = useState<StudyCard[] | null>(null)
   const [result, setResult] = useState<{ mastered: number; total: number } | null>(null)
   const pool = inScope(deck, scope)
-  const open = pool.filter(c => !c.mastered)
+  // A due card is reviewed even when it was mastered: that review is what keeps it mastered.
+  const open = scope.kind === 'due' ? pool : pool.filter(c => !c.mastered)
   const scopeKey = scope.kind === 'topic' ? `topic:${scope.key}` : scope.kind
 
   const start = (includeMastered: boolean) => {
@@ -74,13 +76,14 @@ export function GuideLearn({ chatId, deck, scope, onScope, onSource }: Props) {
         <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-indigo-50 text-indigo-700" aria-hidden><Layers className="size-5" /></span>
         <div className="min-w-0">
           <h2 className="text-base font-semibold">Öyrən</h2>
-          <p className="mt-0.5 text-sm text-slate-600">Sualı oxu, cavabı yadına sal, sonra aç və özünü qiymətləndir. Bilmədiyin kart bir neçə kartdan sonra yenə gəlir.</p>
+          <p className="mt-0.5 text-sm text-slate-600">Sualı oxu, cavabı yadına sal, sonra aç və özünü qiymətləndir. Bilmədiyin kart bir neçə kartdan sonra yenə gəlir; bildiyin kart günlər sonra təkrar üçün qayıdır.</p>
         </div>
       </header>
 
       <div className="flex flex-col gap-2">
-        <div role="radiogroup" aria-label="Nəyi öyrənək?" className="grid grid-cols-3 gap-2">
+        <div role="radiogroup" aria-label="Nəyi öyrənək?" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <ScopeChip active={scope.kind === 'all'} onClick={() => onScope({ kind: 'all' })}>Hamısı</ScopeChip>
+          <ScopeChip active={scope.kind === 'due'} onClick={() => onScope({ kind: 'due' })}>Bu gün · {studyCards(deck).filter(c => c.due).length}</ScopeChip>
           <ScopeChip active={scope.kind === 'weak'} onClick={() => onScope({ kind: 'weak' })}>Zəif · {studyCards(deck).filter(c => c.weak).length}</ScopeChip>
           <ScopeChip active={scope.kind === 'mixed'} onClick={() => onScope({ kind: 'mixed' })}>Qarışıq</ScopeChip>
         </div>
@@ -97,9 +100,11 @@ export function GuideLearn({ chatId, deck, scope, onScope, onSource }: Props) {
       )}
 
       <section className="tutor-border rounded-2xl border bg-white p-4 sm:p-5">
-        <p className="text-sm font-semibold text-slate-900">{topicTitle ?? (scope.kind === 'weak' ? 'Zəif kartlar' : scope.kind === 'mixed' ? 'Qarışıq' : 'Bütün kartlar')}</p>
+        <p className="text-sm font-semibold text-slate-900">{topicTitle ?? (scope.kind === 'due' ? 'Bu günün təkrarı' : scope.kind === 'weak' ? 'Zəif kartlar' : scope.kind === 'mixed' ? 'Qarışıq' : 'Bütün kartlar')}</p>
         <p className="mt-0.5 text-sm text-slate-600">
-          {pool.length === 0 ? 'Burada kart yoxdur.' : `${pool.length - open.length} / ${pool.length} mənimsənilib · ${open.length} kart qalıb`}
+          {scope.kind === 'due'
+            ? (pool.length === 0 ? 'Bu gün təkrar vaxtı çatmış kart yoxdur. Yeni kartları «Hamısı» bölməsindən öyrən.' : `Təkrar vaxtı çatmış ${pool.length} kart`)
+            : pool.length === 0 ? 'Burada kart yoxdur.' : `${pool.length - open.length} / ${pool.length} mənimsənilib · ${open.length} kart qalıb`}
         </p>
         {open.length > 0 ? (
           <button type="button" onClick={() => start(false)}

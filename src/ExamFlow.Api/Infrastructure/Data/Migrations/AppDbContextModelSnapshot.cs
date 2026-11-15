@@ -366,6 +366,59 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.ToTable("StoredBattleRooms");
                 });
 
+            modelBuilder.Entity("ExamFlow.Api.Features.Courses.StudyCourse", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly?>("ExamDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("StudyCourses", (string)null);
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Courses.StudyCourseDocument", b =>
+                {
+                    b.Property<Guid>("CourseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.HasKey("CourseId", "DocumentId");
+
+                    b.HasIndex("DocumentId");
+
+                    b.ToTable("StudyCourseDocuments", (string)null);
+                });
+
             modelBuilder.Entity("ExamFlow.Api.Features.Dim.DimAttempt", b =>
                 {
                     b.Property<Guid>("ExamId")
@@ -1151,6 +1204,12 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTimeOffset?>("DueAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("IntervalDays")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Lapses")
                         .HasColumnType("integer");
 
@@ -1185,6 +1244,8 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("LearningDocumentId");
+
+                    b.HasIndex("UserId", "DueAt");
 
                     b.HasIndex("UserId", "LearningDocumentId", "QuestionHash")
                         .IsUnique();
@@ -2262,6 +2323,32 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ExamFlow.Api.Features.Courses.StudyCourse", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Auth.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Courses.StudyCourseDocument", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Courses.StudyCourse", null)
+                        .WithMany("Documents")
+                        .HasForeignKey("CourseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ExamFlow.Api.Features.Documents.UploadedDocument", "Document")
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Document");
+                });
+
             modelBuilder.Entity("ExamFlow.Api.Features.Dim.DimAttempt", b =>
                 {
                     b.HasOne("ExamFlow.Api.Features.Exams.Exam", "Exam")
@@ -2877,6 +2964,11 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
             modelBuilder.Entity("ExamFlow.Api.Features.Battles.StoredBattleRoom", b =>
                 {
                     b.Navigation("Members");
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Courses.StudyCourse", b =>
+                {
+                    b.Navigation("Documents");
                 });
 
             modelBuilder.Entity("ExamFlow.Api.Features.Documents.UploadedDocument", b =>
