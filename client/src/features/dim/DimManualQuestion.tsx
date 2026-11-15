@@ -1,9 +1,10 @@
-import { Plus, Save } from 'lucide-react'
+import { Save } from 'lucide-react'
 import { useRef, useState, type KeyboardEvent } from 'react'
 import { Alert } from '../../components/common/Alert'
 import { Button } from '../../components/common/Button'
 import { cn } from '../../lib/utils'
-import { useCreateDimQuestion, useCreateDimSet, useDimCatalog, type DimSourceDocument } from './api'
+import { useCreateDimQuestion, useDimCatalog, type DimSourceDocument } from './api'
+import { DimSetPicker } from './DimSetPicker'
 import { inputClass } from './ui'
 
 type Kind = 'closed' | 'coded'
@@ -40,9 +41,7 @@ export function DimManualQuestion({ documents, documentId, onDocument }: {
 }) {
   const catalog = useDimCatalog()
   const create = useCreateDimQuestion()
-  const createSet = useCreateDimSet()
   const textRef = useRef<HTMLTextAreaElement>(null)
-  const [newSetTitle, setNewSetTitle] = useState('')
   const [subject, setSubject] = useState('')
   const [topic, setTopic] = useState('')
   const [kind, setKind] = useState<Kind>('closed')
@@ -85,28 +84,10 @@ export function DimManualQuestion({ documents, documentId, onDocument }: {
     }
   }
 
-  function addSet() {
-    createSet.mutate(newSetTitle.trim(), { onSuccess: set => { setNewSetTitle(''); onDocument(set.id) } })
-  }
-
   return (
     <div className="mt-3 flex flex-col gap-4" onKeyDown={onKeyDown}>
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Dəst / sənəd
-          <select className={inputClass} value={documentId} onChange={e => onDocument(e.target.value)}>
-            <option value="">Seçin</option>
-            {documents.map(d => <option key={d.id} value={d.id}>{d.isManual ? '✎ ' : ''}{d.originalFileName}</option>)}
-          </select>
-        </label>
-        <div className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">
-          <label htmlFor="dim-new-set">və ya yeni dəst</label>
-          <div className="flex gap-2">
-            <input id="dim-new-set" className={inputClass} value={newSetTitle} maxLength={200} placeholder="məs. Riyaziyyat — sınaq 1"
-              onChange={e => setNewSetTitle(e.target.value)} />
-            <Button variant="secondary" className="h-10 shrink-0" loading={createSet.isPending} disabled={newSetTitle.trim().length < 2}
-              onClick={addSet}><Plus className="size-4" aria-hidden />Yarat</Button>
-          </div>
-        </div>
+        <DimSetPicker documents={documents} documentId={documentId} onDocument={onDocument} />
         <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Fənn
           <select className={inputClass} value={subject} onChange={e => setSubject(e.target.value)}>
             <option value="">Fənn seçin</option>
@@ -117,7 +98,6 @@ export function DimManualQuestion({ documents, documentId, onDocument }: {
           <input className={inputClass} value={topic} maxLength={200} placeholder="məs. Kvadrat tənliklər" onChange={e => setTopic(e.target.value)} />
         </label>
       </div>
-      {createSet.isError && <Alert title="Dəst yaradılmadı">{createSet.error.message}</Alert>}
 
       <div role="radiogroup" aria-label="Sualın növü" className="inline-flex self-start rounded-lg border border-slate-200 bg-white p-1">
         {([['closed', 'Qapalı (A–E)'], ['coded', 'Açıq — kodlaşdırılan']] as const).map(([value, label]) => (

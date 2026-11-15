@@ -62,7 +62,11 @@ public sealed record ExamSessionQuestionDto(
     IReadOnlyList<VisualDto> Visuals,
     bool Locked,
     bool IsCoded = false,
-    string? AnswerText = null);
+    string? AnswerText = null,
+    ExamAudioDto? Audio = null);
+
+/// <summary>Listening recording of a question; the file is at <c>/api/exams/{examId}/audio/{Id}</c>.</summary>
+public sealed record ExamAudioDto(Guid Id, string Title);
 
 public sealed record ExamSessionDto(
     Guid Id,
@@ -86,7 +90,8 @@ public sealed record ExamResultQuestionDto(
     IReadOnlyList<VisualDto> Visuals,
     bool IsCoded = false,
     string? AnswerText = null,
-    string? CorrectAnswer = null);
+    string? CorrectAnswer = null,
+    ExamAudioDto? Audio = null);
 
 /// <summary>Where the exam's questions came from. DocumentName is null when the PDF was deleted.</summary>
 public sealed record ExamSourceDto(Guid? DocumentId, string? DocumentName, int? RangeFrom, int? RangeTo);

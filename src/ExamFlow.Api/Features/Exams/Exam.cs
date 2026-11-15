@@ -71,6 +71,11 @@ public class QuestionSnapshot
 
     public List<OptionSnapshot> Options { get; set; } = [];
 
+    /// <summary>Listening recording of the question (DİM, see <c>DimAudio</c>); null when it has none.</summary>
+    public Guid? AudioId { get; set; }
+
+    public string? AudioTitle { get; set; }
+
     /// <summary>Images frozen with the question; missing (null) in exams created before visuals existed.</summary>
     public List<VisualSnapshot>? Visuals { get; set; } = [];
 }

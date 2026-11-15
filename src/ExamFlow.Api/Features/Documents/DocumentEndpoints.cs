@@ -265,9 +265,12 @@ public static class DocumentEndpoints
         // Visuals are removed explicitly (deleted before the questions they reference); questions and options cascade.
         var visuals = await db.QuestionVisuals.Where(v => v.DocumentId == id).ToListAsync(ct);
         db.QuestionVisuals.RemoveRange(visuals);
+        // Listening recordings of a DİM document cascade with it; their files are removed below.
+        var audioKeys = await db.DimAudios.Where(a => a.DocumentId == id).Select(a => a.StorageKey).ToListAsync(ct);
         db.Documents.Remove(document);
         await db.SaveChangesAsync(ct);
         storage.Delete(document.StoredFileName);
+        audioKeys.ForEach(key => Dim.DimAudioEndpoints.DeleteFile(storage, key));
 
         foreach (var key in visuals.Where(v => v.StorageKey is not null).Select(v => v.StorageKey!).Distinct())
         {

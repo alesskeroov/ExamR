@@ -27,6 +27,7 @@ public static class ExamEndpoints
         group.MapPost("/{id:guid}/finish", Finish);
         group.MapGet("/{id:guid}/result", Result);
         group.MapGet("/{id:guid}/visuals/{visualId:guid}", Visual);
+        group.MapGet("/{id:guid}/audio/{audioId:guid}", Audio);
     }
 
     /// <summary>
@@ -400,6 +401,17 @@ public static class ExamEndpoints
             : QuestionVisuals.File(storage, response, visual.StorageKey, visual.ContentType);
     }
 
+    /// <summary>A listening recording of one of the exam's questions (DİM); playable during and after the exam.</summary>
+    private static async Task<IResult> Audio(
+        Guid id, Guid audioId, ClaimsPrincipal user, AppDbContext db, IFileStorage storage, HttpResponse response, CancellationToken ct)
+    {
+        var exam = await LoadAsync(db, id, user.GetUserId(), ct);
+        if (exam is null || exam.Questions.All(q => q.Snapshot.AudioId != audioId))
+            return Problem(StatusCodes.Status404NotFound, "Səs faylı tapılmadı.");
+        var audio = await db.DimAudios.AsNoTracking().FirstOrDefaultAsync(a => a.Id == audioId, ct);
+        return Dim.DimAudioEndpoints.Stream(storage, response, audio);
+    }
+
     /// <summary>Usable questions of one PDF whose original number lies in [from, to].</summary>
     internal static Task<List<ExamCandidate>> Candidates(AppDbContext db, Guid documentId, int from, int to, CancellationToken ct) =>
         db.Questions.AsNoTracking()
@@ -561,6 +573,9 @@ public static class ExamEndpoints
     private static IReadOnlyList<ExamOptionDto> Options(ExamQuestion question) =>
         question.Snapshot.Options.Select(o => new ExamOptionDto(o.OptionId, o.Label, o.Text)).ToList();
 
+    private static ExamAudioDto? AudioOf(ExamQuestion question) =>
+        question.Snapshot.AudioId is { } audioId ? new ExamAudioDto(audioId, question.Snapshot.AudioTitle ?? "Dinləmə") : null;
+
     internal static IReadOnlyList<VisualDto> Visuals(ExamQuestion question) =>
         question.Snapshot.Visuals?.Select(QuestionVisuals.ToDto).ToList() ?? [];
 
@@ -568,7 +583,7 @@ public static class ExamEndpoints
         exam.Id, exam.Status, exam.RevealMode, exam.QuestionCount, exam.StartedAt, exam.ExpiresAt, now,
         exam.Questions.OrderBy(q => q.Position)
             .Select(q => new ExamSessionQuestionDto(q.Id, q.Position, q.Snapshot.Text, Options(q), q.SelectedOptionId, RevealFor(exam, q), Visuals(q),
-                q.LockedAt is not null, q.Snapshot.IsCoded, q.AnswerText))
+                q.LockedAt is not null, q.Snapshot.IsCoded, q.AnswerText, AudioOf(q)))
             .ToList());
 
     private static ExamResultDto ToResult(Exam exam, IReadOnlyDictionary<Guid, string> documentNames)
@@ -580,7 +595,7 @@ public static class ExamEndpoints
             exam.StartedAt, completedAt, (int)Math.Round((completedAt - exam.StartedAt).TotalSeconds),
             exam.Questions.OrderBy(q => q.Position)
                 .Select(q => new ExamResultQuestionDto(q.Position, q.Snapshot.Text, Options(q), q.SelectedOptionId, q.CorrectOptionId,
-                    q.Outcome ?? ExamEngine.OutcomeOf(q), Visuals(q), q.Snapshot.IsCoded, q.AnswerText, q.CorrectAnswer))
+                    q.Outcome ?? ExamEngine.OutcomeOf(q), Visuals(q), q.Snapshot.IsCoded, q.AnswerText, q.CorrectAnswer, AudioOf(q)))
                 .ToList());
     }
 

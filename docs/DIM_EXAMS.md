@@ -27,6 +27,26 @@ Yazılı tapşırıqlar olmadığı üçün tam bal hesablanmır. Hesabat iki r�
 Hər hissə ayrıca rəsmi saya miqyaslanır (sınaqda 3 kodlaşdırılan sual olsa da, rəsmi 5-ə çevrilir). Açıq suallarda
 səhvə görə bal çıxılmır.
 
+## Mövzular aralıqla
+
+`POST /api/admin/dim/documents/{id}/topics` (`text`: hər sətirdə `1-5: Fonetika`, `6–10 Leksika`, `11. Morfologiya`).
+Sonrakı sətir əvvəlkini dəqiqləşdirir (`1-20: Cəbr`, sonra `5: Faiz`). Mövzu `DimBankQuestions.Topic`-ə yazılır; bankda
+olmayan nömrələr cavabda `notInBank` kimi qayıdır.
+
+## Səs materialları (dinləmə)
+
+- `DimAudios` — sənədin/dəstin səs faylı: `Title`, `QuestionFrom`–`QuestionTo` (sənəddəki sual nömrələri), `StorageKey`
+  (`dimaudio_{id}.mp3`), `ContentType`, `SizeBytes`. Bir sənəddə aralıqlar üst-üstə düşə bilməz (hər sualın ən çox bir səsi).
+- Format faylın ilk baytlarına görə yoxlanır (`DimAudioFormat`): MP3, M4A (MP4/AAC), OGG, WAV; ən çox 30 MB.
+- Admin: `GET|POST /api/admin/dim/documents/{id}/audio` (multipart: `file`, `title`, `questionFrom`, `questionTo`),
+  `PUT|DELETE /api/admin/dim/audio/{id}`, `GET /api/admin/dim/audio/{id}/file` (önizləmə).
+- Sınaq başlayanda səs bağlantısı snapshot-a dondurulur (`QuestionSnapshot.AudioId/AudioTitle`). Fayl
+  `GET /api/exams/{examId}/audio/{audioId}` ilə verilir: yalnız imtahan sahibinə, Range dəstəyi ilə (irəli-geri çəkmək, Safari).
+  Səs silinərsə başlanmış imtahanlarda da çalınmır. Sənəd silinəndə səs faylları da silinir.
+- İmtahan ekranı: səs sualın üstündə pleyerdir (`ListeningPlayer`), açarı səsin id-sidir, ona görə eyni səsə aid suallar
+  arasında keçəndə dayanmır; səssiz suala keçəndə dayanır. Nəticə səhifəsində hər səs bir dəfə (qrupun ilk sualında) göstərilir.
+  Dinləmə sayına limit yoxdur.
+
 ## Kodlaşdırılan suallar (`Features/Questions/CodedAnswers.cs`)
 
 - `Questions.CodedAnswer` — variantı olmayan sualın qəbul edilən cavabları, `;` ilə ayrılır (vergül onluq ayırıcıdır):
@@ -53,7 +73,12 @@ səhvə görə bal çıxılmır.
    dərhal `IsDimSource`). `POST /api/admin/dim/questions` (`documentId`, `track`, `subject`, `topic`, `text`,
    `options` [boş = kodlaşdırılan], `correctIndex`, `codedAnswer`) sualı yaradır və dərhal banka əlavə edir. Dəstin
    sualı `DELETE /api/admin/dim/questions/{id}` ilə silinir (PDF sualı yalnız bankdan çıxarılır).
-2. Səhv suallar: `POST /api/admin/dim/documents/{id}/answer-key` (`1-A 2-C …`) və ya tək sual üçün
+1b. Mətndən idxal: `POST /api/admin/dim/sets/{id}/import` (`text`, `track`, `subject`, `topic`, `preview`) yapışdırılmış
+   testi PDF/DOCX ilə eyni parser-lə (`DimTextTools.ParsePastedTest`) suallara bölür; bir sətirdəki `A) 3 B) 4 C) 5`
+   variantları ayrılır. `preview: true` heç nə saxlamır. Boş dəstdə nömrələr mətndəki kimi qalır (cavab açarı uyğun gəlsin),
+   doluda sonuncudan davam edir. Cavabı bilinən suallar dərhal banka düşür; qalanları cavab açarı + "banka əlavə et" ilə.
+2. Səhv suallar: `POST /api/admin/dim/documents/{id}/answer-key` (`1-A 2-C 14=2,5 15=-3 16=2,5|5/2`; kodlaşdırılan cavab
+   yalnız variantı olmayan suala yazılır, `=` və ya `:` lazımdır, alternativlər `|` ilə) və ya tək sual üçün
    `PUT /api/admin/dim/questions/{id}` (mətn, variant mətnləri, düzgün variant; variant sayı dəyişmir). Variantı olmayan PDF sualına `codedAnswer`
    yazılsa, kodlaşdırılan sual olur.
 3. `POST /api/admin/dim/documents/{id}/approve-valid` — sənədin bütün düzgün formatlı suallarını (2–5 variant, tam 1
@@ -75,7 +100,8 @@ Admin endpoint-ləri: `GET documents` (sənədlər + düzgün/bankda sayları), 
 - İstifadəçi: sol menyu → "DİM sınaqları" → `/dim/buraxilis`, `/dim/blok` (tam/fənn filtri, Blokda qrup filtri;
   Başla / Davam et / Son nəticə). Nəticə səhifəsində DİM kartı (`features/dim/DimReportCard.tsx`).
 - Admin: Admin Panel → "DİM sınaqları" (`?section=dim`):
-  - *Sual bankı* — iki yol: "PDF / Word yüklə" və ya "Əl ilə yaz". Əl ilə: dəst seç/yarat, fənn, mövzu, növ
+  - *Sual bankı* — üç yol: "PDF / Word yüklə", "Mətni yapışdır" (önizləmə → saxla) və ya "Əl ilə yaz".
+    Sənəd panelində: cavab açarı, "Mövzuları aralıqla təyin et", "Səs materialları (dinləmə)". Əl ilə: dəst seç/yarat, fənn, mövzu, növ
     (Qapalı A–E / Açıq — kodlaşdırılan), mətn, variantlar və ya cavab; `Ctrl+Enter` saxlayır, forma təmizlənir, dəst/fənn/növ
     qalır. Sualı variantları ilə (`A) … B) …`) yapışdırdıqda variantlar avtomatik ayrılır. PDF yolu: əvvəl imtahan+fənn seç, PDF yüklə; sənəd kartları (X düzgün / Y səhv / Z bankda); bir düymə ilə
     bütün düzgün sualları banka əlavə et; "Səhv suallar" siyahısında sualı yerində düzəlt; cavab açarı yalnız cavabı
@@ -86,4 +112,4 @@ Admin endpoint-ləri: `GET documents` (sənədlər + düzgün/bankda sayları), 
 - İmtahan ekranı: kodlaşdırılan sualda variant əvəzinə cavab xanası (Enter, xanadan çıxış və ya 1,2 san sonra avtomatik
   saxlanır); nəticədə "Sizin cavab / Düzgün cavab"; DİM kartında "Açıq bal" sütunu.
 - Hələ yoxdur: admin UI-da sualları tək-tək seçərək sınaq (API dəstəkləyir), yazılı tapşırıqlar, mətnə bağlı suallar,
-  cavab açarında kodlaşdırılan cavablar (`14=2,5`), rus bölməsi.
+  dinləmə sayına limit, rus bölməsi.

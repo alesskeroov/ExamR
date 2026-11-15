@@ -40,7 +40,13 @@ export interface ExamSessionQuestion {
   /** Open coded task (DİM): the user types a number instead of picking an option. */
   isCoded?: boolean
   answerText?: string | null
+  /** Listening recording of the question (DİM); the file is at `examAudioUrl`. */
+  audio?: ExamAudio | null
 }
+
+export interface ExamAudio { id: string; title: string }
+
+export const examAudioUrl = (examId: string, audioId: string) => `/api/exams/${examId}/audio/${audioId}`
 
 export interface ExamSession {
   id: string
@@ -65,6 +71,7 @@ export interface ExamResultQuestion {
   answerText?: string | null
   /** Coded questions: the accepted answers, e.g. "2,5; 5/2". */
   correctAnswer?: string | null
+  audio?: ExamAudio | null
 }
 
 /** Source PDF and question range. documentName is null if the PDF was deleted; range is null on older exams. */
