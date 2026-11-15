@@ -1,10 +1,11 @@
 import type { ExamSessionQuestion } from './api'
 
-/** Same shapes the server accepts for a coded answer: 12, -3, 2,5, 2.5, ,5, 5/2 (spaces ignored). */
-const NUMBER = /^[+-]?(\d+([.,]\d+)?|[.,]\d+)(\/\d+([.,]\d+)?)?$/
-
-export function isCodedNumber(text: string) {
-  return NUMBER.test(text.replace(/\s+/g, '').replace(/[−–]/g, '-'))
+/**
+ * Whether an open answer can be saved. Like the server, anything but blank is accepted: numbers (12, 2,5, 5/2, 80°),
+ * coordinates ((3; -4)) and words (Azerbaijani language tasks) are all graded there.
+ */
+export function isCodedAnswer(text: string) {
+  return /[\p{L}\p{N}]/u.test(text)
 }
 
 export function isAnswered(question: ExamSessionQuestion) {
