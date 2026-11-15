@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
 import { SupportContact } from '../../components/common/SupportContact'
+import { ScrollToTopButton } from '../../components/common/ScrollToTopButton'
 import { EmptyState } from '../../components/common/EmptyState'
 import { PageHeader } from '../../components/common/PageHeader'
 import { PassageBox } from '../../components/common/PassageBox'
@@ -169,6 +170,7 @@ function ResultView({ result }: { result: ExamResult }) {
       </section>
 
       <DimReportCard examId={result.id} />
+      <ScrollToTopButton />
 
       <section aria-labelledby="review-heading" className="flex min-w-0 flex-col gap-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
