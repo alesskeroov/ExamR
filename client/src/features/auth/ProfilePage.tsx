@@ -20,6 +20,7 @@ import { normalizeUser, useCurrentUser, type User } from './api'
 import { ProfileActivity } from './ProfileActivity'
 import { useTranslation } from 'react-i18next'
 import i18n from '../../lib/i18n'
+import { squareAvatar } from '../../lib/avatar-image'
 
 // Phones show the short label under the icon so all five sections fit without scrolling.
 const tabs = [
@@ -93,7 +94,7 @@ export function ProfilePage() {
     }
     setAvatarBusy(true)
     try {
-      if (remove) await api.delete('/profile/avatar'); else await uploadFile('/profile/avatar', file!)
+      if (remove) await api.delete('/profile/avatar'); else await uploadFile('/profile/avatar', await squareAvatar(file!))
       const fresh = normalizeUser(await api.get<User>('/auth/me'))
       client.setQueryData(queryKeys.me, fresh)
       setNotice(t('profile.avatarSaved'))
