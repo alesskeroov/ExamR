@@ -7,12 +7,14 @@ import { Button } from '../../components/common/Button'
 import { EmptyState } from '../../components/common/EmptyState'
 import { PageHeader } from '../../components/common/PageHeader'
 import { StatusBadge } from '../../components/common/StatusBadge'
+import { UsageMeter } from '../../components/common/UsageMeter'
 import { ApiError } from '../../lib/api-client'
 import { formatDate, formatNumber } from '../../lib/format'
 import { cn } from '../../lib/utils'
 import type { RevealMode } from '../exams/api'
 import { useDimTests, useStartDimTest, type DimTest, type DimTrack } from './api'
 import { DimStartDialog } from './DimStartDialog'
+import { useUsageLimit } from '../usage/api'
 import { useTranslation } from 'react-i18next'
 
 type KindFilter = 'All' | 'Full' | 'Subject'
@@ -40,6 +42,7 @@ export function DimTestsPage({ track }: { track: DimTrack }) {
       <Alert tone="info" title={t('dim.page.noticeTitle')}>
         {t('dim.page.notice', { max: copy[track].max })}
       </Alert>
+      <div className="mt-4"><UsageMeter kind="DimTest" /></div>
 
       <div role="tablist" aria-label={t('dim.page.kindAria')} className="mt-5 inline-flex w-full rounded-lg border border-slate-200 bg-white p-1 sm:w-auto">
         {([['All', t('exam.setup.all')], ['Full', t('dim.page.full')], ['Subject', t('dim.page.subject')]] as const).map(([value, label]) => (
@@ -75,6 +78,7 @@ function TestCard({ test }: { test: DimTest }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const start = useStartDimTest()
+  const monthly = useUsageLimit('DimTest')
   const [choosing, setChoosing] = useState(false)
   const last = test.lastAttempt
   const inProgress = last?.status === 'InProgress'
@@ -149,7 +153,7 @@ function TestCard({ test }: { test: DimTest }) {
             <Play className="size-4" aria-hidden />{t('dashboard.continue')}
           </Link>
         ) : (
-          <Button className="w-full" disabled={!test.isOpen || limitReached} loading={start.isPending} onClick={() => { start.reset(); setChoosing(true) }}>
+          <Button className="w-full" disabled={!test.isOpen || limitReached || monthly.blocked} loading={start.isPending} onClick={() => { start.reset(); setChoosing(true) }}>
             <Play className="size-4" aria-hidden />{limitReached ? t('dim.page.limitReached') : last ? t('dim.page.restart') : t('dim.page.start')}
           </Button>
         )}

@@ -366,6 +366,327 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.ToTable("StoredBattleRooms");
                 });
 
+            modelBuilder.Entity("ExamFlow.Api.Features.Billing.BillingSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("InstagramUsername")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("PaymentInstructions")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("WhatsAppNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("BillingSettings", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_BillingSettings_Single", "\"Id\" = 1");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Enabled = false,
+                            UpdatedAt = new DateTimeOffset(new DateTime(2026, 11, 16, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        });
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Billing.PaymentRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AdminNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Periods")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PlanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ReviewedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("PlanId");
+
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasFilter("\"Status\" = 'Pending'");
+
+                    b.HasIndex("Status", "CreatedAt");
+
+                    b.ToTable("PaymentRequests", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PaymentRequests_Periods", "\"Periods\" BETWEEN 1 AND 12");
+                        });
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Billing.Plan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<int>("DurationDays")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsFeatured")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsFree")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("MonthlyBattles")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("MonthlyDimTests")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("MonthlyExams")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("MonthlyUploads")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<decimal>("Price")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsFree")
+                        .IsUnique()
+                        .HasFilter("\"IsFree\"");
+
+                    b.ToTable("Plans", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Plans_DurationDays", "\"DurationDays\" BETWEEN 1 AND 365");
+
+                            t.HasCheckConstraint("CK_Plans_MonthlyBattles", "\"MonthlyBattles\" IS NULL OR \"MonthlyBattles\" BETWEEN 0 AND 100000");
+
+                            t.HasCheckConstraint("CK_Plans_MonthlyDimTests", "\"MonthlyDimTests\" IS NULL OR \"MonthlyDimTests\" BETWEEN 0 AND 100000");
+
+                            t.HasCheckConstraint("CK_Plans_MonthlyExams", "\"MonthlyExams\" IS NULL OR \"MonthlyExams\" BETWEEN 0 AND 100000");
+
+                            t.HasCheckConstraint("CK_Plans_MonthlyUploads", "\"MonthlyUploads\" IS NULL OR \"MonthlyUploads\" BETWEEN 0 AND 100000");
+
+                            t.HasCheckConstraint("CK_Plans_Price", "\"Price\" >= 0");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("6a1f0c3e-0000-4000-8000-000000000001"),
+                            Description = "Saytı sınamaq üçün",
+                            DurationDays = 30,
+                            IsActive = true,
+                            IsFeatured = false,
+                            IsFree = true,
+                            MonthlyBattles = 0,
+                            MonthlyDimTests = 0,
+                            MonthlyExams = 3,
+                            MonthlyUploads = 1,
+                            Name = "Free",
+                            Price = 0m,
+                            SortOrder = 0,
+                            UpdatedAt = new DateTimeOffset(new DateTime(2026, 11, 16, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        },
+                        new
+                        {
+                            Id = new Guid("6a1f0c3e-0000-4000-8000-000000000002"),
+                            Description = "İmtahandan əvvəlki 7 gün üçün",
+                            DurationDays = 7,
+                            IsActive = true,
+                            IsFeatured = false,
+                            IsFree = false,
+                            MonthlyBattles = 5,
+                            MonthlyDimTests = 5,
+                            MonthlyExams = 30,
+                            MonthlyUploads = 3,
+                            Name = "İmtahan həftəsi",
+                            Price = 3m,
+                            SortOrder = 1,
+                            UpdatedAt = new DateTimeOffset(new DateTime(2026, 11, 16, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        },
+                        new
+                        {
+                            Id = new Guid("6a1f0c3e-0000-4000-8000-000000000003"),
+                            Description = "Müntəzəm hazırlıq üçün",
+                            DurationDays = 30,
+                            IsActive = true,
+                            IsFeatured = false,
+                            IsFree = false,
+                            MonthlyBattles = 10,
+                            MonthlyDimTests = 10,
+                            MonthlyExams = 60,
+                            MonthlyUploads = 10,
+                            Name = "Standart",
+                            Price = 5m,
+                            SortOrder = 2,
+                            UpdatedAt = new DateTimeOffset(new DateTime(2026, 11, 16, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        },
+                        new
+                        {
+                            Id = new Guid("6a1f0c3e-0000-4000-8000-000000000004"),
+                            Description = "Ən çox seçilən paket",
+                            DurationDays = 30,
+                            IsActive = true,
+                            IsFeatured = true,
+                            IsFree = false,
+                            MonthlyBattles = 30,
+                            MonthlyDimTests = 30,
+                            MonthlyExams = 150,
+                            MonthlyUploads = 25,
+                            Name = "Pro",
+                            Price = 7m,
+                            SortOrder = 3,
+                            UpdatedAt = new DateTimeOffset(new DateTime(2026, 11, 16, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        },
+                        new
+                        {
+                            Id = new Guid("6a1f0c3e-0000-4000-8000-000000000005"),
+                            Description = "Limitsiz istifadə",
+                            DurationDays = 30,
+                            IsActive = true,
+                            IsFeatured = false,
+                            IsFree = false,
+                            Name = "Premium",
+                            Price = 10m,
+                            SortOrder = 4,
+                            UpdatedAt = new DateTimeOffset(new DateTime(2026, 11, 16, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
+                        });
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Billing.Subscription", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CancelledByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("EndsAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid?>("PaymentRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PlanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset>("StartsAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PaymentRequestId");
+
+                    b.HasIndex("PlanId");
+
+                    b.HasIndex("UserId", "EndsAt");
+
+                    b.ToTable("Subscriptions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Subscriptions_Period", "\"EndsAt\" > \"StartsAt\"");
+                        });
+                });
+
             modelBuilder.Entity("ExamFlow.Api.Features.Courses.StudyCourse", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2154,6 +2475,9 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.Property<int?>("MonthlyBattles")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("MonthlyDimTests")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("MonthlyExams")
                         .HasColumnType("integer");
 
@@ -2176,6 +2500,8 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                             t.HasCheckConstraint("CK_UserUsageLimits_MonthlyAiRequests", "\"MonthlyAiRequests\" IS NULL OR \"MonthlyAiRequests\" BETWEEN 0 AND 100000");
 
                             t.HasCheckConstraint("CK_UserUsageLimits_MonthlyBattles", "\"MonthlyBattles\" IS NULL OR \"MonthlyBattles\" BETWEEN 0 AND 100000");
+
+                            t.HasCheckConstraint("CK_UserUsageLimits_MonthlyDimTests", "\"MonthlyDimTests\" IS NULL OR \"MonthlyDimTests\" BETWEEN 0 AND 100000");
 
                             t.HasCheckConstraint("CK_UserUsageLimits_MonthlyExams", "\"MonthlyExams\" IS NULL OR \"MonthlyExams\" BETWEEN 0 AND 100000");
 
@@ -2382,6 +2708,45 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                         .HasForeignKey("HostUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Billing.PaymentRequest", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Billing.Plan", "Plan")
+                        .WithMany()
+                        .HasForeignKey("PlanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ExamFlow.Api.Features.Auth.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Plan");
+                });
+
+            modelBuilder.Entity("ExamFlow.Api.Features.Billing.Subscription", b =>
+                {
+                    b.HasOne("ExamFlow.Api.Features.Billing.PaymentRequest", null)
+                        .WithMany()
+                        .HasForeignKey("PaymentRequestId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ExamFlow.Api.Features.Billing.Plan", "Plan")
+                        .WithMany()
+                        .HasForeignKey("PlanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ExamFlow.Api.Features.Auth.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Plan");
                 });
 
             modelBuilder.Entity("ExamFlow.Api.Features.Courses.StudyCourse", b =>

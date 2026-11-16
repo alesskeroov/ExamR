@@ -1,4 +1,4 @@
-import { GraduationCap, Layers, ShieldCheck, DoorOpen, FileUp, History, LayoutDashboard, Library, ListChecks, LogOut, Menu, School, Swords, Users, X, type LucideIcon } from 'lucide-react'
+import { Crown, GraduationCap, Layers, ShieldCheck, DoorOpen, FileUp, History, LayoutDashboard, Library, ListChecks, LogOut, Menu, School, Swords, Users, X, type LucideIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useSearchParams } from 'react-router'
 import { useCurrentUser, useLogout } from '../features/auth/api'
@@ -14,6 +14,7 @@ import { LanguageSwitcher } from '../components/common/LanguageSwitcher'
 
 const navItems: { to: string; label: string; icon: LucideIcon; group: string; end?: boolean; adminOnly?: boolean; badge?: string }[] = [
   { to: '/', label: 'dashboard', icon: LayoutDashboard, group: '', end: true },
+  { to: '/plans', label: 'plans', icon: Crown, group: '' },
   { to: '/upload', label: 'upload', icon: FileUp, group: 'prep' },
   { to: '/questions', label: 'questions', icon: Library, group: 'prep' },
   { to: '/tutor', label: 'tutor', icon: Layers, group: 'prep', badge: tutorEnabled ? 'demo' : 'soon' },
@@ -157,7 +158,7 @@ function Brand() {
 }
 
 const extraPages: Record<string, string> = { '/notifications': 'notifications', '/profile': 'profile' }
-const adminSections = ['documents', 'groups', 'admins', 'dim', 'nameplates']
+const adminSections = ['documents', 'groups', 'admins', 'dim', 'nameplates', 'usage']
 
 function Breadcrumb() {
   const { pathname } = useLocation()

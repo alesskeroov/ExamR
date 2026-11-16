@@ -110,6 +110,7 @@ export function useStartDimTest() {
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.dim.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.exams.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.usage.mine })
     },
   })
 }

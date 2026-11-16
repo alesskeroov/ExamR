@@ -1,7 +1,7 @@
 import { NameplateAdmin } from '../nameplates/NameplateAdmin'
-import { UsageAdmin } from '../usage/UsageAdmin'
+import { BillingAdmin } from '../billing/BillingAdmin'
 import { useEffect, useId, useState } from 'react'
-import { FolderOpen, School, ShieldCheck, Users } from 'lucide-react'
+import { Crown, FolderOpen, School, ShieldCheck, Users } from 'lucide-react'
 import { DimAdminSection } from '../dim/DimAdminSection'
 import { Navigate, useSearchParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
@@ -18,7 +18,7 @@ import { useTranslation } from 'react-i18next'
 
 const sections = [
   { id: 'nameplates', icon: Users },
-  { id: 'usage', icon: Users },
+  { id: 'usage', icon: Crown },
   { id: 'documents', icon: FolderOpen },
   { id: 'dim', icon: School },
   { id: 'groups', icon: Users },
@@ -40,7 +40,7 @@ export function AdminPage() {
         return <button key={item.id} type="button" aria-pressed={active} onClick={() => setParams({ section: item.id })} className={cn('flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors', active ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50')}><item.icon className="size-4" aria-hidden />{t(`admin.sections.${item.id}`)}</button>
       })}
     </nav>
-    {section === 'nameplates' ? <NameplateAdmin /> : section === 'usage' ? <UsageAdmin /> : section === 'dim' ? <DimAdminSection /> : section === 'groups' ? <GroupsAdminPage /> : section === 'admins' ? <AdminsSection currentUserId={user.id} /> : <UploadPage admin />}
+    {section === 'nameplates' ? <NameplateAdmin /> : section === 'usage' ? <BillingAdmin /> : section === 'dim' ? <DimAdminSection /> : section === 'groups' ? <GroupsAdminPage /> : section === 'admins' ? <AdminsSection currentUserId={user.id} /> : <UploadPage admin />}
   </>
 }
 

@@ -1,3 +1,4 @@
+using ExamFlow.Api.Features.Billing;
 using ExamFlow.Api.Features.Usage;
 using ExamFlow.Api.Features.Feedback;
 using ExamFlow.Api.Features.Nameplates;
@@ -31,6 +32,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddJwtIdentity(builder.Configuration);
 builder.Services.AddFeedback(builder.Configuration);
+builder.Services.AddBilling();
 
 // Behind a reverse proxy (nginx, IIS, a cloud load balancer) the API must see the public scheme, host and client IP:
 // OAuth redirect URIs, Secure cookies and per-IP rate limits depend on them. Loopback proxies are trusted by default;
@@ -245,6 +247,7 @@ api.MapFriendsEndpoints();
 api.MapGroupEndpoints();
 api.MapAdminEndpoints();
 api.MapUsageEndpoints();
+api.MapBillingEndpoints();
 api.MapDimEndpoints();
 api.MapDimAdminEndpoints();
 api.MapDimAudioEndpoints();

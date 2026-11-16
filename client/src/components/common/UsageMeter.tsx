@@ -1,3 +1,4 @@
+import { Link } from 'react-router'
 import { useUsage, useUsageLimit, type UsageKind } from '../../features/usage/api'
 import { Alert } from './Alert'
 import { SupportContact } from './SupportContact'
@@ -15,6 +16,7 @@ export function UsageMeter({ kind }: { kind: UsageKind }) {
   if (!usage.item || !usage.data) return null
   const { used, limit } = usage.item
   if (limit === null) return <p className="text-sm text-slate-500">{t('usage.kindUnlimited', { kind: label })}</p>
+  if (limit === 0) return <Alert tone="info" title={t('usage.notIncludedTitle')} action={<UpgradeLink />}>{t('usage.notIncluded', { kind: label })}</Alert>
   const date = new Date(new Date(usage.data.resetsAt).getTime() + 4 * 3600000)
   const reset = t('usage.resetDate', { day: date.getUTCDate(), month: monthName(date.getUTCMonth()) })
   const ratio = limit === 0 ? 1 : Math.min(1, used / limit)
@@ -23,36 +25,42 @@ export function UsageMeter({ kind }: { kind: UsageKind }) {
     <div role="progressbar" aria-label={t('usage.usageAria', { kind: label })} aria-valuenow={used} aria-valuemin={0} aria-valuemax={Math.max(used, limit)} className="h-1.5 overflow-hidden rounded-full bg-slate-100">
       <div className={`h-full ${ratio >= 1 ? 'bg-rose-500' : ratio >= .8 ? 'bg-amber-500' : 'bg-indigo-500'}`} style={{ width: `${ratio * 100}%` }} />
     </div>
-    {usage.blocked && <Alert title={t('usage.blockedTitle')}>{t('usage.blockedText', { kind: label, reset })}<SupportContact className="mt-1" topic={t('usage.raiseTopic')} lead={t('usage.raiseLead')} /></Alert>}
+    {usage.blocked && <Alert title={t('usage.blockedTitle')} action={<UpgradeLink />}>{t('usage.blockedText', { kind: label, reset })}<SupportContact className="mt-1" topic={t('usage.raiseTopic')} lead={t('usage.raiseLead')} /></Alert>}
+    {!usage.blocked && !usage.data.unlimited && ratio >= .8 && <UpgradeLink />}
   </div>
+}
+
+function UpgradeLink() {
+  const { t } = useTranslation()
+  return <Link to="/plans" className="inline-flex text-sm font-medium text-indigo-700 hover:underline">{t('usage.upgrade')}</Link>
 }
 
 /** Dashboard footer: this month's limits as three thin meters in one row, one shared reset date. */
 export function UsageStrip({ className }: { className?: string }) {
   const usage = useUsage()
   const { t } = useTranslation()
-  const kinds: UsageKind[] = ['Upload', 'Exam', 'Battle']
+  const kinds: UsageKind[] = ['Upload', 'Exam', 'Battle', 'DimTest']
   if (usage.isPending) return <div role="status" aria-label={t('usage.limitsLoading')} className={`h-12 animate-pulse rounded-lg bg-sunken ${className ?? ''}`} />
   if (usage.error || !usage.data) return null
   const date = new Date(new Date(usage.data.resetsAt).getTime() + 4 * 3600000)
   return <section aria-labelledby="usage-strip-title" className={className}>
     <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
       <h2 id="usage-strip-title" className="text-[15px] font-bold">{t('usage.monthTitle')}</h2>
-      <p className="text-[13px] text-muted">{t('usage.resetsAt', { day: date.getUTCDate(), month: monthName(date.getUTCMonth()) })}</p>
+      <p className="text-[13px] text-muted">{t('usage.resetsAt', { day: date.getUTCDate(), month: monthName(date.getUTCMonth()) })} · <Link to="/plans" className="font-medium text-accent hover:underline">{t('usage.plansLink')}</Link></p>
     </div>
-    <ul className="mt-4 grid gap-x-10 gap-y-5 sm:grid-cols-3">{kinds.map(kind => {
+    <ul className="mt-4 grid gap-x-10 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">{kinds.map(kind => {
       const item = usage.data.items.find(x => x.kind === kind)
       if (!item) return null
       const ratio = item.limit === null ? 0 : item.limit === 0 ? 1 : Math.min(1, item.used / item.limit)
       return <li key={kind}>
         <div className="flex items-baseline justify-between gap-3 text-[13.5px]">
           <span className="text-muted">{t(`usage.strip.${kind}`)}</span>
-          <span className="ds-num font-semibold">{item.limit === null ? t('common.unlimited') : `${item.used} / ${item.limit}`}</span>
+          <span className="ds-num font-semibold">{item.limit === null ? t('common.unlimited') : item.limit === 0 ? t('usage.notInPlan') : `${item.used} / ${item.limit}`}</span>
         </div>
-        {item.limit !== null && <div role="progressbar" aria-label={t('usage.limitAria', { kind: t(`usage.strip.${kind}`) })} aria-valuenow={item.used} aria-valuemin={0} aria-valuemax={Math.max(item.used, item.limit)} className="mt-2 h-1 overflow-hidden rounded-full bg-line">
+        {!!item.limit && <div role="progressbar" aria-label={t('usage.limitAria', { kind: t(`usage.strip.${kind}`) })} aria-valuenow={item.used} aria-valuemin={0} aria-valuemax={Math.max(item.used, item.limit)} className="mt-2 h-1 overflow-hidden rounded-full bg-line">
           <div className={`h-full rounded-full ${ratio >= 1 ? 'bg-bad' : ratio >= .8 ? 'bg-amber-500' : 'bg-accent'}`} style={{ width: `${ratio * 100}%` }} />
         </div>}
-        {item.limit !== null && item.used >= item.limit && <p className="mt-1.5 text-xs font-medium text-bad">{t('usage.limitReached')}</p>}
+        {!!item.limit && item.used >= item.limit && <p className="mt-1.5 text-xs font-medium text-bad">{t('usage.limitReached')}</p>}
       </li>
     })}</ul>
   </section>
