@@ -1116,6 +1116,16 @@
     }
   },
   "documents": {
+    "help": {
+      "topic": "PDF problem",
+      "title": "Questions not coming out right?",
+      "text": "If the file does not upload, or questions are missing, mixed up or wrong, send us the PDF. We will check the file, fix the problem and reply to you.",
+      "step1": "Open an email with the button below (or copy the address).",
+      "step2": "Attach the PDF file to the email — it is not attached automatically.",
+      "step3": "Briefly describe the problem: which questions are wrong and what you expected.",
+      "send": "Send the PDF by email",
+      "address": "Address:"
+    },
     "status": {
       "Pending": "Queued",
       "Processing": "Processing",

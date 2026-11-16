@@ -1,6 +1,6 @@
 import { UsageMeter } from '../../components/common/UsageMeter'
 import { useUsageLimit } from '../usage/api'
-import { AlertCircle, FileText, Trash2 } from 'lucide-react'
+import { AlertCircle, FileText, LifeBuoy, Mail, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { FileDropzone } from '../../components/common/FileDropzone'
@@ -19,6 +19,8 @@ import { Button } from '../../components/common/Button'
 import { DocumentSharingModal } from './DocumentSharingModal'
 import { SharedDocuments } from './SharedDocuments'
 import { useTranslation } from 'react-i18next'
+import { SupportContact } from '../../components/common/SupportContact'
+import { supportMailto } from '../../lib/support'
 
 export function UploadPage({ admin = false }: { admin?: boolean }) {
   const { t } = useTranslation()
@@ -29,11 +31,13 @@ export function UploadPage({ admin = false }: { admin?: boolean }) {
 
   const [progress, setProgress] = useState(0)
   const [clientError, setClientError] = useState<string | null>(null)
+  const [lastFileName, setLastFileName] = useState<string | null>(null)
   const upload = useUploadDocument(setProgress)
 
   function handleFile(file: File) {
     if (monthly.blocked) return
     setClientError(null)
+    setLastFileName(file.name)
     upload.reset()
     if (!/\.(pdf|docx)$/i.test(file.name)) {
       setClientError(t('documents.onlyPdfDocx'))
@@ -98,6 +102,8 @@ export function UploadPage({ admin = false }: { admin?: boolean }) {
               </div>
             </div>
           )}
+
+          {!admin && <PdfProblemHelp fileName={errorMessage ? lastFileName : null} />}
         </div>
 
         <RecentDocuments admin={admin} key={upload.data?.id ?? 'documents'} selectedId={selectedId} onSelect={select} onDeleted={(id) => { if (selectedId === id) setSearchParams({}) }} />
@@ -105,6 +111,36 @@ export function UploadPage({ admin = false }: { admin?: boolean }) {
         {selectedId && <DocumentResult key={selectedId} documentId={selectedId} />}
       </div>
     </>
+  )
+}
+
+/** Where to send a PDF that does not upload or parses wrongly: the feedback form cannot carry files, so it goes by email. */
+function PdfProblemHelp({ fileName }: { fileName: string | null }) {
+  const { t } = useTranslation()
+  const topic = t('documents.help.topic')
+  const reference = fileName ?? undefined
+  return (
+    <section aria-labelledby="pdf-help-heading" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="flex gap-3">
+        <LifeBuoy className="mt-0.5 size-5 shrink-0 text-indigo-600" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <h2 id="pdf-help-heading" className="font-semibold">{t('documents.help.title')}</h2>
+          <p className="mt-1 text-sm leading-6 text-slate-600">{t('documents.help.text')}</p>
+          <ol className="mt-3 flex list-decimal flex-col gap-1 pl-5 text-sm leading-6 text-slate-700">
+            <li>{t('documents.help.step1')}</li>
+            <li>{t('documents.help.step2')}</li>
+            <li>{t('documents.help.step3')}</li>
+          </ol>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+            <a href={supportMailto({ topic, reference })} onClick={event => { event.currentTarget.href = supportMailto({ topic, reference }) }}
+              className="btn-primary inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium">
+              <Mail className="size-4" aria-hidden />{t('documents.help.send')}
+            </a>
+            <SupportContact topic={topic} reference={reference} lead={t('documents.help.address')} className="text-slate-600" />
+          </div>
+        </div>
+      </div>
+    </section>
   )
 }
 

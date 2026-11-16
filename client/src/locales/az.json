@@ -1103,6 +1103,16 @@
     }
   },
   "documents": {
+    "help": {
+      "topic": "PDF problemi",
+      "title": "PDF-dən suallar düzgün çıxmır?",
+      "text": "Fayl yüklənmirsə, suallar əskik, qarışıq və ya səhv çıxırsa, PDF-i bizə göndərin. Faylı yoxlayıb problemi həll edəcəyik və sizə cavab yazacağıq.",
+      "step1": "Aşağıdakı düymə ilə məktub açın (və ya ünvanı kopyalayın).",
+      "step2": "PDF faylını məktuba əlavə edin — fayl avtomatik əlavə olunmur.",
+      "step3": "Problemi qısa yazın: hansı suallar səhv çıxıb, nə gözləyirdiniz.",
+      "send": "PDF-i e-poçtla göndər",
+      "address": "Ünvan:"
+    },
     "status": {
       "Pending": "Növbədə",
       "Processing": "Emal olunur",
