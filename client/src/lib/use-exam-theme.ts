@@ -3,13 +3,13 @@ import { currentTheme } from './use-theme'
 
 export type ExamTheme = 'auto' | 'paper' | 'calm' | 'night' | 'contrast'
 
-/** Reading themes for the exam screen. `base` is the site mode the theme is drawn on (null = follow the site). */
-export const examThemes: readonly { id: ExamTheme; label: string; hint: string; swatch: string; base: 'light' | 'dark' | null }[] = [
-  { id: 'auto', label: 'Sistem', hint: 'Saytın açıq/tünd temasını izləyir', swatch: 'linear-gradient(135deg, #f5f6f2 50%, #161e1b 50%)', base: null },
-  { id: 'paper', label: 'Sepiya', hint: 'İsti kağız rəngi, uzun oxuma üçün', swatch: '#f3ead8', base: 'light' },
-  { id: 'calm', label: 'Sakit', hint: 'Yumşaq soyuq fon', swatch: 'linear-gradient(160deg, #e6eef5, #eeeaf6)', base: 'light' },
-  { id: 'night', label: 'Gecə', hint: 'Tünd və az parlaq', swatch: '#14181c', base: 'dark' },
-  { id: 'contrast', label: 'Yüksək kontrast', hint: 'Ağ fon, qara mətn və sərhədlər', swatch: 'linear-gradient(135deg, #fff 50%, #000 50%)', base: 'light' },
+/** Reading themes for the exam screen (names in locales: examTheme.<id>). `base` is the site mode the theme is drawn on (null = follow the site). */
+export const examThemes: readonly { id: ExamTheme; swatch: string; base: 'light' | 'dark' | null }[] = [
+  { id: 'auto', swatch: 'linear-gradient(135deg, #f5f6f2 50%, #161e1b 50%)', base: null },
+  { id: 'paper', swatch: '#f3ead8', base: 'light' },
+  { id: 'calm', swatch: 'linear-gradient(160deg, #e6eef5, #eeeaf6)', base: 'light' },
+  { id: 'night', swatch: '#14181c', base: 'dark' },
+  { id: 'contrast', swatch: 'linear-gradient(135deg, #fff 50%, #000 50%)', base: 'light' },
 ]
 
 const key = 'examr-exam-theme'

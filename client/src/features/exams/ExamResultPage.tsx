@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { Alert } from '../../components/common/Alert'
 import { SupportContact } from '../../components/common/SupportContact'
+import { ScrollToTopButton } from '../../components/common/ScrollToTopButton'
 import { EmptyState } from '../../components/common/EmptyState'
 import { PageHeader } from '../../components/common/PageHeader'
 import { PassageBox } from '../../components/common/PassageBox'
@@ -21,6 +22,7 @@ import { DimReportCard } from '../dim/DimReportCard'
 import { DimRetakeButton } from '../dim/DimRetakeButton'
 import { useExamLinks, type ExamQuestionLink } from '../courses/api'
 import { placeLabel } from '../tutor/place-label'
+import { useTranslation } from 'react-i18next'
 
 type Filter = 'All' | 'Correct' | 'Incorrect' | 'Unanswered'
 
@@ -32,21 +34,23 @@ const cellTone: Record<ExamOutcome, string> = {
 }
 
 export function ExamResultPage() {
+  const { t } = useTranslation()
   const { id = '' } = useParams()
   const result = useExamResult(id)
 
   if (result.isPending) {
-    return <div className="h-64 animate-pulse rounded-xl bg-slate-200/60" aria-label="Yüklənir" />
+    return <div className="h-64 animate-pulse rounded-xl bg-slate-200/60" aria-label={t('common.loading')} />
   }
 
   if (result.isError) {
-    return <Alert title="Nəticə yüklənmədi">{result.error.message}<SupportContact className="mt-1" topic="Nəticə yüklənmədi" reference={id} /></Alert>
+    return <Alert title={t('exam.result.loadFailed')}>{result.error.message}<SupportContact className="mt-1" topic={t('exam.result.loadFailed')} reference={id} /></Alert>
   }
 
   return <ResultView result={result.data} />
 }
 
 function ResultView({ result }: { result: ExamResult }) {
+  const { t } = useTranslation()
   const monthly = useUsageLimit('Exam')
   const [filter, setFilter] = useState<Filter>('All')
   const [focused, setFocused] = useState<number | null>(null)
@@ -61,17 +65,17 @@ function ResultView({ result }: { result: ExamResult }) {
   const total = result.questions.length
 
   const filters: { value: Filter; label: string; count: number }[] = [
-    { value: 'All', label: 'Hamısı', count: total },
-    { value: 'Correct', label: 'Düzgün', count: count('Correct') },
-    { value: 'Incorrect', label: 'Səhv', count: count('Incorrect') },
-    { value: 'Unanswered', label: 'Boş', count: count('Unanswered') },
+    { value: 'All', label: t('exam.setup.all'), count: total },
+    { value: 'Correct', label: t('exam.session.legendCorrect'), count: count('Correct') },
+    { value: 'Incorrect', label: t('exam.result.wrongShort'), count: count('Incorrect') },
+    { value: 'Unanswered', label: t('exam.session.legendBlank'), count: count('Unanswered') },
   ]
   const segments: Segment[] = [
-    { value: 'Correct', label: 'Düzgün', count: count('Correct'), swatch: 'bg-emerald-600' },
-    { value: 'Incorrect', label: 'Səhv', count: count('Incorrect'), swatch: 'bg-rose-600' },
-    { value: 'Unanswered', label: 'Boş', count: count('Unanswered'), swatch: 'bg-slate-300' },
+    { value: 'Correct', label: t('exam.session.legendCorrect'), count: count('Correct'), swatch: 'bg-emerald-600' },
+    { value: 'Incorrect', label: t('exam.result.wrongShort'), count: count('Incorrect'), swatch: 'bg-rose-600' },
+    { value: 'Unanswered', label: t('exam.session.legendBlank'), count: count('Unanswered'), swatch: 'bg-slate-300' },
     // Questions whose correct answer is unknown are not scored; listed only when present.
-    ...(count('Ungraded') > 0 ? [{ value: 'Ungraded' as const, label: 'Qiymətləndirilməyib', count: count('Ungraded'), swatch: 'bg-amber-400' }] : []),
+    ...(count('Ungraded') > 0 ? [{ value: 'Ungraded' as const, label: t('exam.outcome.Ungraded'), count: count('Ungraded'), swatch: 'bg-amber-400' }] : []),
   ]
 
   const openQuestion = (q: ExamResultQuestion) => {
@@ -85,31 +89,31 @@ function ResultView({ result }: { result: ExamResult }) {
   return (
     <div className="exam-flow mx-auto max-w-5xl">
       <PageHeader
-        title="İmtahan nəticəsi"
+        title={t('exam.result.title')}
         description={[
           sourceName(result.source),
-          sourceRange(result.source) && `suallar ${sourceRange(result.source)}`,
+          sourceRange(result.source) && t('exam.result.questionsRange', { range: sourceRange(result.source) }),
           formatDate(result.completedAt),
-          result.completionReason === 'TimeExpired' ? 'Vaxt bitdi' : 'Tamamlandı',
+          result.completionReason === 'TimeExpired' ? t('history.timeUp') : t('exam.result.completed'),
         ].filter(Boolean).join(' · ')}
         actions={
           <div className="flex min-w-0 flex-wrap gap-2">
             <Link to="/exams" className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 font-medium text-slate-700 hover:bg-slate-50">
               <History className="size-4" aria-hidden />
-              Tarixçə
+              {t('nav.items.history')}
             </Link>
             {canRetake(result) && result.incorrect + result.unanswered > 0 && (
               // Mistakes mode over the same range: includes earlier mistakes there, not only this exam's.
               <Link aria-disabled={monthly.blocked} tabIndex={monthly.blocked ? -1 : undefined} onClick={e => { if (monthly.blocked) e.preventDefault() }} style={monthly.blocked ? { opacity: .45, cursor: "not-allowed" } : undefined} to={`/exams/new?retake=${result.id}&pool=mistakes`} className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 font-medium text-slate-700 hover:bg-slate-50">
                 <RotateCcw className="size-4" aria-hidden />
-                Səhvləri təkrarla
+                {t('exam.result.retryMistakes')}
               </Link>
             )}
             {canRetake(result) && (
               // Opens the setup with this exam's settings, so they can be reviewed and changed first.
               <Link aria-disabled={monthly.blocked} tabIndex={monthly.blocked ? -1 : undefined} onClick={e => { if (monthly.blocked) e.preventDefault() }} style={monthly.blocked ? { opacity: .45, cursor: "not-allowed" } : undefined} to={`/exams/new?retake=${result.id}`} className="inline-flex h-10 items-center gap-2 rounded-lg btn-primary px-4 font-medium">
                 <RotateCw className="size-4" aria-hidden />
-                Yenidən imtahan ver
+                {t('exam.result.retake')}
               </Link>
             )}
             {result.source.documentId === null && (
@@ -120,18 +124,18 @@ function ResultView({ result }: { result: ExamResult }) {
       />
 
       {canRetake(result) && <UsageMeter kind="Exam" />}
-      <section aria-label="Xülasə" className="result-reveal mb-5 rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
+      <section aria-label={t('exam.result.summary')} className="result-reveal mb-5 rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
         <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
           <div className="min-w-0">
-            <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">Uğur faizi</p>
+            <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">{t('exam.result.score')}</p>
             <p className="mt-0.5 flex items-baseline gap-2">
               <ScoreValue percent={result.scorePercent} />
-              <span className="text-sm text-slate-500 tabular-nums">{formatNumber(result.correct)} / {formatNumber(total)} düzgün</span>
+              <span className="text-sm text-slate-500 tabular-nums">{formatNumber(result.correct)} / {formatNumber(total)} {t('dashboard.correctWord')}</span>
             </p>
           </div>
           <p className="flex items-center gap-1.5 text-sm text-slate-500 tabular-nums">
             <Clock className="size-4" aria-hidden />
-            {minutes} dəq {seconds} san
+            {t('exam.result.duration', { minutes, seconds })}
           </p>
         </div>
 
@@ -147,15 +151,15 @@ function ResultView({ result }: { result: ExamResult }) {
         </dl>
 
         <div className="mt-5 border-t border-slate-100 pt-4">
-          <h2 className="mb-2.5 text-sm font-semibold">Sual xəritəsi</h2>
-          <ol className="result-map grid grid-cols-[repeat(auto-fill,minmax(2.25rem,1fr))] gap-1.5" aria-label="Sual xəritəsi">
+          <h2 className="mb-2.5 text-sm font-semibold">{t('exam.result.map')}</h2>
+          <ol className="result-map grid grid-cols-[repeat(auto-fill,minmax(2.25rem,1fr))] gap-1.5" aria-label={t('exam.result.map')}>
             {result.questions.map((q, i) => (
               <li key={q.position}>
                 <button
                   type="button"
                   onClick={() => openQuestion(q)}
                   aria-current={focused === q.position ? 'true' : undefined}
-                  aria-label={`Sual ${q.position + 1}: ${outcomeBadge[q.outcome].label}`}
+                  aria-label={`${t('exam.session.question', { n: q.position + 1 })}: ${t(`exam.outcome.${q.outcome}`)}`}
                   style={{ animationDelay: `${Math.min(i, 40) * 8}ms` }}
                   className={cn('result-cell flex h-9 w-full items-center justify-center rounded-md border text-xs font-semibold tabular-nums', cellTone[q.outcome],
                     focused === q.position && 'ring-2 ring-[var(--app-ink)] ring-offset-2 ring-offset-[var(--app-surface)]')}
@@ -169,13 +173,14 @@ function ResultView({ result }: { result: ExamResult }) {
       </section>
 
       <DimReportCard examId={result.id} />
+      <ScrollToTopButton />
 
       <section aria-labelledby="review-heading" className="flex min-w-0 flex-col gap-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 id="review-heading" className="text-lg font-semibold">
-            Cavabların icmalı
+            {t('exam.result.review')}
           </h2>
-          <div role="tablist" aria-label="Sual filtri" className="grid grid-cols-4 gap-1 rounded-xl bg-slate-100 p-1">
+          <div role="tablist" aria-label={t('exam.result.filter')} className="grid grid-cols-4 gap-1 rounded-xl bg-slate-100 p-1">
             {filters.map((f, i) => (
               <button
                 key={f.value}
@@ -206,7 +211,7 @@ function ResultView({ result }: { result: ExamResult }) {
 
         <div id="exam-review-panel" role="tabpanel" aria-labelledby={`exam-filter-${filter}`} tabIndex={0} className="space-y-3">
         {questions.length === 0 ? (
-          <EmptyState title="Bu filtrə uyğun sual yoxdur" />
+          <EmptyState title={t('exam.result.noMatch')} />
         ) : (
           questions.map((q, i) => (
             <ReviewCard key={q.position} question={q} visualSrc={visualUrls.exam(result.id)} highlighted={focused === q.position}
@@ -269,11 +274,11 @@ function SegmentedBar({ segments, total }: { segments: Segment[]; total: number 
   )
 }
 
-const outcomeBadge: Record<ExamOutcome, { label: string; className: string }> = {
-  Correct: { label: 'Düzgün', className: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
-  Incorrect: { label: 'Yanlış', className: 'bg-rose-50 text-rose-700 ring-rose-200' },
-  Unanswered: { label: 'Cavablandırılmayıb', className: 'bg-slate-100 text-slate-700 ring-slate-200' },
-  Ungraded: { label: 'Qiymətləndirilməyib', className: 'bg-amber-50 text-amber-800 ring-amber-200' },
+const outcomeBadge: Record<ExamOutcome, { className: string }> = {
+  Correct: { className: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
+  Incorrect: { className: 'bg-rose-50 text-rose-700 ring-rose-200' },
+  Unanswered: { className: 'bg-slate-100 text-slate-700 ring-slate-200' },
+  Ungraded: { className: 'bg-amber-50 text-amber-800 ring-amber-200' },
 }
 
 function ReviewCard({ question, visualSrc, highlighted, audioSrc, link }: {
@@ -284,6 +289,7 @@ function ReviewCard({ question, visualSrc, highlighted, audioSrc, link }: {
   /** Where the course lectures explain this missed question. */
   link?: ExamQuestionLink
 }) {
+  const { t } = useTranslation()
   const badge = outcomeBadge[question.outcome]
   const unanswered = question.outcome === 'Unanswered'
   // Unanswered questions list every option so the student sees what they skipped.
@@ -296,29 +302,29 @@ function ReviewCard({ question, visualSrc, highlighted, audioSrc, link }: {
           {question.position + 1}
         </span>
         <h3 className="exam-question-text min-w-0 basis-[calc(100%-3rem)] flex-1 text-[15px] leading-6 font-medium">
-          {visibleText(question.text, bodyVisuals(question.visuals).length > 0) ?? <span className="sr-only">Şəkilli sual</span>}
+          {visibleText(question.text, bodyVisuals(question.visuals).length > 0) ?? <span className="sr-only">{t('exam.result.imageQuestion')}</span>}
         </h3>
-        <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset', badge.className)}>{badge.label}</span>
+        <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset', badge.className)}>{t(`exam.outcome.${question.outcome}`)}</span>
       </header>
       {question.passage && <PassageBox passage={question.passage} defaultOpen={false} className="mb-3" />}
       <QuestionVisuals visuals={bodyVisuals(question.visuals)} src={visualSrc} className="mb-3" />
       {audioSrc && question.audio && <ListeningPlayer src={audioSrc} title={question.audio.title} hint={false} className="mb-3 rounded-lg border border-indigo-200 bg-indigo-50/60 px-3 py-2.5" />}
 
       {unanswered && (
-        <p className="mb-2.5 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-600">Bu suala cavab verməmisiniz.</p>
+        <p className="mb-2.5 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-600">{t('exam.result.notAnswered')}</p>
       )}
 
       {question.isCoded && (
         <dl className="grid gap-1.5 text-sm sm:grid-cols-2">
           {question.answerText && (
             <div className={cn('rounded-lg border px-3 py-2.5', question.outcome === 'Correct' ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50')}>
-              <dt className="text-xs font-medium text-slate-500">Sizin cavab{question.outcome === 'Correct' ? ' · düzgün' : ''}</dt>
+              <dt className="text-xs font-medium text-slate-500">{question.outcome === 'Correct' ? t('exam.result.yoursCorrect') : t('exam.result.yours')}</dt>
               <dd className={cn('mt-0.5 text-base font-semibold tabular-nums', question.outcome === 'Correct' ? 'text-emerald-900' : 'text-rose-900')}>{question.answerText}</dd>
             </div>
           )}
           {question.correctAnswer && question.outcome !== 'Correct' && (
             <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
-              <dt className="text-xs font-medium text-slate-500">Düzgün cavab</dt>
+              <dt className="text-xs font-medium text-slate-500">{t('exam.result.correctAnswer')}</dt>
               <dd className="mt-0.5 text-base font-semibold text-emerald-900 tabular-nums">{question.correctAnswer}</dd>
             </div>
           )}
@@ -349,7 +355,7 @@ function ReviewCard({ question, visualSrc, highlighted, audioSrc, link }: {
                 {isCorrect ? <Check className="size-3.5" strokeWidth={3} /> : isWrongPick ? <X className="size-3.5" strokeWidth={3} /> : option.label}
               </span>
               <span className={cn('exam-question-text min-w-0 flex-1 text-sm leading-6', isCorrect ? 'font-medium text-emerald-900' : isWrongPick ? 'text-rose-900' : 'text-slate-700')}>
-                {(isSelected || isCorrect) && <span className="mb-1 block text-xs font-medium text-slate-500">{isSelected && isCorrect ? 'Sizin cavab · düzgün' : isSelected ? 'Sizin cavab' : 'Düzgün cavab'} · {option.label}</span>}
+                {(isSelected || isCorrect) && <span className="mb-1 block text-xs font-medium text-slate-500">{isSelected && isCorrect ? t('exam.result.yoursCorrect') : isSelected ? t('exam.result.yours') : t('exam.result.correctAnswer')} · {option.label}</span>}
                 {visibleText(answerDisplayText(option.text), optionVisuals(question.visuals, option.id).length > 0)}
                 <QuestionVisuals visuals={optionVisuals(question.visuals, option.id)} src={visualSrc} size="option" />
               </span>
@@ -364,7 +370,7 @@ function ReviewCard({ question, visualSrc, highlighted, audioSrc, link }: {
           className="mt-3 flex items-start gap-2 rounded-lg bg-indigo-50 px-3 py-2 text-sm text-indigo-800 hover:bg-indigo-100">
           <BookOpen className="mt-0.5 size-4 shrink-0" aria-hidden />
           <span className="min-w-0">
-            <span className="font-semibold">Konspektdə bax: </span>
+            <span className="font-semibold">{t('exam.result.seeNotes')} </span>
             {[link.materialName, link.section, placeLabel(link.format, link.pageFrom, link.pageTo)].filter(Boolean).join(' · ')}
             <span className="mt-0.5 line-clamp-2 block text-xs text-indigo-700/80">{link.excerpt}</span>
           </span>
@@ -374,7 +380,7 @@ function ReviewCard({ question, visualSrc, highlighted, audioSrc, link }: {
       {question.outcome === 'Ungraded' && (
         <p className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-amber-800">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
-          Bu sualın düzgün cavabı məlum deyil, nəticəyə daxil edilmədi.
+          {t('exam.result.ungraded')}
         </p>
       )}
     </article>

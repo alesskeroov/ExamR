@@ -14,9 +14,11 @@ import {
   type QuestionFilter,
 } from './api'
 import { documentStatus } from './documentStatus'
+import { useTranslation } from 'react-i18next'
 
 /** Status, parsing report and extracted questions of one uploaded document. */
 export function DocumentResult({ documentId }: { documentId: string }) {
+  const { t } = useTranslation()
   const { data: document, isPending, error } = useDocument(documentId)
 
   if (isPending) {
@@ -25,8 +27,8 @@ export function DocumentResult({ documentId }: { documentId: string }) {
 
   if (error || !document) {
     return (
-      <Alert tone="danger" title="Sənəd yüklənmədi">
-        {error?.message ?? 'Sənəd tapılmadı.'}
+      <Alert tone="danger" title={t('documents.loadFailed')}>
+        {error?.message ?? t('documents.notFound')}
       </Alert>
     )
   }
@@ -47,6 +49,7 @@ export function DocumentResult({ documentId }: { documentId: string }) {
 }
 
 function DocumentHeader({ document }: { document: DocumentDto }) {
+  const { t } = useTranslation()
   const status = documentStatus[document.status]
   return (
     <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -59,36 +62,38 @@ function DocumentHeader({ document }: { document: DocumentDto }) {
         </p>
         <p className="text-slate-500">
           {formatBytes(document.fileSizeBytes)}
-          {document.pageCount !== null && ` · ${document.pageCount} səhifə`}
+          {document.pageCount !== null && ` · ${t('documents.pages', { count: document.pageCount })}`}
           {` · ${document.uploadedBy.displayName}`}
         </p>
       </div>
-      <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
+      <StatusBadge tone={status.tone}>{t(`documents.status.${document.status}`)}</StatusBadge>
     </div>
   )
 }
 
 function ProcessingState() {
+  const { t } = useTranslation()
   return (
     <div role="status" className="flex items-center gap-3 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-5 text-indigo-800">
       <Loader2 className="size-5 shrink-0 animate-spin" aria-hidden />
       <div>
-        <p className="font-medium">Suallar çıxarılır…</p>
-        <p className="text-indigo-700/80">Böyük fayllarda bu bir neçə saniyə çəkə bilər.</p>
+        <p className="font-medium">{t('documents.extracting')}</p>
+        <p className="text-indigo-700/80">{t('documents.extractingText')}</p>
       </div>
     </div>
   )
 }
 
 function FailedState({ document }: { document: DocumentDto }) {
+  const { t } = useTranslation()
   const reprocess = useReprocessDocument()
   return (
-    <Alert tone="danger" title="Emal uğursuz oldu">
-      <p>{document.errorMessage ?? 'Naməlum xəta.'}</p>
+    <Alert tone="danger" title={t('documents.processingFailed')}>
+      <p>{document.errorMessage ?? t('documents.unknownError')}</p>
       {document.canEdit && (
         <Button variant="secondary" className="mt-3" loading={reprocess.isPending} onClick={() => reprocess.mutate(document.id)}>
           <RotateCw className="size-4" aria-hidden />
-          Yenidən emal et
+          {t('documents.reprocess')}
         </Button>
       )}
     </Alert>
@@ -96,18 +101,19 @@ function FailedState({ document }: { document: DocumentDto }) {
 }
 
 function ReportStats({ document }: { document: DocumentDto }) {
+  const { t } = useTranslation()
   const report = document.processingReport!
   const [showWarnings, setShowWarnings] = useState(false)
 
   const stats = [
-    { label: 'Tapılan sual', value: report.questionsFound, tone: 'text-slate-900' },
-    { label: 'Cavabı tapılan', value: report.autoDetected, tone: 'text-emerald-700' },
-    { label: 'Cavabı bilinməyən', value: report.unverified, tone: report.unverified > 0 ? 'text-amber-700' : 'text-slate-900' },
-    { label: 'Atlanan dublikat', value: report.duplicatesSkipped, tone: 'text-slate-900' },
+    { label: t('documents.report.found'), value: report.questionsFound, tone: 'text-slate-900' },
+    { label: t('documents.report.answered'), value: report.autoDetected, tone: 'text-emerald-700' },
+    { label: t('documents.report.unverified'), value: report.unverified, tone: report.unverified > 0 ? 'text-amber-700' : 'text-slate-900' },
+    { label: t('documents.report.duplicates'), value: report.duplicatesSkipped, tone: 'text-slate-900' },
   ]
 
   return (
-    <section aria-label="Emal nəticəsi" className="flex flex-col gap-3">
+    <section aria-label={t('documents.report.aria')} className="flex flex-col gap-3">
       <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {stats.map((stat) => (
           <div key={stat.label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -126,7 +132,7 @@ function ReportStats({ document }: { document: DocumentDto }) {
             className="flex w-full items-center gap-2 px-4 py-3 text-left font-medium"
           >
             <AlertTriangle className="size-4 shrink-0" aria-hidden />
-            <span className="flex-1">Parsing xəbərdarlıqları: {report.warnings.length}</span>
+            <span className="flex-1">{t('documents.report.warnings', { n: report.warnings.length })}</span>
             <ChevronDown className={cn('size-4 transition-transform duration-150', showWarnings && 'rotate-180')} aria-hidden />
           </button>
           {showWarnings && (
@@ -138,20 +144,21 @@ function ReportStats({ document }: { document: DocumentDto }) {
           )}
         </div>
       ) : (
-        <p className="text-slate-500">Parsing xəbərdarlığı yoxdur.</p>
+        <p className="text-slate-500">{t('documents.report.noWarnings')}</p>
       )}
     </section>
   )
 }
 
 const filters: { value: QuestionFilter; label: string }[] = [
-  { value: 'all', label: 'Hamısı' },
-  { value: 'answered', label: 'Cavabı tapılan' },
-  { value: 'unverified', label: 'Cavabı bilinməyən' },
-  { value: 'warnings', label: 'Xəbərdarlıqlı' },
+  { value: 'all', label: 'exam.setup.all' },
+  { value: 'answered', label: 'documents.report.answered' },
+  { value: 'unverified', label: 'documents.report.unverified' },
+  { value: 'warnings', label: 'documents.filterWarnings' },
 ]
 
 function QuestionList({ documentId }: { documentId: string }) {
+  const { t } = useTranslation()
   const [filter, setFilter] = useState<QuestionFilter>('all')
   const questions = useDocumentQuestions(documentId, filter, true)
   const items = questions.data?.pages.flatMap((p) => p.items) ?? []
@@ -161,9 +168,9 @@ function QuestionList({ documentId }: { documentId: string }) {
     <section aria-labelledby="questions-heading" className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 id="questions-heading" className="text-lg font-semibold">
-          Çıxarılan suallar
+          {t('documents.extracted')}
         </h2>
-        <div role="tablist" aria-label="Sual filtri" className="flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1">
+        <div role="tablist" aria-label={t('exam.result.filter')} className="flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1">
           {filters.map((f) => (
             <button
               key={f.value}
@@ -176,7 +183,7 @@ function QuestionList({ documentId }: { documentId: string }) {
                 filter === f.value ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900',
               )}
             >
-              {f.label}
+              {t(f.label)}
             </button>
           ))}
         </div>
@@ -185,15 +192,15 @@ function QuestionList({ documentId }: { documentId: string }) {
       {questions.isPending ? (
         <PanelSkeleton />
       ) : questions.isError ? (
-        <Alert tone="danger" title="Suallar yüklənmədi">
+        <Alert tone="danger" title={t('documents.questionsFailed')}>
           {questions.error.message}
         </Alert>
       ) : items.length === 0 ? (
-        <EmptyState title="Bu filtrə uyğun sual yoxdur" />
+        <EmptyState title={t('exam.result.noMatch')} />
       ) : (
         <>
           <p className="text-slate-500" aria-live="polite">
-            {formatNumber(items.length)} / {formatNumber(total)} sual göstərilir
+            {t('documents.showing', { shown: formatNumber(items.length), total: formatNumber(total) })}
           </p>
           <div className={cn('flex flex-col gap-3', questions.isPlaceholderData && 'opacity-60')}>
             {items.map((question) => (
@@ -207,7 +214,7 @@ function QuestionList({ documentId }: { documentId: string }) {
               loading={questions.isFetchingNextPage}
               onClick={() => questions.fetchNextPage()}
             >
-              Daha çox göstər
+              {t('documents.showMore')}
             </Button>
           )}
         </>

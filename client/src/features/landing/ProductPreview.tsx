@@ -1,14 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, FileText } from 'lucide-react'
 import './landing.css'
+import { useTranslation } from 'react-i18next'
 
 // Sample questions the preview cycles through; illustrative content only.
-const samples = [
-  { q: 'OSI modelində IP ünvanlaması hansı səviyyədə həyata keçirilir?', options: ['Fiziki səviyyə', 'Kanal səviyyəsi', 'Şəbəkə səviyyəsi', 'Nəqliyyat səviyyəsi'], answer: 2 },
-  { q: 'Veb səhifələri şifrələnmiş şəkildə hansı protokol ötürür?', options: ['HTTP', 'FTP', 'HTTPS', 'SMTP'], answer: 2 },
-  { q: 'SQL-də cədvəldən məlumat seçmək üçün hansı əmr istifadə olunur?', options: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'], answer: 0 },
-  { q: 'Hansı məlumat strukturu LIFO prinsipi ilə işləyir?', options: ['Növbə', 'Stek', 'Massiv', 'Ağac'], answer: 1 },
-]
+const answers = [2, 2, 0, 1]
 const TICKS_PER_QUESTION = 4 // one tick per second: show question, pick an answer, pause, next
 const START_NUMBER = 7
 const START_SECONDS = 18 * 60 + 42
@@ -18,6 +14,8 @@ const pad = (n: number) => String(n).padStart(2, '0')
 export function ProductPreview() {
   const stage = useRef<HTMLDivElement>(null)
   const [tick, setTick] = useState(0)
+  const { t } = useTranslation()
+  const samples = (t('landing.preview.samples', { returnObjects: true }) as { q: string; options: string[] }[]).map((s, i) => ({ ...s, answer: answers[i] }))
 
   // Animate only while the preview is on screen; stay static for reduced motion.
   useEffect(() => {
@@ -40,11 +38,11 @@ export function ProductPreview() {
   const seconds = Math.max(0, START_SECONDS - tick)
 
   return (
-    <div ref={stage} className="lp-stage" aria-label="ExamR interfeysinin nümunəsi" role="img">
+    <div ref={stage} className="lp-stage" aria-label={t('landing.preview.aria')} role="img">
       <div className="lp-sheetdoc" aria-hidden>
         <div className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-1.5 text-[12px] font-semibold"><FileText className="size-3.5" />informatika-final.pdf</span>
-          <span className="lp-chip"><Check className="size-3" strokeWidth={3} />48 sual</span>
+          <span className="lp-chip"><Check className="size-3" strokeWidth={3} />{t('landing.questionsCount', { count: 48 })}</span>
         </div>
         <div className="lp-sheetdoc-line" style={{ width: '92%' }} />
         <div className="lp-sheetdoc-line" style={{ width: '78%' }} />
@@ -56,7 +54,7 @@ export function ProductPreview() {
 
       <div className="lp-examcard" aria-hidden>
         <div className="lp-examcard-head">
-          <span className="lp-mono">Sual {pad(number)} / 20</span>
+          <span className="lp-mono">{t('landing.panel.questionOf', { n: pad(number), total: 20 })}</span>
           <span className="lp-timer lp-mono">{pad(Math.floor(seconds / 60))}:{pad(seconds % 60)}</span>
         </div>
         <div key={step} className="lp-examcard-body">
@@ -75,7 +73,7 @@ export function ProductPreview() {
         <svg viewBox="0 0 132 80" className="lp-grade-ring"><path d="M70 7C108 5 128 24 124 44 120 66 80 75 50 71 20 67 5 52 9 33 13 16 38 7 76 10" /></svg>
         <span key={done} className="lp-grade-score lp-swap">{done}/{done}</span>
       </div>
-      <span className="lp-tag">nümunə interfeys</span>
+      <span className="lp-tag">{t('landing.preview.tag')}</span>
     </div>
   )
 }

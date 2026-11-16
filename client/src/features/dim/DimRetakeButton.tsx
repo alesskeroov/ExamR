@@ -3,12 +3,14 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useDimReport, useStartDimTest } from './api'
 import { DimStartDialog } from './DimStartDialog'
+import { useTranslation } from 'react-i18next'
 
 /**
  * "Yenidən imtahan ver" for a finished DİM attempt. When the attempt limit is used up (or the test is closed)
  * the button is shown disabled with the reason. Renders nothing for ordinary exams.
  */
 export function DimRetakeButton({ examId, questionCount, durationMinutes }: { examId: string; questionCount: number; durationMinutes: number }) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const report = useDimReport(examId)
   const start = useStartDimTest()
@@ -21,11 +23,11 @@ export function DimRetakeButton({ examId, questionCount, durationMinutes }: { ex
     return (
       <span
         role="note"
-        title={limitReached ? `Bu sınaq üçün ${data.attemptLimit} cəhdin hamısından istifadə etmisiniz.` : 'Sınaq hazırda bağlıdır.'}
+        title={limitReached ? t('dim.retake.limitTitle', { limit: data.attemptLimit }) : t('dim.retake.closedTitle')}
         className="inline-flex h-10 cursor-not-allowed items-center gap-2 rounded-lg border border-slate-200 bg-slate-100 px-4 font-medium text-slate-400"
       >
         <Ban className="size-4" aria-hidden />
-        {limitReached ? `Cəhd limiti bitib (${data.attemptsUsed}/${data.attemptLimit})` : 'Sınaq bağlıdır'}
+        {limitReached ? t('dim.retake.limit', { used: data.attemptsUsed, limit: data.attemptLimit }) : t('dim.retake.closed')}
       </span>
     )
   }
@@ -35,7 +37,7 @@ export function DimRetakeButton({ examId, questionCount, durationMinutes }: { ex
       <button type="button" onClick={() => { start.reset(); setChoosing(true) }}
         className="btn-primary inline-flex h-10 items-center gap-2 rounded-lg px-4 font-medium">
         <RotateCw className="size-4" aria-hidden />
-        Yenidən imtahan ver
+        {t('exam.result.retake')}
         {data.attemptLimit !== null && <span className="text-xs opacity-80">({data.attemptsUsed}/{data.attemptLimit})</span>}
       </button>
       {choosing && (

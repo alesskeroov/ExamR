@@ -6,6 +6,7 @@ import { cn } from '../../lib/utils'
 import { useCreateDimQuestion, useDimCatalog, type DimSourceDocument } from './api'
 import { DimSetPicker } from './DimSetPicker'
 import { inputClass } from './ui'
+import { Trans, useTranslation } from 'react-i18next'
 
 type Kind = 'closed' | 'coded'
 
@@ -39,6 +40,7 @@ export function DimManualQuestion({ documents, documentId, onDocument }: {
   documentId: string
   onDocument: (id: string) => void
 }) {
+  const { t } = useTranslation()
   const catalog = useDimCatalog()
   const create = useCreateDimQuestion()
   const textRef = useRef<HTMLTextAreaElement>(null)
@@ -88,19 +90,19 @@ export function DimManualQuestion({ documents, documentId, onDocument }: {
     <div className="mt-3 flex flex-col gap-4" onKeyDown={onKeyDown}>
       <div className="grid gap-3 sm:grid-cols-2">
         <DimSetPicker documents={documents} documentId={documentId} onDocument={onDocument} />
-        <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Fənn
+        <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">{t('dim.report.subject')}
           <select className={inputClass} value={subject} onChange={e => setSubject(e.target.value)}>
-            <option value="">Fənn seçin</option>
+            <option value="">{t('dim.form.pickSubject')}</option>
             {subjects.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
           </select>
         </label>
-        <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Mövzu (istəyə bağlı)
-          <input className={inputClass} value={topic} maxLength={200} placeholder="məs. Kvadrat tənliklər" onChange={e => setTopic(e.target.value)} />
+        <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">{t('dim.form.topic')}
+          <input className={inputClass} value={topic} maxLength={200} placeholder={t('dim.form.topicPlaceholder')} onChange={e => setTopic(e.target.value)} />
         </label>
       </div>
 
-      <div role="radiogroup" aria-label="Sualın növü" className="inline-flex self-start rounded-lg border border-slate-200 bg-white p-1">
-        {([['closed', 'Qapalı (A–E)'], ['coded', 'Açıq — kodlaşdırılan']] as const).map(([value, label]) => (
+      <div role="radiogroup" aria-label={t('dim.manual.kindAria')} className="inline-flex self-start rounded-lg border border-slate-200 bg-white p-1">
+        {([['closed', t('dim.manual.closed')], ['coded', t('dim.manual.coded')]] as const).map(([value, label]) => (
           <button key={value} type="button" role="radio" aria-checked={kind === value} onClick={() => setKind(value)}
             className={cn('rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap', kind === value ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100')}>
             {label}
@@ -109,12 +111,12 @@ export function DimManualQuestion({ documents, documentId, onDocument }: {
       </div>
       {spec && (
         <p className="-mt-2 text-xs text-slate-500">
-          Rəsmi imtahanda {spec.name}: {spec.closed} qapalı{spec.coded > 0 && `, ${spec.coded} kodlaşdırılan`}{spec.written > 0 && `, ${spec.written} yazılı`} tapşırıq.
+          {t('dim.manual.official', { name: spec.name, closed: spec.closed })}{spec.coded > 0 && `, ${t('dim.manual.codedN', { n: spec.coded })}`}{spec.written > 0 && `, ${t('dim.manual.writtenN', { n: spec.written })}`}.
         </p>
       )}
 
       <div className="flex flex-col gap-1.5">
-      <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Sual
+      <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">{t('dim.manual.question')}
         <textarea ref={textRef} value={text} rows={4} maxLength={4000} className={textareaClass}
           aria-describedby={kind === 'closed' ? 'dim-manual-paste-hint' : undefined}
           onChange={e => setText(e.target.value)}
@@ -127,40 +129,39 @@ export function DimManualQuestion({ documents, documentId, onDocument }: {
             setOptions(LABELS.map((_, i) => split.options[i] ?? ''))
           }} />
       </label>
-        {kind === 'closed' && <p id="dim-manual-paste-hint" className="text-xs text-slate-500">Sualı variantları ilə birlikdə yapışdırsanız (A) … B) …), variantlar avtomatik ayrılır.</p>}
+        {kind === 'closed' && <p id="dim-manual-paste-hint" className="text-xs text-slate-500">{t('dim.manual.pasteHint')}</p>}
       </div>
 
       {kind === 'closed' ? (
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 text-sm font-medium text-slate-700">Variantlar — düzgün cavabı işarələyin (boş qalan son variantlar nəzərə alınmır)</legend>
+          <legend className="mb-1 text-sm font-medium text-slate-700">{t('dim.manual.optionsLegend')}</legend>
           {options.map((o, i) => (
             <div key={LABELS[i]} className="flex items-center gap-2">
               <input type="radio" name="dim-manual-correct" className="size-4 shrink-0 accent-emerald-600" checked={correct === i}
-                onChange={() => setCorrect(i)} aria-label={`${LABELS[i]} düzgün cavabdır`} />
+                onChange={() => setCorrect(i)} aria-label={t('questions.isCorrect', { label: LABELS[i] })} />
               <span className="w-5 text-sm font-semibold text-slate-500">{LABELS[i]})</span>
-              <input className={inputClass} value={o} maxLength={1000} aria-label={`Variant ${LABELS[i]}`}
+              <input className={inputClass} value={o} maxLength={1000} aria-label={t('dim.manual.option', { label: LABELS[i] })}
                 onChange={e => setOptions(list => list.map((x, j) => (j === i ? e.target.value : x)))} />
             </div>
           ))}
         </fieldset>
       ) : (
         <div className="flex flex-col gap-1.5 sm:max-w-md">
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Düzgün cavab
-            <input className={inputClass} value={answer} maxLength={100} placeholder="məs. 2,5 · (3; -4) · mübtəda" aria-describedby="dim-manual-answer-hint"
+          <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">{t('exam.result.correctAnswer')}
+            <input className={inputClass} value={answer} maxLength={100} placeholder={t('dim.manual.answerPlaceholder')} aria-describedby="dim-manual-answer-hint"
               onChange={e => setAnswer(e.target.value)} />
           </label>
           <p id="dim-manual-answer-hint" className="text-xs text-slate-500">
-            Ədəd (2,5, 5/2, 80°, 40 sm²), koordinat <code>(3; -4)</code> və ya söz. Bir neçə düzgün yazılış varsa nöqtəli vergüllə
-            ayırın: <code>2,5; 5/2</code>. Ədədlər dəyərinə görə (2,5 = 5/2, 80° = 80), sözlər böyük/kiçik hərfə baxmadan müqayisə olunur.
+            <Trans i18nKey="dim.manual.answerHint" components={{ c: <code /> }} />
           </p>
         </div>
       )}
 
-      {create.isError && <Alert title="Sual əlavə edilmədi">{create.error.message}</Alert>}
+      {create.isError && <Alert title={t('dim.manual.addFailed')}>{create.error.message}</Alert>}
       <div className="flex flex-wrap items-center gap-3">
-        <Button loading={create.isPending} disabled={!ready} onClick={save}><Save className="size-4" aria-hidden />Əlavə et</Button>
+        <Button loading={create.isPending} disabled={!ready} onClick={save}><Save className="size-4" aria-hidden />{t('dim.manual.add')}</Button>
         <span className="text-xs text-slate-500">Ctrl + Enter</span>
-        {saved !== null && <p role="status" className="text-sm text-emerald-700">#{saved} sual banka əlavə edildi.</p>}
+        {saved !== null && <p role="status" className="text-sm text-emerald-700">{t('dim.manual.added', { n: saved })}</p>}
       </div>
     </div>
   )

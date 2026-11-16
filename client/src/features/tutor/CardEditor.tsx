@@ -4,6 +4,8 @@ import { ApiError } from '../../lib/api-client'
 import { topicStats, useSaveCard, type CardDeck, type StudyCard } from './api'
 import { GuideDialog } from './GuideDialog'
 import { TopicPicker } from './TopicPicker'
+import { useTranslation } from 'react-i18next'
+import i18n from '../../lib/i18n'
 
 interface Props {
   chatId: string
@@ -30,11 +32,12 @@ function startBack(card?: StudyCard) {
 
 function message(error: unknown) {
   if (error instanceof ApiError) return Object.values(error.problem?.errors ?? {}).flat()[0] ?? error.message
-  return 'Kart yadda saxlanmadı. Yenidən yoxlayın.'
+  return i18n.t('tutor.card.saveError')
 }
 
 /** Writes a new card or rewrites one: a simple question in front and its answer behind. */
 export function CardEditor({ chatId, deck, card, topicKey = '', initialFront = '', initialBack = '', onClose, onSaved }: Props) {
+  const { t } = useTranslation()
   const [front, setFront] = useState(card?.front ?? initialFront.slice(0, maxFront))
   const [back, setBack] = useState(card ? startBack(card) : initialBack.slice(0, maxBack))
   const [topic, setTopic] = useState(card ? card.topicKey : topicKey)
@@ -54,36 +57,36 @@ export function CardEditor({ chatId, deck, card, topicKey = '', initialFront = '
   // Own cards without a topic live under "Mənim kartlarım"; it is not offered as a topic to pick.
   const topics = deck.topics.filter(t => t.key !== 'own')
   return (
-    <GuideDialog title={card ? 'Kartı redaktə et' : 'Yeni kart'} onClose={onClose}>
+    <GuideDialog title={card ? t('tutor.card.editTitle') : t('tutor.card.newTitle')} onClose={onClose}>
       <form onSubmit={submit} className="guide-scroll flex min-h-0 flex-col gap-4 overflow-y-auto px-4 py-4 sm:px-5">
         {card && !card.own && (
-          <p className="text-sm text-slate-600">Dəyişiklik yalnız sizin kartınızda görünür; sənəd və digər istifadəçilərin kartları dəyişmir.</p>
+          <p className="text-sm text-slate-600">{t('tutor.card.editNote')}</p>
         )}
         {!card && (
           <div className="flex flex-col gap-1.5">
-            <span className="text-sm font-semibold text-slate-700">Mövzu</span>
-            <TopicPicker topics={topics} stats={topicStats(deck)} value={topic} onChange={setTopic} allLabel="Mövzusuz — «Mənim kartlarım»" />
+            <span className="text-sm font-semibold text-slate-700">{t('tutor.card.topic')}</span>
+            <TopicPicker topics={topics} stats={topicStats(deck)} value={topic} onChange={setTopic} allLabel={t('tutor.card.noTopic')} />
           </div>
         )}
         <div className="flex flex-col gap-1.5">
-          <label htmlFor={frontId} className="text-sm font-semibold text-slate-700">Ön üz — sual</label>
+          <label htmlFor={frontId} className="text-sm font-semibold text-slate-700">{t('tutor.card.front')}</label>
           <textarea id={frontId} value={front} onChange={e => setFront(e.target.value)} maxLength={maxFront} rows={3} required autoFocus
-            placeholder="Məsələn: NAT nə edir?"
+            placeholder={t('tutor.card.frontPlaceholder')}
             className="tutor-border min-h-20 resize-y rounded-xl border bg-white px-3 py-2 text-base text-slate-900 outline-none focus:border-indigo-400 sm:text-sm" />
           <span className="self-end text-xs text-slate-500">{front.length} / {maxFront}</span>
         </div>
         <div className="flex flex-col gap-1.5">
-          <label htmlFor={backId} className="text-sm font-semibold text-slate-700">Arxa üz — cavab</label>
+          <label htmlFor={backId} className="text-sm font-semibold text-slate-700">{t('tutor.card.back')}</label>
           <textarea id={backId} value={back} onChange={e => setBack(e.target.value)} maxLength={maxBack} rows={6} required
             className="tutor-border min-h-32 resize-y rounded-xl border bg-white px-3 py-2 text-base text-slate-900 outline-none focus:border-indigo-400 sm:text-sm" />
           <span className="self-end text-xs text-slate-500">{back.length} / {maxBack}</span>
         </div>
-        {save.isError && <Alert title="Yadda saxlanmadı">{message(save.error)}</Alert>}
+        {save.isError && <Alert title={t('questions.notSaved')}>{message(save.error)}</Alert>}
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <button type="button" onClick={onClose} className="tutor-shared-action sm:px-5">Ləğv et</button>
+          <button type="button" onClick={onClose} className="tutor-shared-action sm:px-5">{t('common.cancel')}</button>
           <button type="submit" disabled={!valid || save.isPending}
             className="btn-primary inline-flex h-11 items-center justify-center rounded-xl px-5 text-sm font-semibold disabled:opacity-60">
-            {save.isPending ? 'Saxlanılır…' : 'Yadda saxla'}
+            {save.isPending ? t('tutor.card.saving') : t('questions.saveButton')}
           </button>
         </div>
       </form>

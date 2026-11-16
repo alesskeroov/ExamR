@@ -6,6 +6,7 @@ import { studyCards, topicStats, useReviewCard, type CardDeck, type CardGrade, t
 import { FlipCard } from './FlipCard'
 import { TopicPicker } from './TopicPicker'
 import { Frame } from './TutorShared'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   chatId: string
@@ -20,9 +21,9 @@ const sessionSize = 10
 const comeBackAfter: Record<CardGrade, number> = { Again: 3, Hard: 4, Good: 6 }
 
 const grades: { grade: CardGrade; label: string; key: string; tone: string }[] = [
-  { grade: 'Again', label: 'Bilmirdim', key: '1', tone: 'border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100' },
-  { grade: 'Hard', label: 'Qismən', key: '2', tone: 'border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100' },
-  { grade: 'Good', label: 'Bilirdim', key: '3', tone: 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100' },
+  { grade: 'Again', label: 'tutor.grade.again', key: '1', tone: 'border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100' },
+  { grade: 'Hard', label: 'tutor.grade.hard', key: '2', tone: 'border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100' },
+  { grade: 'Good', label: 'tutor.grade.good', key: '3', tone: 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100' },
 ]
 
 function shuffle<T>(items: T[]) {
@@ -44,6 +45,7 @@ function inScope(deck: CardDeck, scope: LearnScope) {
 
 /** "Öyrən": flashcards the student grades themself. Graded cards come back on their review day ("Bu gün"); a card is mastered after "Bilirdim" in a row. */
 export function GuideLearn({ chatId, deck, scope, onScope, onSource }: Props) {
+  const { t } = useTranslation()
   const [session, setSession] = useState<StudyCard[] | null>(null)
   const [result, setResult] = useState<{ mastered: number; total: number } | null>(null)
   const pool = inScope(deck, scope)
@@ -75,47 +77,47 @@ export function GuideLearn({ chatId, deck, scope, onScope, onSource }: Props) {
       <header className="flex items-start gap-3">
         <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-indigo-50 text-indigo-700" aria-hidden><Layers className="size-5" /></span>
         <div className="min-w-0">
-          <h2 className="text-base font-semibold">Öyrən</h2>
-          <p className="mt-0.5 text-sm text-slate-600">Sualı oxu, cavabı yadına sal, sonra aç və özünü qiymətləndir. Bilmədiyin kart bir neçə kartdan sonra yenə gəlir; bildiyin kart günlər sonra təkrar üçün qayıdır.</p>
+          <h2 className="text-base font-semibold">{t('tutor.learn.title')}</h2>
+          <p className="mt-0.5 text-sm text-slate-600">{t('tutor.learn.text')}</p>
         </div>
       </header>
 
       <div className="flex flex-col gap-2">
-        <div role="radiogroup" aria-label="Nəyi öyrənək?" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <ScopeChip active={scope.kind === 'all'} onClick={() => onScope({ kind: 'all' })}>Hamısı</ScopeChip>
-          <ScopeChip active={scope.kind === 'due'} onClick={() => onScope({ kind: 'due' })}>Bu gün · {studyCards(deck).filter(c => c.due).length}</ScopeChip>
-          <ScopeChip active={scope.kind === 'weak'} onClick={() => onScope({ kind: 'weak' })}>Zəif · {studyCards(deck).filter(c => c.weak).length}</ScopeChip>
-          <ScopeChip active={scope.kind === 'mixed'} onClick={() => onScope({ kind: 'mixed' })}>Qarışıq</ScopeChip>
+        <div role="radiogroup" aria-label={t('tutor.learn.scopeAria')} className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <ScopeChip active={scope.kind === 'all'} onClick={() => onScope({ kind: 'all' })}>{t('exam.setup.all')}</ScopeChip>
+          <ScopeChip active={scope.kind === 'due'} onClick={() => onScope({ kind: 'due' })}>{t('tutor.learn.today')} · {studyCards(deck).filter(c => c.due).length}</ScopeChip>
+          <ScopeChip active={scope.kind === 'weak'} onClick={() => onScope({ kind: 'weak' })}>{t('tutor.status.weak')} · {studyCards(deck).filter(c => c.weak).length}</ScopeChip>
+          <ScopeChip active={scope.kind === 'mixed'} onClick={() => onScope({ kind: 'mixed' })}>{t('tutor.topics.mixed')}</ScopeChip>
         </div>
-        <TopicPicker topics={deck.topics} stats={stats} value={scope.kind === 'topic' ? scope.key : ''} allLabel="Mövzu seç…"
+        <TopicPicker topics={deck.topics} stats={stats} value={scope.kind === 'topic' ? scope.key : ''} allLabel={t('tutor.learn.pickTopic')}
           onChange={key => onScope(key ? { kind: 'topic', key } : { kind: 'all' })}
           className={cn('h-11', scope.kind === 'topic' && 'border-indigo-400')} />
       </div>
 
       {result && result.total > 0 && (
         <div className="tutor-enter rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900" role="status">
-          <p className="font-semibold">Sessiya bitdi</p>
-          <p className="mt-0.5">Bu sessiyada {result.mastered} / {result.total} kart mənimsənildi.</p>
+          <p className="font-semibold">{t('tutor.learn.sessionDone')}</p>
+          <p className="mt-0.5">{t('tutor.learn.sessionResult', { mastered: result.mastered, total: result.total })}</p>
         </div>
       )}
 
       <section className="tutor-border rounded-2xl border bg-white p-4 sm:p-5">
-        <p className="text-sm font-semibold text-slate-900">{topicTitle ?? (scope.kind === 'due' ? 'Bu günün təkrarı' : scope.kind === 'weak' ? 'Zəif kartlar' : scope.kind === 'mixed' ? 'Qarışıq' : 'Bütün kartlar')}</p>
+        <p className="text-sm font-semibold text-slate-900">{topicTitle ?? (scope.kind === 'due' ? t('tutor.learn.todayReview') : scope.kind === 'weak' ? t('tutor.topics.weakCards') : scope.kind === 'mixed' ? t('tutor.topics.mixed') : t('tutor.learn.allCards'))}</p>
         <p className="mt-0.5 text-sm text-slate-600">
           {scope.kind === 'due'
-            ? (pool.length === 0 ? 'Bu gün təkrar vaxtı çatmış kart yoxdur. Yeni kartları «Hamısı» bölməsindən öyrən.' : `Təkrar vaxtı çatmış ${pool.length} kart`)
-            : pool.length === 0 ? 'Burada kart yoxdur.' : `${pool.length - open.length} / ${pool.length} mənimsənilib · ${open.length} kart qalıb`}
+            ? (pool.length === 0 ? t('tutor.learn.noDue') : t('tutor.learn.due', { n: pool.length }))
+            : pool.length === 0 ? t('tutor.learn.empty') : t('tutor.learn.progress', { done: pool.length - open.length, total: pool.length, left: open.length })}
         </p>
         {open.length > 0 ? (
           <button type="button" onClick={() => start(false)}
             className="btn-primary mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold">
-            <Play className="size-4" aria-hidden />Başla — {Math.min(sessionSize, open.length)} kart
+            <Play className="size-4" aria-hidden />{t('tutor.learn.start', { n: Math.min(sessionSize, open.length) })}
           </button>
         ) : pool.length > 0 && (
           <div className="mt-4">
-            <p className="flex items-center gap-2 text-sm font-semibold text-emerald-700"><Check className="size-4" aria-hidden />Hamısı mənimsənilib</p>
+            <p className="flex items-center gap-2 text-sm font-semibold text-emerald-700"><Check className="size-4" aria-hidden />{t('tutor.learn.allMastered')}</p>
             <button type="button" onClick={() => start(true)} className="tutor-shared-action mt-3 w-full">
-              <RotateCcw className="size-4" aria-hidden />Yenə də təkrarla
+              <RotateCcw className="size-4" aria-hidden />{t('tutor.learn.repeatAgain')}
             </button>
           </div>
         )}
@@ -140,6 +142,7 @@ interface SessionProps {
 }
 
 function Session({ chatId, cards, required, topics, onSource, onFinish }: SessionProps) {
+  const { t } = useTranslation()
   const review = useReviewCard(chatId)
   const [queue, setQueue] = useState(cards)
   const [masteredCount, setMasteredCount] = useState(0)
@@ -190,8 +193,8 @@ function Session({ chatId, cards, required, topics, onSource, onFinish }: Sessio
   return (
     <>
       <div className="flex items-center justify-between gap-3 text-sm">
-        <button type="button" onClick={() => onFinish({ mastered: masteredCount, total })} className="font-semibold text-slate-600 hover:text-slate-900">Dayandır</button>
-        <span className="text-slate-500" aria-live="polite">{masteredCount} / {total} mənimsənildi</span>
+        <button type="button" onClick={() => onFinish({ mastered: masteredCount, total })} className="font-semibold text-slate-600 hover:text-slate-900">{t('tutor.learn.stop')}</button>
+        <span className="text-slate-500" aria-live="polite">{t('tutor.learn.masteredOf', { done: masteredCount, total })}</span>
       </div>
       <div className="h-1.5 overflow-hidden rounded-full bg-slate-100" aria-hidden>
         <div className="h-full rounded-full bg-emerald-500 transition-[width]" style={{ width: `${(masteredCount / total) * 100}%` }} />
@@ -206,12 +209,12 @@ function Session({ chatId, cards, required, topics, onSource, onFinish }: Sessio
       <div className="tutor-surface sticky bottom-0 z-10 -mx-4 px-4 pt-2 pb-[max(.75rem,env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:p-0">
       {flipped ? (
         <div>
-          <p className="text-center text-sm font-medium text-slate-700">Nə qədər bildin?</p>
+          <p className="text-center text-sm font-medium text-slate-700">{t('tutor.learn.howWell')}</p>
           <div className="mt-2 grid grid-cols-3 gap-2">
             {grades.map(g => (
               <button key={g.grade} type="button" onClick={() => grade(g.grade)} disabled={review.isPending}
                 className={cn('min-h-12 rounded-xl border px-2 py-1.5 text-[15px] font-semibold disabled:opacity-60', g.tone)}>
-                {g.label}<span className="ml-1 hidden text-[11px] font-normal opacity-70 sm:inline">({g.key})</span>
+                {t(g.label)}<span className="ml-1 hidden text-[11px] font-normal opacity-70 sm:inline">({g.key})</span>
               </button>
             ))}
           </div>
@@ -219,12 +222,12 @@ function Session({ chatId, cards, required, topics, onSource, onFinish }: Sessio
       ) : (
         <button type="button" onClick={() => setFlipped(true)}
           className="btn-primary inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[15px] font-semibold">
-          <Eye className="size-4" aria-hidden />Cavabı göstər
+          <Eye className="size-4" aria-hidden />{t('exam.session.showAnswer')}
         </button>
       )}
       </div>
-      <p className="hidden text-center text-[11px] text-slate-400 sm:block">Boşluq — kartı çevir · 1 / 2 / 3 — qiymət</p>
-      {review.isError && <Alert title="Qiymət saxlanmadı">{review.error.message}</Alert>}
+      <p className="hidden text-center text-[11px] text-slate-400 sm:block">{t('tutor.learn.keyboard')}</p>
+      {review.isError && <Alert title={t('tutor.learn.gradeFailed')}>{review.error.message}</Alert>}
     </>
   )
 }

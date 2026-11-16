@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ImageOff } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import type { VisualDto } from '../../lib/visuals'
+import { useTranslation } from 'react-i18next'
 
 // PDF points → CSS pixels at 100 % zoom.
 const POINTS_TO_PX = 96 / 72
@@ -17,6 +18,7 @@ interface QuestionVisualsProps {
 
 /** Images of a question or option, in reading order. Renders nothing when there are none. */
 export function QuestionVisuals({ visuals, src, size = 'question', className }: QuestionVisualsProps) {
+  const { t } = useTranslation()
   if (visuals.length === 0) return null
 
   return (
@@ -24,7 +26,7 @@ export function QuestionVisuals({ visuals, src, size = 'question', className }: 
     <span className={cn('flex min-w-0 flex-wrap items-start gap-2', className)}>
       {visuals.map((visual, index) => (
         <VisualImage key={visual.id} visual={visual} src={src(visual.id)} size={size}
-          alt={visuals.length > 1 ? `Şəkil ${index + 1}` : 'Şəkil'} />
+          alt={visuals.length > 1 ? t('common.imageN', { n: index + 1 }) : t('common.image')} />
       ))}
     </span>
   )
@@ -32,12 +34,13 @@ export function QuestionVisuals({ visuals, src, size = 'question', className }: 
 
 function VisualImage({ visual, src, size, alt }: { visual: VisualDto; src: string; size: 'question' | 'option'; alt: string }) {
   const [failed, setFailed] = useState(false)
+  const { t } = useTranslation()
 
   if (!visual.hasFile || failed) {
     return (
       <span className="flex items-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-600">
         <ImageOff className="size-4 shrink-0" aria-hidden />
-        {visual.hasFile ? 'Şəkil yüklənmədi.' : `Şəkil göstərilə bilmir — PDF-in ${visual.pageNumber}-ci səhifəsinə baxın.`}
+        {visual.hasFile ? t('common.imageFailed') : t('common.imageMissing', { page: visual.pageNumber })}
       </span>
     )
   }

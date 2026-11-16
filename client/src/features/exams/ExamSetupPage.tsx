@@ -13,6 +13,8 @@ import { useCompletedDocuments } from '../documents/api'
 import { ChoiceCard } from '../../components/common/ChoiceCard'
 import { InfoTip } from '../../components/common/InfoTip'
 import { useActiveExam, useCreateExam, useExamAvailability, useExamResult, type ExamPool, type RevealMode } from './api'
+import { useTranslation } from 'react-i18next'
+import i18n from '../../lib/i18n'
 
 const MAX_MINUTES = 600
 
@@ -21,6 +23,7 @@ const inputClass =
   'h-11 rounded-lg border border-slate-300 bg-white px-3 tabular-nums focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none aria-invalid:border-rose-400'
 
 export function ExamSetupPage() {
+  const { t } = useTranslation()
   const monthly = useUsageLimit('Exam')
   const navigate = useNavigate()
   const active = useActiveExam()
@@ -59,11 +62,11 @@ export function ExamSetupPage() {
     setMinutesInput(p.timeLimitMinutes)
   }
   const retakeNotice = !retakeId ? null
-    : previous.isError ? { tone: 'danger' as const, title: 'Əvvəlki imtahan tapılmadı', text: 'Ayarları özünüz seçin.' }
+    : previous.isError ? { tone: 'danger' as const, title: t('exam.setup.retake.notFound'), text: t('exam.setup.retake.notFoundText') }
       : !prefilled ? null
-        : previousReadable ? { tone: 'info' as const, title: 'Əvvəlki imtahanın ayarları seçildi', text: 'PDF, aralıq, sual sayı, vaxt və cavab rejimi əvvəlki kimidir — istəsəniz dəyişin. Köhnə nəticə dəyişmir.' }
-          : !previous.data?.source.documentName ? { tone: 'danger' as const, title: 'Əvvəlki PDF artıq mövcud deyil', text: 'O PDF silinib. Digər ayarlar saxlanıldı — başqa PDF seçin.' }
-            : { tone: 'danger' as const, title: 'Bu PDF-ə artıq girişiniz yoxdur', text: `“${previous.data.source.documentName}” sizinlə artıq paylaşılmır, ona görə seçilə bilməz. Başqa PDF seçin.` }
+        : previousReadable ? { tone: 'info' as const, title: t('exam.setup.retake.applied'), text: t('exam.setup.retake.appliedText') }
+          : !previous.data?.source.documentName ? { tone: 'danger' as const, title: t('exam.setup.retake.deleted'), text: t('exam.setup.retake.deletedText') }
+            : { tone: 'danger' as const, title: t('exam.setup.retake.noAccess'), text: t('exam.setup.retake.noAccessText', { name: previous.data.source.documentName }) }
 
   const span = useExamAvailability(documentId)
   const first = span.data?.firstNumber ?? null
@@ -87,16 +90,16 @@ export function ExamSetupPage() {
   const countError = !range
     ? null
     : pool === 'Mistakes' && availabilityReady && mistakes === 0
-      ? 'Bu aralıqda səhv cavablandırdığınız və ya boş buraxdığınız sual yoxdur.'
+      ? t('exam.setup.noMistakesInRange')
       : !Number.isInteger(count) || count < 1
-        ? 'Sual sayı ən azı 1 olmalıdır.'
+        ? t('exam.setup.countMin')
         : count > max
-          ? `Bu aralıqda ən çox ${formatNumber(max)} sual seçmək olar.`
+          ? t('exam.setup.countMax', { count: max })
           : null
   const autoMinutes = availability.data?.defaultDurationMinutes ?? 30
   const minutes = minutesInput ?? autoMinutes
   const timeError = !Number.isInteger(minutes) || minutes < 1 || minutes > MAX_MINUTES
-    ? `Vaxt 1–${MAX_MINUTES} dəqiqə arasında olmalıdır.`
+    ? t('exam.setup.timeRange', { max: MAX_MINUTES })
     : null
   const selectedDocument = documents.data?.items.find((d) => d.id === documentId)
 
@@ -128,20 +131,20 @@ export function ExamSetupPage() {
 
   return (
     <div className="exam-flow mx-auto max-w-5xl">
-      <PageHeader title="İmtahana başla" description="PDF-i, sual aralığını, sual sayını və cavab rejimini seçin." />
+      <PageHeader title={t('nav.items.newExam')} description={t('exam.setup.description')} />
 
       {active.data && (
         <div className="mb-6">
           <Alert
             tone="info"
-            title="Davam edən imtahanınız var"
+            title={t('exam.setup.activeTitle')}
             action={
               <Link to={`/exams/${active.data.id}`} className="inline-flex h-9 items-center rounded-lg btn-primary px-4 font-medium">
-                Davam et
+                {t('dashboard.continue')}
               </Link>
             }
           >
-            Yeni imtahan başlamaq üçün əvvəlcə onu bitirin.
+            {t('exam.setup.activeText')}
           </Alert>
         </div>
       )}
@@ -164,66 +167,66 @@ export function ExamSetupPage() {
               onChange={(e) => selectDocument(e.target.value)}
               className={cn(inputClass, 'w-full')}
             >
-              <option value="">{documents.isPending ? 'Yüklənir…' : 'PDF seçin'}</option>
+              <option value="">{documents.isPending ? t('common.loadingDots') : t('exam.setup.pickPdf')}</option>
               {documents.data?.items.map((d) => (
                 <option key={d.id} value={d.id}>
-                  {d.originalFileName} · {formatNumber(d.questionCount)} sual
+                  {d.originalFileName} · {t('common.questions', { count: d.questionCount })}
                 </option>
               ))}
             </select>
             {documents.data?.items.length === 0 && (
               <p className="mt-2 text-slate-500">
-                Hələ emal olunmuş PDF yoxdur.{' '}
+                {t('exam.setup.noPdf')}{' '}
                 <Link to="/upload" className="font-medium text-indigo-600 hover:text-indigo-700">
-                  PDF yükləyin
+                  {t('exam.setup.uploadPdf')}
                 </Link>
               </p>
             )}
           </Section>
 
-          <Section step={2} title="Sual aralığı">
+          <Section step={2} title={t('exam.setup.range')}>
             <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-2">
-              <NumberField label="Başlanğıc sual" value={from} disabled={!documentId || span.isPending} invalid={!!rangeError} onChange={(v) => updateRange('from', v)} />
+              <NumberField label={t('exam.setup.fromQuestion')} value={from} disabled={!documentId || span.isPending} invalid={!!rangeError} onChange={(v) => updateRange('from', v)} />
               <span className="pb-2.5 text-slate-400" aria-hidden>
                 –
               </span>
-              <NumberField label="Son sual" value={to} disabled={!documentId || span.isPending} invalid={!!rangeError} onChange={(v) => updateRange('to', v)} />
+              <NumberField label={t('exam.setup.toQuestion')} value={to} disabled={!documentId || span.isPending} invalid={!!rangeError} onChange={(v) => updateRange('to', v)} />
             </div>
             <p className={cn('mt-2', rangeError && documentId && !span.isPending ? 'text-rose-600' : 'text-slate-500')}>
               {!documentId
-                ? 'Əvvəlcə PDF seçin.'
+                ? t('exam.setup.pickPdfFirst')
                 : span.isPending
-                  ? 'Yüklənir…'
-                  : rangeError ?? `PDF-dəki orijinal sual nömrələri: ${first}–${last}. Suallar yalnız bu aralıqdan təsadüfi seçilir.`}
+                  ? t('common.loadingDots')
+                  : rangeError ?? t('exam.setup.rangeHint', { first, last })}
             </p>
           </Section>
 
-          <Section step={3} title="Hansı suallar?">
+          <Section step={3} title={t('exam.setup.whichQuestions')}>
             <div className="grid gap-3 sm:grid-cols-2">
-              <ChoiceCard name="pool" checked={pool === 'All'} onChange={() => selectPool('All')} icon={<Layers className="size-5" />} title="Bütün suallar" description="Aralıqdakı bütün suallardan təsadüfi seçilir" />
+              <ChoiceCard name="pool" checked={pool === 'All'} onChange={() => selectPool('All')} icon={<Layers className="size-5" />} title={t('exam.setup.poolAll')} description={t('exam.setup.poolAllText')} />
               <ChoiceCard
                 name="pool"
                 checked={pool === 'Mistakes'}
                 onChange={() => selectPool('Mistakes')}
                 icon={<RotateCcw className="size-5" />}
-                title="Səhvlərim"
-                description="Son dəfə səhv cavablandırdığınız və ya boş buraxdığınız suallar. Düzgün cavablandırdıqca siyahıdan çıxır"
+                title={t('exam.setup.poolMistakes')}
+                description={t('exam.setup.poolMistakesText')}
                 aside={
-                  <InfoTip label="Səhv sualların sayı">
+                  <InfoTip label={t('exam.setup.mistakeCount')}>
                     {!range
-                      ? 'Səhv sualların sayı PDF və aralıq seçildikdən sonra görünür.'
+                      ? t('exam.setup.mistakeCountLater')
                       : !availability.data || availability.isPlaceholderData
-                        ? 'Hesablanır…'
+                        ? t('exam.setup.calculating')
                         : mistakes === 0
-                          ? `${range.from}–${range.to} aralığında səhv və ya boş buraxdığınız sual yoxdur.`
-                          : `${range.from}–${range.to} aralığında ${formatNumber(mistakes)} səhv və ya boş buraxdığınız sual var.`}
+                          ? t('exam.setup.mistakesNone', { range: `${range.from}–${range.to}` })
+                          : t('exam.setup.mistakesSome', { range: `${range.from}–${range.to}`, count: mistakes })}
                   </InfoTip>
                 }
               />
             </div>
           </Section>
 
-          <Section step={4} title="Sual sayı">
+          <Section step={4} title={t('exam.setup.count')}>
             <div className="flex flex-wrap items-center gap-2">
               {PRESETS.map((preset) => (
                 <button
@@ -241,7 +244,7 @@ export function ExamSetupPage() {
                 </button>
               ))}
               <label className="flex items-center gap-2">
-                <span className="sr-only">Sual sayı</span>
+                <span className="sr-only">{t('exam.setup.count')}</span>
                 <input
                   type="number"
                   min={1}
@@ -255,17 +258,17 @@ export function ExamSetupPage() {
             </div>
             <p className={cn('mt-2', countError ? 'text-rose-600' : 'text-slate-500')}>
               {countError ?? (!range
-                ? 'Əvvəlcə aralığı təyin edin.'
+                ? t('exam.setup.setRangeFirst')
                 : pool === 'Mistakes'
-                  ? `Aralıqda səhv və ya boş buraxdığınız ${formatNumber(available)} sual var.`
-                  : `Aralıqda ${formatNumber(available)} unikal sual var. Suallar təkrarlanmır.`)}
+                  ? t('exam.setup.availableMistakes', { count: available })
+                  : t('exam.setup.availableUnique', { count: available }))}
             </p>
           </Section>
 
-          <Section step={5} title="Vaxt limiti">
+          <Section step={5} title={t('exam.setup.timeLimit')}>
             <div className="flex flex-wrap items-center gap-2">
               <label className="flex items-center gap-2">
-                <span className="sr-only">Vaxt limiti (dəqiqə)</span>
+                <span className="sr-only">{t('exam.setup.timeLimitMinutes')}</span>
                 <input
                   type="number"
                   min={1}
@@ -276,24 +279,24 @@ export function ExamSetupPage() {
                   aria-describedby="time-limit-hint"
                   className={cn(inputClass, 'w-24')}
                 />
-                <span className="text-slate-600">dəqiqə</span>
+                <span className="text-slate-600">{t('exam.setup.minutesWord')}</span>
               </label>
               {minutesInput !== null && (
                 <button type="button" onClick={() => setMinutesInput(null)}
                   className="h-11 rounded-lg px-3 font-medium text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700">
-                  Avtomatik ({autoMinutes} dəq)
+                  {t('exam.setup.autoShort', { n: autoMinutes })}
                 </button>
               )}
             </div>
             <p id="time-limit-hint" className={cn('mt-2', timeError ? 'text-rose-600' : 'text-slate-500')}>
-              {timeError ?? (minutesInput === null ? `Avtomatik: ${autoMinutes} dəqiqə.` : 'Vaxt sizin seçiminizdir.')}
+              {timeError ?? (minutesInput === null ? t('exam.setup.autoLong', { n: autoMinutes }) : t('exam.setup.customTime'))}
             </p>
           </Section>
 
-          <Section step={6} title="Düzgün cavablar nə vaxt göstərilsin?">
+          <Section step={6} title={t('exam.setup.revealTitle')}>
             <div className="grid gap-3 sm:grid-cols-2">
-              <ChoiceCard name="reveal" checked={revealMode === 'AtEnd'} onChange={() => setRevealMode('AtEnd')} icon={<EyeOff className="size-5" />} title="İmtahan bitdikdə" description="Cavablar sona qədər dəyişdirilə bilər" />
-              <ChoiceCard name="reveal" checked={revealMode === 'Immediate'} onChange={() => setRevealMode('Immediate')} icon={<Eye className="size-5" />} title="Hər sualdan sonra" description="Hər sualda “Cavabı göstər” ilə düzgün cavabı görə bilərsiniz; göstərildikdən sonra variant dəyişmir" />
+              <ChoiceCard name="reveal" checked={revealMode === 'AtEnd'} onChange={() => setRevealMode('AtEnd')} icon={<EyeOff className="size-5" />} title={t('exam.setup.revealEnd')} description={t('exam.setup.revealEndText')} />
+              <ChoiceCard name="reveal" checked={revealMode === 'Immediate'} onChange={() => setRevealMode('Immediate')} icon={<Eye className="size-5" />} title={t('exam.setup.revealEach')} description={t('exam.setup.revealEachText')} />
             </div>
           </Section>
         </div>
@@ -301,30 +304,30 @@ export function ExamSetupPage() {
         <aside className="min-w-0 lg:sticky lg:top-8 lg:self-start">
           <UsageMeter kind="Exam" />
           <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
-            <h2 className="mb-4 font-semibold">Seçdiyiniz imtahan</h2>
+            <h2 className="mb-4 font-semibold">{t('exam.setup.summary')}</h2>
             <dl className="flex flex-col gap-2.5 text-sm">
               <SummaryRow label="PDF">
                 <span className="block max-w-full break-words text-right" title={selectedDocument?.originalFileName}>
                   {selectedDocument?.originalFileName ?? '—'}
                 </span>
               </SummaryRow>
-              <SummaryRow label="Aralıq">{range ? `${range.from}–${range.to}` : '—'}</SummaryRow>
-              <SummaryRow label="Suallar">{pool === 'Mistakes' ? 'Səhvlərim' : 'Hamısı'}</SummaryRow>
-              <SummaryRow label="Mövcud sual">
+              <SummaryRow label={t('exam.setup.sumRange')}>{range ? `${range.from}–${range.to}` : '—'}</SummaryRow>
+              <SummaryRow label={t('exam.session.questions')}>{pool === 'Mistakes' ? t('exam.setup.poolMistakes') : t('exam.setup.all')}</SummaryRow>
+              <SummaryRow label={t('exam.setup.sumAvailable')}>
                 {range && availability.isFetching ? <Loader2 className="size-4 animate-spin" /> : range ? formatNumber(available) : '—'}
               </SummaryRow>
-              <SummaryRow label="Sual sayı">{range && !countError ? formatNumber(count) : '—'}</SummaryRow>
-              <SummaryRow label="Vaxt">
+              <SummaryRow label={t('exam.setup.count')}>{range && !countError ? formatNumber(count) : '—'}</SummaryRow>
+              <SummaryRow label={t('exam.setup.sumTime')}>
                 <span className="inline-flex items-center gap-1.5">
                   <Clock className="size-4 text-slate-400" aria-hidden />
-                  {range && !countError && !timeError ? `${minutes} dəqiqə` : '—'}
+                  {range && !countError && !timeError ? t('exam.setup.minutes', { count: minutes }) : '—'}
                 </span>
               </SummaryRow>
-              <SummaryRow label="Cavablar">{revealMode === 'AtEnd' ? 'Sonda' : 'Hər sualdan sonra'}</SummaryRow>
+              <SummaryRow label={t('exam.setup.sumAnswers')}>{revealMode === 'AtEnd' ? t('exam.setup.atEnd') : t('exam.setup.revealEach')}</SummaryRow>
             </dl>
             {range && pool === 'All' && !!availability.data?.ungraded && (
               <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-amber-800">
-                Aralıqdakı {formatNumber(availability.data.ungraded)} sualın düzgün cavabı məlum deyil — düşsə, ballanmayacaq.
+                {t('exam.setup.ungraded', { count: availability.data.ungraded })}
               </p>
             )}
             {create.error && (
@@ -334,7 +337,7 @@ export function ExamSetupPage() {
             )}
             <Button className="mt-5 w-full" disabled={!canStart} loading={create.isPending} onClick={start}>
               <PlayCircle className="size-4" aria-hidden />
-              İmtahana başla
+              {t('nav.items.newExam')}
             </Button>
           </div>
         </aside>
@@ -345,10 +348,10 @@ export function ExamSetupPage() {
 
 /** Returns an error message, or null when the range is valid for the PDF's numbering. */
 function validateRange(from: number | null, to: number | null, first: number | null, last: number | null) {
-  if (first === null || last === null) return 'Bu PDF-də sual yoxdur.'
-  if (from === null || to === null || !Number.isInteger(from) || !Number.isInteger(to)) return 'Başlanğıc və son sual nömrəsini daxil edin.'
-  if (from > to) return 'Başlanğıc nömrə son nömrədən böyük ola bilməz.'
-  if (from < first || to > last) return `Aralıq PDF-dəki nömrələr daxilində olmalıdır (${first}–${last}).`
+  if (first === null || last === null) return i18n.t('exam.setup.noQuestions')
+  if (from === null || to === null || !Number.isInteger(from) || !Number.isInteger(to)) return i18n.t('exam.setup.enterRange')
+  if (from > to) return i18n.t('exam.setup.fromGreater')
+  if (from < first || to > last) return i18n.t('exam.setup.outOfRange', { first, last })
   return null
 }
 

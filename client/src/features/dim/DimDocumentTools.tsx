@@ -7,6 +7,7 @@ import {
   type DimAudio,
 } from './api'
 import { inputClass } from './ui'
+import { Trans, useTranslation } from 'react-i18next'
 
 const numberClass = inputClass.replace('w-full', 'w-20')
 
@@ -15,6 +16,7 @@ const numberClass = inputClass.replace('w-full', 'w-20')
  * student can play it on those questions during the exam.
  */
 export function DimAudioPanel({ documentId }: { documentId: string }) {
+  const { t } = useTranslation()
   const audios = useDimAudios(documentId)
   const upload = useUploadDimAudio()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -30,7 +32,7 @@ export function DimAudioPanel({ documentId }: { documentId: string }) {
   function pick(next: File | null) {
     setClientError(null)
     if (next && next.size > DIM_AUDIO_MAX_BYTES) {
-      setClientError('Səs faylı 30 MB-dan böyük ola bilməz.')
+      setClientError(t('dim.audio.tooLarge'))
       next = null
     }
     setFile(next)
@@ -50,54 +52,54 @@ export function DimAudioPanel({ documentId }: { documentId: string }) {
   return (
     <details className="mt-4 border-t border-slate-100 pt-3 text-sm" open={(audios.data?.length ?? 0) > 0 || undefined}>
       <summary className="flex cursor-pointer items-center gap-2 font-medium text-slate-700">
-        <Headphones className="size-4 text-indigo-600" aria-hidden />Səs materialları (dinləmə)
-        {audios.data && audios.data.length > 0 && <span className="font-normal text-slate-500">— {audios.data.length} fayl</span>}
+        <Headphones className="size-4 text-indigo-600" aria-hidden />{t('dim.audio.title')}
+        {audios.data && audios.data.length > 0 && <span className="font-normal text-slate-500">— {t('dim.audio.files', { n: audios.data.length })}</span>}
       </summary>
       <p className="mt-2 text-slate-600">
-        Səs faylını yükləyin və hansı suallara aid olduğunu göstərin. İmtahanda həmin suallarda pleyer görünəcək; eyni səsə aid
-        suallar arasında keçəndə səs dayanmır. MP3, M4A, OGG və ya WAV, ən çox 30 MB.
+        {t('dim.audio.text')}
       </p>
 
-      {audios.isError && <div className="mt-2"><Alert title="Səs faylları yüklənmədi">{audios.error.message}</Alert></div>}
+      {audios.isError && <div className="mt-2"><Alert title={t('dim.audio.loadFailed')}>{audios.error.message}</Alert></div>}
       {audios.data && audios.data.length > 0 && (
         <ul className="mt-3 flex flex-col gap-2">{audios.data.map(a => <li key={a.id}><AudioRow audio={a} /></li>)}</ul>
       )}
 
       <div className="mt-3 grid gap-3 rounded-lg border border-dashed border-slate-300 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-        <label className="flex flex-col gap-1.5 font-medium text-slate-700">Fayl
+        <label className="flex flex-col gap-1.5 font-medium text-slate-700">{t('dim.audio.file')}
           <input ref={fileRef} type="file" accept="audio/mpeg,audio/mp4,audio/x-m4a,audio/ogg,audio/wav,.mp3,.m4a,.ogg,.wav"
             onChange={e => pick(e.target.files?.[0] ?? null)}
             className="text-sm file:mr-3 file:rounded-md file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:font-medium file:text-indigo-700" />
         </label>
-        <label className="flex flex-col gap-1.5 font-medium text-slate-700">Ad
-          <input className={inputClass} value={title} maxLength={200} placeholder="məs. Listening 1" onChange={e => setTitle(e.target.value)} />
+        <label className="flex flex-col gap-1.5 font-medium text-slate-700">{t('dim.admin.name')}
+          <input className={inputClass} value={title} maxLength={200} placeholder={t('dim.audio.namePlaceholder')} onChange={e => setTitle(e.target.value)} />
         </label>
         <fieldset className="flex flex-col gap-1.5">
-          <legend className="mb-1.5 font-medium text-slate-700">Suallar</legend>
+          <legend className="mb-1.5 font-medium text-slate-700">{t('exam.session.questions')}</legend>
           <div className="flex items-center gap-2">
-            <input className={numberClass} inputMode="numeric" value={from} placeholder="1" aria-label="İlk sual nömrəsi" onChange={e => setFrom(e.target.value)} />
+            <input className={numberClass} inputMode="numeric" value={from} placeholder="1" aria-label={t('dim.audio.firstNumber')} onChange={e => setFrom(e.target.value)} />
             <span aria-hidden>–</span>
-            <input className={numberClass} inputMode="numeric" value={to} placeholder="5" aria-label="Son sual nömrəsi" onChange={e => setTo(e.target.value)} />
+            <input className={numberClass} inputMode="numeric" value={to} placeholder="5" aria-label={t('dim.audio.lastNumber')} onChange={e => setTo(e.target.value)} />
           </div>
         </fieldset>
         <div className="flex flex-wrap items-center gap-3 sm:col-span-3">
-          <label className="flex items-center gap-2 font-medium text-slate-700">Dinləmə limiti
-            <input className={numberClass} inputMode="numeric" value={plays} placeholder="limitsiz" aria-describedby={`dim-plays-hint-${documentId}`}
+          <label className="flex items-center gap-2 font-medium text-slate-700">{t('dim.audio.playLimit')}
+            <input className={numberClass} inputMode="numeric" value={plays} placeholder={t('dim.admin.unlimited')} aria-describedby={`dim-plays-hint-${documentId}`}
               onChange={e => setPlays(e.target.value)} />
           </label>
-          <span id={`dim-plays-hint-${documentId}`} className="text-xs text-slate-500">Rəsmi imtahanda səs 2 dəfə səsləndirilir. Boş = limitsiz.</span>
+          <span id={`dim-plays-hint-${documentId}`} className="text-xs text-slate-500">{t('dim.audio.playHint')}</span>
           <Button variant="secondary" loading={upload.isPending} disabled={!file || !range || maxPlays === undefined} onClick={submit}>
-            <Upload className="size-4" aria-hidden />Səsi yüklə
+            <Upload className="size-4" aria-hidden />{t('dim.audio.upload')}
           </Button>
-          {upload.isPending && <span role="status" className="text-slate-500">Yüklənir…</span>}
+          {upload.isPending && <span role="status" className="text-slate-500">{t('common.loadingDots')}</span>}
         </div>
       </div>
-      {(clientError || upload.isError) && <div className="mt-2"><Alert title="Səs yüklənmədi">{clientError ?? upload.error?.message}</Alert></div>}
+      {(clientError || upload.isError) && <div className="mt-2"><Alert title={t('dim.audio.uploadFailed')}>{clientError ?? upload.error?.message}</Alert></div>}
     </details>
   )
 }
 
 function AudioRow({ audio }: { audio: DimAudio }) {
+  const { t } = useTranslation()
   const update = useUpdateDimAudio()
   const remove = useDeleteDimAudio()
   const [editing, setEditing] = useState(false)
@@ -112,73 +114,73 @@ function AudioRow({ audio }: { audio: DimAudio }) {
     <article className="rounded-lg border border-slate-200 p-3">
       {editing ? (
         <div className="flex flex-wrap items-end gap-2">
-          <label className="flex min-w-48 flex-1 flex-col gap-1 font-medium text-slate-700">Ad
+          <label className="flex min-w-48 flex-1 flex-col gap-1 font-medium text-slate-700">{t('dim.admin.name')}
             <input className={inputClass} value={title} maxLength={200} onChange={e => setTitle(e.target.value)} />
           </label>
-          <input className={numberClass} inputMode="numeric" value={from} aria-label="İlk sual nömrəsi" onChange={e => setFrom(e.target.value)} />
-          <input className={numberClass} inputMode="numeric" value={to} aria-label="Son sual nömrəsi" onChange={e => setTo(e.target.value)} />
-          <label className="flex flex-col gap-1 font-medium text-slate-700">Limit
-            <input className={numberClass} inputMode="numeric" value={plays} placeholder="limitsiz" onChange={e => setPlays(e.target.value)} />
+          <input className={numberClass} inputMode="numeric" value={from} aria-label={t('dim.audio.firstNumber')} onChange={e => setFrom(e.target.value)} />
+          <input className={numberClass} inputMode="numeric" value={to} aria-label={t('dim.audio.lastNumber')} onChange={e => setTo(e.target.value)} />
+          <label className="flex flex-col gap-1 font-medium text-slate-700">{t('dim.audio.limit')}
+            <input className={numberClass} inputMode="numeric" value={plays} placeholder={t('dim.admin.unlimited')} onChange={e => setPlays(e.target.value)} />
           </label>
           <Button className="h-10" loading={update.isPending} disabled={!range || !title.trim() || maxPlays === undefined}
             onClick={() => range && maxPlays !== undefined && update.mutate({ id: audio.id, title: title.trim(), questionFrom: range.from, questionTo: range.to, maxPlays },
               { onSuccess: () => setEditing(false) })}>
-            Saxla
+            {t('common.save')}
           </Button>
-          <Button variant="ghost" className="h-10" onClick={() => setEditing(false)}>Ləğv et</Button>
+          <Button variant="ghost" className="h-10" onClick={() => setEditing(false)}>{t('common.cancel')}</Button>
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
           <Headphones className="size-4 text-indigo-600" aria-hidden />
           <span className="font-medium text-slate-800">{audio.title}</span>
           <span className="text-slate-500 tabular-nums">
-            suallar {audio.questionFrom}–{audio.questionTo} · {audio.maxPlays === null ? 'limitsiz dinləmə' : `${audio.maxPlays} dəfə dinləmə`} · {(audio.sizeBytes / 1024 / 1024).toFixed(1)} MB
+            {t('exam.result.questionsRange', { range: `${audio.questionFrom}–${audio.questionTo}` })} · {audio.maxPlays === null ? t('dim.audio.unlimitedPlays') : t('dim.audio.plays', { n: audio.maxPlays })} · {(audio.sizeBytes / 1024 / 1024).toFixed(1)} MB
           </span>
           <span className="ml-auto flex gap-1">
             <button type="button" onClick={() => setEditing(true)} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-50">
-              <Pencil className="size-3.5" aria-hidden />Düzəlt
+              <Pencil className="size-3.5" aria-hidden />{t('dim.audio.edit')}
             </button>
             <button type="button" disabled={remove.isPending}
-              onClick={() => { if (window.confirm(`"${audio.title}" silinsin? Başlanmış imtahanlarda da çalınmayacaq.`)) remove.mutate(audio.id) }}
+              onClick={() => { if (window.confirm(t('dim.audio.deleteConfirm', { title: audio.title }))) remove.mutate(audio.id) }}
               className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50">
-              <Trash2 className="size-3.5" aria-hidden />Sil
+              <Trash2 className="size-3.5" aria-hidden />{t('common.delete')}
             </button>
           </span>
         </div>
       )}
-      <audio controls preload="none" src={dimAudioAdminUrl(audio.id)} className="mt-2 w-full" aria-label={`${audio.title} — dinlə`} />
-      {(update.isError || remove.isError) && <div className="mt-2"><Alert title="Alınmadı">{(update.error ?? remove.error)?.message}</Alert></div>}
+      <audio controls preload="none" src={dimAudioAdminUrl(audio.id)} className="mt-2 w-full" aria-label={t('dim.audio.listenAria', { title: audio.title })} />
+      {(update.isError || remove.isError) && <div className="mt-2"><Alert title={t('profile.actionFailed')}>{(update.error ?? remove.error)?.message}</Alert></div>}
     </article>
   )
 }
 
 /** Topics for many bank questions at once, by number ranges ("1-5: Fonetika"). */
 export function DimTopicRanges({ documentId }: { documentId: string }) {
+  const { t } = useTranslation()
   const setTopics = useSetDimTopics()
   const [text, setText] = useState('')
   return (
     <details className="mt-4 border-t border-slate-100 pt-3 text-sm">
       <summary className="flex cursor-pointer items-center gap-2 font-medium text-slate-700">
-        <Tags className="size-4 text-indigo-600" aria-hidden />Mövzuları aralıqla təyin et
+        <Tags className="size-4 text-indigo-600" aria-hidden />{t('dim.topics.title')}
       </summary>
       <p className="mt-2 text-slate-600" id={`dim-topics-hint-${documentId}`}>
-        Hər sətirdə bir aralıq: <code>1-5: Fonetika</code>, <code>6-10: Leksika</code>. Sonrakı sətir əvvəlkini dəqiqləşdirə bilər
-        (<code>1-20: Cəbr</code>, sonra <code>5: Faiz</code>). Mövzu yalnız bankdakı suallara yazılır; nəticədə zəif mövzular buna görə göstərilir.
+        <Trans i18nKey="dim.topics.hint" components={{ c: <code /> }} />
       </p>
-      <textarea value={text} onChange={e => setText(e.target.value)} rows={4} aria-label="Mövzu aralıqları" aria-describedby={`dim-topics-hint-${documentId}`}
+      <textarea value={text} onChange={e => setText(e.target.value)} rows={4} aria-label={t('dim.topics.aria')} aria-describedby={`dim-topics-hint-${documentId}`}
         className="mt-2 w-full rounded-lg border border-slate-300 bg-white p-3 font-mono text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none" />
       <div className="mt-2 flex flex-wrap items-center gap-3">
         <Button variant="secondary" loading={setTopics.isPending} disabled={text.trim().length < 2}
-          onClick={() => setTopics.mutate({ documentId, text })}>Mövzuları tətbiq et</Button>
+          onClick={() => setTopics.mutate({ documentId, text })}>{t('dim.topics.apply')}</Button>
         {setTopics.data && (
           <p role="status" className="text-slate-600">
-            {setTopics.data.updated} suala mövzu yazıldı.
-            {setTopics.data.notInBank.length > 0 && ` Bankda olmayan: ${setTopics.data.notInBank.join(', ')}.`}
-            {setTopics.data.unread.length > 0 && ` Oxunmayan sətirlər: ${setTopics.data.unread.join(' · ')}.`}
+            {t('dim.topics.updated', { n: setTopics.data.updated })}
+            {setTopics.data.notInBank.length > 0 && ` ${t('dim.topics.notInBank', { list: setTopics.data.notInBank.join(', ') })}`}
+            {setTopics.data.unread.length > 0 && ` ${t('dim.topics.unread', { list: setTopics.data.unread.join(' · ') })}`}
           </p>
         )}
       </div>
-      {setTopics.isError && <div className="mt-2"><Alert title="Mövzular tətbiq edilmədi">{setTopics.error.message}</Alert></div>}
+      {setTopics.isError && <div className="mt-2"><Alert title={t('dim.topics.failed')}>{setTopics.error.message}</Alert></div>}
     </details>
   )
 }

@@ -4,14 +4,16 @@ import { StatusBadge, type BadgeTone } from '../../components/common/StatusBadge
 import { cn } from '../../lib/utils'
 import { bodyVisuals, optionVisuals, visibleText, visualUrls } from '../../lib/visuals'
 import type { QuestionDto, VerificationStatus } from '../documents/api'
+import { useTranslation } from 'react-i18next'
 
-const statusBadge: Record<VerificationStatus, { tone: BadgeTone; label: string }> = {
-  AutoDetected: { tone: 'info', label: 'Avtomatik' },
-  Verified: { tone: 'success', label: 'Təsdiqlənmiş' },
-  Unverified: { tone: 'warning', label: 'Cavab bilinmir' },
+const statusBadge: Record<VerificationStatus, { tone: BadgeTone }> = {
+  AutoDetected: { tone: 'info' },
+  Verified: { tone: 'success' },
+  Unverified: { tone: 'warning' },
 }
 
 export function QuestionCard({ question }: { question: QuestionDto }) {
+  const { t } = useTranslation()
   const badge = statusBadge[question.verificationStatus]
   const visualSrc = visualUrls.document(question.documentId)
   const images = bodyVisuals(question.visuals)
@@ -23,10 +25,10 @@ export function QuestionCard({ question }: { question: QuestionDto }) {
           #{question.sourceNumber}
         </span>
         <h3 id={`q-${question.id}`} className="flex-1 text-[15px] leading-6 font-medium text-slate-900">
-          {visibleText(question.text, images.length > 0) ?? <span className="sr-only">Şəkilli sual #{question.sourceNumber}</span>}
+          {visibleText(question.text, images.length > 0) ?? <span className="sr-only">{t('exam.result.imageQuestion')} #{question.sourceNumber}</span>}
         </h3>
         <span className="shrink-0">
-          <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
+          <StatusBadge tone={badge.tone}>{t(`questions.verification.${question.verificationStatus}`)}</StatusBadge>
         </span>
       </header>
       <QuestionVisuals visuals={images} src={visualSrc} className="mb-3" />
@@ -51,7 +53,7 @@ export function QuestionCard({ question }: { question: QuestionDto }) {
             </span>
             <span className={cn('flex-1 leading-6', option.isCorrect ? 'font-medium text-emerald-900' : 'text-slate-700')}>
               <span className="sr-only">
-                {option.label}){option.isCorrect ? ' (düzgün cavab)' : ''}{' '}
+                {option.label}){option.isCorrect ? ` (${t('exam.session.correctAnswerSr')})` : ''}{' '}
               </span>
               {visibleText(option.text, optionVisuals(question.visuals, option.id).length > 0)}
               <QuestionVisuals visuals={optionVisuals(question.visuals, option.id)} src={visualSrc} size="option" />

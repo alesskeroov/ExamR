@@ -18,17 +18,19 @@ import { DimAudioPanel, DimTopicRanges } from './DimDocumentTools'
 import { DimManualQuestion } from './DimManualQuestion'
 import { DimTextImport } from './DimTextImport'
 import { inputClass, trackLabel } from './ui'
+import { Trans, useTranslation } from 'react-i18next'
+import i18n from '../../lib/i18n'
 
 interface Classification { track: DimTrack; subject: string }
 
 /** Mirrors the server rule (DimAdminEndpoints.BankRejection); null = the question fits DİM tests. */
 function problem(q: DimSourceQuestion): string | null {
-  if (!q.text.trim()) return 'Boş mətn'
-  if (q.options.length === 0) return q.codedAnswer ? null : 'Açıq sual: cavabını yazın'
-  if (q.options.length < 2) return 'Variant azdır'
-  if (q.options.length > 5) return '5-dən çox variant'
-  if (q.options.filter(o => o.isCorrect).length !== 1) return 'Düzgün cavab yoxdur'
-  if (!q.text.trim() || q.options.some(o => !o.text.trim())) return 'Boş mətn'
+  if (!q.text.trim()) return i18n.t('dim.bank.problem.empty')
+  if (q.options.length === 0) return q.codedAnswer ? null : i18n.t('dim.bank.problem.openNoAnswer')
+  if (q.options.length < 2) return i18n.t('dim.bank.problem.fewOptions')
+  if (q.options.length > 5) return i18n.t('dim.bank.problem.manyOptions')
+  if (q.options.filter(o => o.isCorrect).length !== 1) return i18n.t('dim.bank.problem.noCorrect')
+  if (!q.text.trim() || q.options.some(o => !o.text.trim())) return i18n.t('dim.bank.problem.empty')
   return null
 }
 
@@ -39,6 +41,7 @@ function problem(q: DimSourceQuestion): string | null {
 const fixable = (q: DimSourceQuestion) => q.options.length === 0 || (q.options.length >= 2 && q.options.length <= 5)
 
 export function DimBankAdmin() {
+  const { t } = useTranslation()
   const documents = useDimSourceDocuments()
   const stats = useDimBankStats()
   const [documentId, setDocumentId] = useState('')
@@ -54,20 +57,20 @@ export function DimBankAdmin() {
   async function handleDelete(d: DimSourceDocument) {
     const banked = d.bank.reduce((sum, b) => sum + b.count, 0)
     const usedBy = (tests.data ?? []).filter(t => t.sections.some(s => s.sourceDocumentId === d.id)).map(t => `"${t.title}"`)
-    const description = `"${d.originalFileName}" və onun ${d.questionCount} sualı birdəfəlik silinəcək`
-      + (banked > 0 ? `, ${banked} sual sual bankından çıxarılacaq` : '')
-      + '. Sınaqlarda bu sənədin sualları artıq çıxmayacaq'
-      + (usedBy.length > 0 ? ` (bu sənəddən sual götürən sınaqlar: ${usedBy.join(', ')})` : '')
-      + '. İstifadəçilərin keçmiş nəticələri qalır. Bu geri qaytarıla bilməz.'
-    if (await confirm({ title: 'Sənəd silinsin?', description, confirmLabel: 'Sil', danger: true }))
+    const description = t('dim.bank.deleteText', { name: d.originalFileName, n: d.questionCount })
+      + (banked > 0 ? t('dim.bank.deleteBanked', { n: banked }) : '')
+      + t('dim.bank.deleteTests')
+      + (usedBy.length > 0 ? t('dim.bank.deleteUsedBy', { list: usedBy.join(', ') }) : '')
+      + t('dim.bank.deleteEnd')
+    if (await confirm({ title: t('documents.deleteTitle'), description, confirmLabel: t('common.delete'), danger: true }))
       removeDocument.mutate(d.id, { onSuccess: () => setDocumentId(current => (current === d.id ? '' : current)) })
   }
 
   return (
     <div className="flex flex-col gap-5">
       <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
-        <div role="tablist" aria-label="Sualların mənbəyi" className="inline-flex rounded-lg border border-slate-200 bg-white p-1">
-          {([['upload', 'PDF / Word yüklə'], ['import', 'Mətni yapışdır'], ['manual', 'Əl ilə yaz']] as const).map(([value, label]) => (
+        <div role="tablist" aria-label={t('dim.bank.sourceAria')} className="inline-flex rounded-lg border border-slate-200 bg-white p-1">
+          {([['upload', t('dim.bank.source.upload')], ['import', t('dim.bank.source.import')], ['manual', t('dim.bank.source.manual')]] as const).map(([value, label]) => (
             <button key={value} type="button" role="tab" aria-selected={source === value} onClick={() => setSource(value)}
               className={cn('rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap', source === value ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100')}>
               {label}
@@ -76,7 +79,7 @@ export function DimBankAdmin() {
         </div>
         {source === 'upload' ? (
           <>
-            <p className="mt-3 text-sm text-slate-600">Əvvəlcə imtahanı və fənni seçin, sonra faylı yükləyin. Suallar avtomatik çıxarılır və yoxlanılır.</p>
+            <p className="mt-3 text-sm text-slate-600">{t('dim.bank.uploadText')}</p>
             <SubjectFields value={upload} onChange={setUpload} />
             <DimUpload disabled={!upload.subject} onReady={id => {
               setChosen(c => ({ ...c, [id]: upload }))
@@ -87,7 +90,7 @@ export function DimBankAdmin() {
         ) : source === 'import' ? (
           <>
             <p className="mt-3 text-sm text-slate-600">
-              Bütün testi Word-dan, saytdan və ya PDF-dən kopyalayıb yapışdırın: əvvəl önizləmə, sonra hamısı bir dəfəyə dəstə düşür.
+              {t('dim.bank.importText')}
             </p>
             <DimTextImport documents={documents.data ?? []} documentId={documentId} onDocument={setDocumentId}
               onImported={(id, subject) => setChosen(c => ({ ...c, [id]: { track: 'Buraxilis', subject } }))} />
@@ -95,8 +98,7 @@ export function DimBankAdmin() {
         ) : (
           <>
             <p className="mt-3 text-sm text-slate-600">
-              Qapalı və ya açıq (kodlaşdırılan) sualı cavabı ilə yazın: dərhal banka düşür. Yeni dəst yaradın və ya mövcud sənədə əlavə edin
-              (məs. PDF-də olmayan açıq tapşırıqları).
+              {t('dim.bank.manualText')}
             </p>
             <DimManualQuestion documents={documents.data ?? []} documentId={documentId} onDocument={setDocumentId} />
           </>
@@ -105,14 +107,14 @@ export function DimBankAdmin() {
 
       <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="font-semibold">Sənədlərim</h2>
+          <h2 className="font-semibold">{t('dim.bank.myDocuments')}</h2>
           {stats.data && stats.data.length > 0 && (
-            <p className="text-sm text-slate-500">Bankda cəmi: {stats.data.map(s => `${trackLabel[s.track]} ${s.name} ${s.count}`).join(' · ')}</p>
+            <p className="text-sm text-slate-500">{t('dim.bank.totalInBank')} {stats.data.map(s => `${trackLabel[s.track]} ${s.name} ${s.count}`).join(' · ')}</p>
           )}
         </div>
-        {documents.isPending ? <div className="mt-3 h-20 animate-pulse rounded-lg bg-slate-200/60" aria-label="Yüklənir" />
-          : documents.isError ? <div className="mt-3"><Alert title="Sənədlər yüklənmədi">{documents.error.message}</Alert></div>
-          : documents.data.length === 0 ? <p className="mt-2 text-sm text-slate-500">Hələ sənəd yoxdur — yuxarıdan PDF yükləyin.</p>
+        {documents.isPending ? <div className="mt-3 h-20 animate-pulse rounded-lg bg-slate-200/60" aria-label={t('common.loading')} />
+          : documents.isError ? <div className="mt-3"><Alert title={t('documents.listFailed')}>{documents.error.message}</Alert></div>
+          : documents.data.length === 0 ? <p className="mt-2 text-sm text-slate-500">{t('dim.bank.noDocs')}</p>
           : (
             <ul className="mt-3 grid gap-2 sm:grid-cols-2">
               {documents.data.map(d => (
@@ -123,7 +125,7 @@ export function DimBankAdmin() {
                     <DocumentCounts document={d} />
                   </button>
                   <button type="button" onClick={() => void handleDelete(d)} disabled={removeDocument.isPending}
-                    aria-label={`${d.originalFileName} sənədini sil`} title="Sənədi sil"
+                    aria-label={t('documents.deleteAria', { name: d.originalFileName })} title={t('documents.delete')}
                     className="absolute top-2 right-2 inline-flex size-9 items-center justify-center rounded-md text-slate-500 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-50">
                     <Trash2 className="size-4" aria-hidden />
                   </button>
@@ -131,7 +133,7 @@ export function DimBankAdmin() {
               ))}
             </ul>
           )}
-        {removeDocument.isError && <div className="mt-3"><Alert title="Sənəd silinmədi">{removeDocument.error.message}</Alert></div>}
+        {removeDocument.isError && <div className="mt-3"><Alert title={t('dim.bank.deleteFailed')}>{removeDocument.error.message}</Alert></div>}
       </section>
 
       {/* Re-mounted when a subject is chosen for the document (upload or import), so "add to bank" starts with it. */}
@@ -141,25 +143,27 @@ export function DimBankAdmin() {
 }
 
 function DocumentCounts({ document: d }: { document: DimSourceDocument }) {
+  const { t } = useTranslation()
   const banked = d.bank.reduce((sum, b) => sum + b.count, 0)
   return (
     <span className="mt-1 block text-sm text-slate-600 tabular-nums">
-      <span className="text-emerald-700">{d.valid} düzgün</span>
-      {d.questionCount - d.valid > 0 && <> · <span className="text-amber-700">{d.questionCount - d.valid} səhv</span></>}
-      {' · '}{banked > 0 ? `${banked} bankda (${d.bank.map(b => `${trackLabel[b.track]} ${b.name}`).join(', ')})` : 'bankda yoxdur'}
+      <span className="text-emerald-700">{d.valid} {t('dashboard.correctWord')}</span>
+      {d.questionCount - d.valid > 0 && <> · <span className="text-amber-700">{d.questionCount - d.valid} {t('dashboard.wrongWord')}</span></>}
+      {' · '}{banked > 0 ? `${t('dim.admin.inBank', { n: banked })} (${d.bank.map(b => `${trackLabel[b.track]} ${b.name}`).join(', ')})` : t('dim.bank.notInBank')}
     </span>
   )
 }
 
 /** Only Buraxılış is offered for now; Blok is paused (the API still supports it). */
 function SubjectFields({ value, onChange }: { value: Classification; onChange: (next: Classification) => void }) {
+  const { t } = useTranslation()
   const catalog = useDimCatalog()
   const subjects = catalog.data?.buraxilis ?? []
   return (
     <div className="mt-3 grid gap-3 sm:max-w-sm">
-      <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Fənn
+      <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">{t('dim.report.subject')}
         <select className={inputClass} value={value.subject} onChange={e => onChange({ ...value, subject: e.target.value })}>
-          <option value="">Fənn seçin</option>
+          <option value="">{t('dim.form.pickSubject')}</option>
           {subjects.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
         </select>
       </label>
@@ -168,6 +172,7 @@ function SubjectFields({ value, onChange }: { value: Classification; onChange: (
 }
 
 function DocumentPanel({ document, initial }: { document: DimSourceDocument; initial?: Classification }) {
+  const { t } = useTranslation()
   const questions = useDimSourceQuestions(document.id)
   const audios = useDimAudios(document.id)
   const approve = useApproveValid()
@@ -175,8 +180,8 @@ function DocumentPanel({ document, initial }: { document: DimSourceDocument; ini
   const [topic, setTopic] = useState('')
   const [view, setView] = useState<'wrong' | 'all'>('wrong')
 
-  if (questions.isPending) return <div className="h-64 animate-pulse rounded-xl bg-slate-200/60" aria-label="Yüklənir" />
-  if (questions.isError) return <Alert title="Suallar yüklənmədi">{questions.error.message}</Alert>
+  if (questions.isPending) return <div className="h-64 animate-pulse rounded-xl bg-slate-200/60" aria-label={t('common.loading')} />
+  if (questions.isError) return <Alert title={t('documents.questionsFailed')}>{questions.error.message}</Alert>
 
   const all = questions.data
   const wrong = all.filter(q => problem(q) !== null)
@@ -193,32 +198,32 @@ function DocumentPanel({ document, initial }: { document: DimSourceDocument; ini
       <section className="rounded-xl border border-indigo-200 bg-white p-4 sm:p-5">
         <h2 className="font-semibold break-all">{document.originalFileName}</h2>
         <p className="mt-1 text-sm text-slate-600">
-          {all.length} sual tapıldı: <span className="font-medium text-emerald-700">{valid} düzgün formatda</span>
-          {wrong.length > 0 && <>, <span className="font-medium text-amber-700">{wrong.length} səhv</span> (aşağıda düzəldə bilərsiniz)</>}.
+          {t('dim.bank.found', { n: all.length })} <span className="font-medium text-emerald-700">{t('dim.bank.validFormat', { n: valid })}</span>
+          {wrong.length > 0 && <>, <span className="font-medium text-amber-700">{wrong.length} {t('dashboard.wrongWord')}</span> {t('dim.bank.fixBelow')}</>}.
         </p>
         {document.isManual && unbanked === 0 ? (
-          <p className="mt-2 text-sm text-slate-500">Əl ilə yaradılmış dəst: düzgün formatda olan suallar birbaşa banka düşür.</p>
+          <p className="mt-2 text-sm text-slate-500">{t('dim.bank.manualSet')}</p>
         ) : (
           <>
         <SubjectFields value={target} onChange={setTarget} />
         <details className="mt-3 text-sm">
-          <summary className="cursor-pointer font-medium text-slate-600">Mövzu əlavə et (istəyə bağlı)</summary>
-          <label className="mt-2 flex flex-col gap-1.5 text-slate-700">Mövzu — nəticədə zəif mövzuları göstərmək üçün
-            <input className={inputClass} value={topic} maxLength={200} onChange={e => setTopic(e.target.value)} placeholder="məs. Kvadrat tənliklər" />
+          <summary className="cursor-pointer font-medium text-slate-600">{t('dim.bank.addTopic')}</summary>
+          <label className="mt-2 flex flex-col gap-1.5 text-slate-700">{t('dim.bank.topicLabel')}
+            <input className={inputClass} value={topic} maxLength={200} onChange={e => setTopic(e.target.value)} placeholder={t('dim.form.topicPlaceholder')} />
           </label>
         </details>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <Button loading={approve.isPending} disabled={!target.subject || valid === 0}
             onClick={() => approve.mutate({ documentId: document.id, ...target, topic: topic.trim() || null })}>
-            <CheckCircle2 className="size-4" aria-hidden />Düzgün {valid} sualı banka əlavə et
+            <CheckCircle2 className="size-4" aria-hidden />{t('dim.bank.approve', { n: valid })}
           </Button>
           {approve.data && (
             <p className="text-sm text-slate-600" role="status">
-              {approve.data.approved} sual banka əlavə edildi.{approve.data.rejected.length > 0 && ` ${approve.data.rejected.length} səhv sual əlavə edilmədi.`}
+              {t('dim.bank.approved', { n: approve.data.approved })}{approve.data.rejected.length > 0 && ` ${t('dim.bank.rejected', { n: approve.data.rejected.length })}`}
             </p>
           )}
         </div>
-        {approve.isError && <div className="mt-2"><Alert title="Əlavə alınmadı">{approve.error.message}</Alert></div>}
+        {approve.isError && <div className="mt-2"><Alert title={t('dim.bank.approveFailed')}>{approve.error.message}</Alert></div>}
           </>
         )}
         {missingAnswers > 0 && <AnswerKey documentId={document.id} missing={missingAnswers} />}
@@ -227,9 +232,9 @@ function DocumentPanel({ document, initial }: { document: DimSourceDocument; ini
         <DimAudioPanel documentId={document.id} />
       </section>
 
-      <section aria-label="Sənədin sualları" className="flex flex-col gap-3">
-        <div role="tablist" aria-label="Suallar" className="inline-flex self-start rounded-lg border border-slate-200 bg-white p-1">
-          {([['wrong', `Səhv suallar (${wrong.length})`], ['all', `Bütün suallar (${all.length})`]] as const).map(([value, label]) => (
+      <section aria-label={t('dim.bank.questionsAria')} className="flex flex-col gap-3">
+        <div role="tablist" aria-label={t('exam.session.questions')} className="inline-flex self-start rounded-lg border border-slate-200 bg-white p-1">
+          {([['wrong', t('dim.bank.wrongTab', { n: wrong.length })], ['all', t('dim.bank.allTab', { n: all.length })]] as const).map(([value, label]) => (
             <button key={value} type="button" role="tab" aria-selected={view === value} onClick={() => setView(value)}
               className={cn('rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap', view === value ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100')}>
               {label}
@@ -237,7 +242,7 @@ function DocumentPanel({ document, initial }: { document: DimSourceDocument; ini
           ))}
         </div>
         {visible.length === 0 ? (
-          <EmptyState title={view === 'wrong' ? 'Səhv sual yoxdur' : 'Sual yoxdur'} description={view === 'wrong' ? 'Bütün suallar düzgün formatdadır.' : 'Bu sənəddə sual tapılmadı.'} />
+          <EmptyState title={view === 'wrong' ? t('dim.bank.noWrong') : t('dim.bank.noQuestions')} description={view === 'wrong' ? t('dim.bank.allValid') : t('dim.bank.noneInDoc')} />
         ) : (
           <ul className="flex flex-col gap-2">{visible.map(q => <li key={q.id}><QuestionItem question={q} manual={document.isManual} audio={audioFor(q.sourceNumber)} /></li>)}</ul>
         )}
@@ -247,39 +252,39 @@ function DocumentPanel({ document, initial }: { document: DimSourceDocument; ini
 }
 
 function AnswerKey({ documentId, missing }: { documentId: string; missing: number }) {
+  const { t } = useTranslation()
   const applyKey = useApplyAnswerKey()
   const [keyText, setKeyText] = useState('')
   return (
     <details className="mt-4 border-t border-slate-100 pt-3 text-sm">
       <summary className="flex cursor-pointer items-center gap-2 font-medium text-slate-700">
-        <KeyRound className="size-4 text-indigo-600" aria-hidden />Cavab açarını yapışdır
-        <span className="font-normal text-amber-700">— {missing} sualın cavabı tapılmadı</span>
+        <KeyRound className="size-4 text-indigo-600" aria-hidden />{t('dim.key.title')}
+        <span className="font-normal text-amber-700">— {t('dim.key.missing', { n: missing })}</span>
       </summary>
       <p className="mt-2 text-slate-600">
-        Format: <code>1-A 2-C 3-B</code> və ya hər sətirdə bir cüt. Açıq suallar üçün <code>14=2,5</code>, <code>21=(3; -4)</code>,
-        <code>22=80°</code>, <code>23=40 sm²</code>, <code>24=mübtəda</code>; bir neçə düzgün yazılış: <code>16=2,5|5/2</code>.
-        PDF-dəki cavab cədvəlini də yapışdıra bilərsiniz (hər sətirdə <code>21 (3; -4)</code>). Nömrələr sənəddəki nömrələrdir.
+        <Trans i18nKey="dim.key.hint" components={{ c: <code /> }} />
       </p>
-      <textarea value={keyText} onChange={e => setKeyText(e.target.value)} rows={3} aria-label="Cavab açarı"
+      <textarea value={keyText} onChange={e => setKeyText(e.target.value)} rows={3} aria-label={t('dim.key.aria')}
         className="mt-2 w-full rounded-lg border border-slate-300 bg-white p-3 font-mono text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none" />
       <div className="mt-2 flex flex-wrap items-center gap-3">
         <Button variant="secondary" loading={applyKey.isPending} disabled={keyText.trim().length < 2}
-          onClick={() => applyKey.mutate({ documentId, text: keyText })}>Açarı tətbiq et</Button>
+          onClick={() => applyKey.mutate({ documentId, text: keyText })}>{t('dim.key.apply')}</Button>
         {applyKey.data && (
           <p className="text-slate-600" role="status">
-            {applyKey.data.applied} suala tətbiq edildi.
-            {applyKey.data.notFound.length > 0 && ` Tapılmayan nömrələr: ${applyKey.data.notFound.join(', ')}.`}
-            {applyKey.data.invalid.length > 0 && ` Variant sayı uyğun deyil: ${applyKey.data.invalid.join(', ')}.`}
+            {t('dim.key.applied', { n: applyKey.data.applied })}
+            {applyKey.data.notFound.length > 0 && ` ${t('dim.key.notFound', { list: applyKey.data.notFound.join(', ') })}`}
+            {applyKey.data.invalid.length > 0 && ` ${t('dim.key.invalid', { list: applyKey.data.invalid.join(', ') })}`}
           </p>
         )}
       </div>
-      {applyKey.isError && <div className="mt-2"><Alert title="Açar tətbiq edilmədi">{applyKey.error.message}</Alert></div>}
+      {applyKey.isError && <div className="mt-2"><Alert title={t('dim.key.failed')}>{applyKey.error.message}</Alert></div>}
     </details>
   )
 }
 
 /** Reading passages / listening transcripts: shown in the exam above the questions of their number range. */
 function Passages({ documentId }: { documentId: string }) {
+  const { t } = useTranslation()
   const passages = useDimPassages(documentId)
   const remove = useDeleteDimPassage()
   const [editing, setEditing] = useState<DimPassage | 'new' | null>(null)
@@ -288,15 +293,14 @@ function Passages({ documentId }: { documentId: string }) {
   return (
     <details className="mt-4 border-t border-slate-100 pt-3 text-sm">
       <summary className="flex cursor-pointer items-center gap-2 font-medium text-slate-700">
-        <BookOpen className="size-4 text-indigo-600" aria-hidden />Mətnlər (oxu / dinləmə)
+        <BookOpen className="size-4 text-indigo-600" aria-hidden />{t('dim.passages.title')}
         <span className="font-normal text-slate-500">— {passages.isPending ? '…' : list.length}</span>
       </summary>
       <p className="mt-2 text-slate-600">
-        Mətn imtahanda göstərilən nömrəli sualların üstündə çıxır və bu suallar yan-yana düşür. PDF-dəki
-        «Read the passage and answer questions 18 – 21» kimi mətnlər avtomatik tapılır; dinləmə mətnini (transkripti) özünüz əlavə edə bilərsiniz.
+        {t('dim.passages.text')}
       </p>
-      {passages.isError && <div className="mt-2"><Alert title="Mətnlər yüklənmədi">{passages.error.message}</Alert></div>}
-      {remove.isError && <div className="mt-2"><Alert title="Silinmədi">{remove.error.message}</Alert></div>}
+      {passages.isError && <div className="mt-2"><Alert title={t('dim.passages.loadFailed')}>{passages.error.message}</Alert></div>}
+      {remove.isError && <div className="mt-2"><Alert title={t('dim.passages.deleteFailed')}>{remove.error.message}</Alert></div>}
       <ul className="mt-3 flex flex-col gap-2">
         {list.map(p => (
           <li key={p.id} className="rounded-lg border border-slate-200 p-3">
@@ -305,15 +309,15 @@ function Passages({ documentId }: { documentId: string }) {
             ) : (
               <>
                 <div className="flex flex-wrap items-center gap-2">
-                  <StatusBadge tone="info">{`Suallar ${p.fromNumber}–${p.toNumber}`}</StatusBadge>
+                  <StatusBadge tone="info">{t('history.questionsRange', { range: `${p.fromNumber}–${p.toNumber}` })}</StatusBadge>
                   {p.title && <span className="min-w-0 truncate text-slate-600">{p.title}</span>}
                   <span className="ml-auto flex gap-1">
                     <button type="button" onClick={() => setEditing(p)} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-50">
-                      <Pencil className="size-3.5" aria-hidden />Redaktə
+                      <Pencil className="size-3.5" aria-hidden />{t('questions.edit')}
                     </button>
                     <button type="button" onClick={() => remove.mutate(p.id)} disabled={remove.isPending}
                       className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50">
-                      <Trash2 className="size-3.5" aria-hidden />Sil
+                      <Trash2 className="size-3.5" aria-hidden />{t('common.delete')}
                     </button>
                   </span>
                 </div>
@@ -326,13 +330,14 @@ function Passages({ documentId }: { documentId: string }) {
       {editing === 'new' ? (
         <div className="mt-2 rounded-lg border border-indigo-200 p-3"><PassageEditor documentId={documentId} onDone={() => setEditing(null)} /></div>
       ) : (
-        <Button variant="secondary" className="mt-2" onClick={() => setEditing('new')}><Plus className="size-4" aria-hidden />Mətn əlavə et</Button>
+        <Button variant="secondary" className="mt-2" onClick={() => setEditing('new')}><Plus className="size-4" aria-hidden />{t('dim.passages.add')}</Button>
       )}
     </details>
   )
 }
 
 function PassageEditor({ documentId, passage, onDone }: { documentId: string; passage?: DimPassage; onDone: () => void }) {
+  const { t } = useTranslation()
   const save = useSaveDimPassage()
   const [from, setFrom] = useState(passage ? String(passage.fromNumber) : '')
   const [to, setTo] = useState(passage ? String(passage.toNumber) : '')
@@ -345,33 +350,34 @@ function PassageEditor({ documentId, passage, onDone }: { documentId: string; pa
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap gap-3">
-        <label className="flex w-28 flex-col gap-1.5 font-medium text-slate-700">İlk sual
+        <label className="flex w-28 flex-col gap-1.5 font-medium text-slate-700">{t('dim.passages.firstQuestion')}
           <input className={inputClass} type="number" min={1} inputMode="numeric" value={from} onChange={e => setFrom(e.target.value)} />
         </label>
-        <label className="flex w-28 flex-col gap-1.5 font-medium text-slate-700">Son sual
+        <label className="flex w-28 flex-col gap-1.5 font-medium text-slate-700">{t('exam.setup.toQuestion')}
           <input className={inputClass} type="number" min={1} inputMode="numeric" value={to} onChange={e => setTo(e.target.value)} />
         </label>
-        <label className="flex min-w-48 flex-1 flex-col gap-1.5 font-medium text-slate-700">Başlıq (istəyə bağlı)
-          <input className={inputClass} value={title} maxLength={300} onChange={e => setTitle(e.target.value)} placeholder="məs. Read the passage and answer questions 18 – 21." />
+        <label className="flex min-w-48 flex-1 flex-col gap-1.5 font-medium text-slate-700">{t('dim.passages.heading')}
+          <input className={inputClass} value={title} maxLength={300} onChange={e => setTitle(e.target.value)} placeholder={t('dim.passages.headingPlaceholder')} />
         </label>
       </div>
-      <label className="flex flex-col gap-1.5 font-medium text-slate-700">Mətn — paraqrafları boş sətirlə ayırın
+      <label className="flex flex-col gap-1.5 font-medium text-slate-700">{t('dim.passages.textLabel')}
         <textarea value={text} onChange={e => setText(e.target.value)} rows={8} maxLength={20000}
           className="w-full rounded-lg border border-slate-300 bg-white p-3 text-sm leading-6 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none" />
       </label>
-      {save.isError && <Alert title="Yadda saxlanmadı">{save.error.message}</Alert>}
+      {save.isError && <Alert title={t('questions.notSaved')}>{save.error.message}</Alert>}
       <div className="flex gap-2">
         <Button loading={save.isPending} disabled={!ready}
           onClick={() => save.mutate({ documentId, id: passage?.id, fromNumber, toNumber, title: title.trim() || null, text }, { onSuccess: onDone })}>
-          Yadda saxla
+          {t('questions.saveButton')}
         </Button>
-        <Button variant="ghost" onClick={onDone}>Ləğv et</Button>
+        <Button variant="ghost" onClick={onDone}>{t('common.cancel')}</Button>
       </div>
     </div>
   )
 }
 
 function QuestionItem({ question: q, manual, audio }: { question: DimSourceQuestion; manual: boolean; audio: string | null }) {
+  const { t } = useTranslation()
   const catalog = useDimCatalog()
   const remove = useRemoveFromBank()
   const deleteQuestion = useDeleteDimQuestion()
@@ -386,23 +392,23 @@ function QuestionItem({ question: q, manual, audio }: { question: DimSourceQuest
         {audio && <span className="inline-flex items-center gap-1 text-xs text-indigo-700"><Headphones className="size-3.5" aria-hidden />{audio}</span>}
         {issue ? <StatusBadge tone="warning">{issue}</StatusBadge>
           : q.bank ? <StatusBadge tone="success">{`${trackLabel[q.bank.track]} · ${subjectName(q.bank.subject)}${q.bank.topic ? ` · ${q.bank.topic}` : ''}`}</StatusBadge>
-          : <StatusBadge tone="info">Düzgün, bankda deyil</StatusBadge>}
+          : <StatusBadge tone="info">{t('dim.bank.validNotBanked')}</StatusBadge>}
         <span className="ml-auto flex gap-1">
           {!editing && fixable(q) && (
             <button type="button" onClick={() => setEditing(true)} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-50">
-              <Pencil className="size-3.5" aria-hidden />Düzəlt
+              <Pencil className="size-3.5" aria-hidden />{t('dim.audio.edit')}
             </button>
           )}
           {!manual && q.bank && (
             <button type="button" onClick={() => remove.mutate(q.id)} disabled={remove.isPending}
               className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100">
-              Bankdan çıxar
+              {t('dim.bank.removeFromBank')}
             </button>
           )}
           <button type="button" disabled={deleteQuestion.isPending}
-            onClick={() => { if (window.confirm(`#${q.sourceNumber} sual silinsin? Sual sınaqlara və banka bir daha düşməyəcək.`)) deleteQuestion.mutate(q.id) }}
+            onClick={() => { if (window.confirm(t('dim.bank.deleteQuestion', { n: q.sourceNumber }))) deleteQuestion.mutate(q.id) }}
             className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50">
-            <Trash2 className="size-3.5" aria-hidden />Sil
+            <Trash2 className="size-3.5" aria-hidden />{t('common.delete')}
           </button>
         </span>
       </div>
@@ -419,18 +425,19 @@ function QuestionItem({ question: q, manual, audio }: { question: DimSourceQuest
             </ul>
           )}
           {q.codedAnswer && (
-            <p className="mt-2 text-sm"><span className="rounded-md bg-emerald-50 px-2 py-1 font-medium text-emerald-800">Kodlaşdırılan cavab: {q.codedAnswer}</span></p>
+            <p className="mt-2 text-sm"><span className="rounded-md bg-emerald-50 px-2 py-1 font-medium text-emerald-800">{t('dim.bank.codedAnswer')}: {q.codedAnswer}</span></p>
           )}
-          {issue && !fixable(q) && <p className="mt-1 text-xs text-slate-500">Bu sual DİM formatına uyğun deyil və sınağa düşməyəcək.</p>}
+          {issue && !fixable(q) && <p className="mt-1 text-xs text-slate-500">{t('dim.bank.notDimFormat')}</p>}
           {q.parseWarning && <p className="mt-1 text-xs text-amber-700">{q.parseWarning}</p>}
         </>
       )}
-      {deleteQuestion.isError && <p className="mt-1 text-xs text-rose-700" role="alert">Sual silinmədi: {deleteQuestion.error.message}</p>}
+      {deleteQuestion.isError && <p className="mt-1 text-xs text-rose-700" role="alert">{t('dim.bank.questionDeleteFailed', { error: deleteQuestion.error.message })}</p>}
     </article>
   )
 }
 
 function QuestionEditor({ question, onDone }: { question: DimSourceQuestion; onDone: () => void }) {
+  const { t } = useTranslation()
   const edit = useEditDimQuestion()
   const [text, setText] = useState(question.text)
   const [codedAnswer, setCodedAnswer] = useState(question.codedAnswer ?? '')
@@ -442,41 +449,40 @@ function QuestionEditor({ question, onDone }: { question: DimSourceQuestion; onD
 
   return (
     <div className="mt-3 flex flex-col gap-3">
-      <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">Sual
+      <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">{t('dim.manual.question')}
         <textarea value={text} onChange={e => setText(e.target.value)} rows={3} maxLength={4000}
           className="w-full rounded-lg border border-slate-300 bg-white p-3 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none" />
       </label>
       {coded ? (
-        <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700 sm:max-w-sm">Kodlaşdırılan cavab
-          <input className={inputClass} value={codedAnswer} maxLength={100} placeholder="məs. 2,5 · (3; -4) · 80° · mübtəda"
+        <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700 sm:max-w-sm">{t('dim.bank.codedAnswer')}
+          <input className={inputClass} value={codedAnswer} maxLength={100} placeholder={t('dim.bank.codedPlaceholder')}
             onChange={e => setCodedAnswer(e.target.value)} />
           <span className="text-xs font-normal text-slate-500">
-            Ədəd (2,5; 5/2), vahidli ədəd (80°, 40 sm² — vahid yoxlanmır), koordinat <code>(3; -4)</code> və ya söz (böyük/kiçik hərf fərqlənmir).
-            Bir neçə düzgün cavabı <code>;</code> ilə ayırın. Variantı olmayan sual cavabı yazıldıqdan sonra açıq sual kimi banka düşə bilər.
+            <Trans i18nKey="dim.bank.codedHint" components={{ c: <code /> }} />
           </span>
         </label>
       ) : (
       <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1 text-sm font-medium text-slate-700">Variantlar — düzgün cavabı işarələyin</legend>
+        <legend className="mb-1 text-sm font-medium text-slate-700">{t('dim.bank.optionsLegend')}</legend>
         {options.map((o, i) => (
           <div key={o.id} className="flex items-center gap-2">
-            <input type="radio" name={name} className="size-4 shrink-0 accent-emerald-600" checked={correct === o.id} onChange={() => setCorrect(o.id)} aria-label={`${o.label} düzgün cavabdır`} />
+            <input type="radio" name={name} className="size-4 shrink-0 accent-emerald-600" checked={correct === o.id} onChange={() => setCorrect(o.id)} aria-label={t('questions.isCorrect', { label: o.label })} />
             <span className="w-5 text-sm font-semibold text-slate-500">{o.label})</span>
-            <input className={inputClass} value={o.text} maxLength={1000} aria-label={`Variant ${o.label}`}
+            <input className={inputClass} value={o.text} maxLength={1000} aria-label={t('dim.manual.option', { label: o.label })}
               onChange={e => setOptions(list => list.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))} />
           </div>
         ))}
       </fieldset>
       )}
-      {edit.isError && <Alert title="Yadda saxlanmadı">{edit.error.message}</Alert>}
+      {edit.isError && <Alert title={t('questions.notSaved')}>{edit.error.message}</Alert>}
       <div className="flex gap-2">
         <Button loading={edit.isPending} disabled={!ready}
           onClick={() => edit.mutate(coded
             ? { id: question.id, text, options: [], codedAnswer }
             : { id: question.id, text, options: options.map(o => ({ id: o.id, text: o.text })), correctOptionId: correct }, { onSuccess: onDone })}>
-          Yadda saxla
+          {t('questions.saveButton')}
         </Button>
-        <Button variant="ghost" onClick={onDone}>Ləğv et</Button>
+        <Button variant="ghost" onClick={onDone}>{t('common.cancel')}</Button>
       </div>
     </div>
   )
@@ -484,6 +490,7 @@ function QuestionEditor({ question, onDone }: { question: DimSourceQuestion; onD
 
 /** Uploads a PDF/DOCX and waits until the parser has finished, then hands the document id back. */
 function DimUpload({ disabled, onReady }: { disabled: boolean; onReady: (documentId: string) => void }) {
+  const { t } = useTranslation()
   const [progress, setProgress] = useState(0)
   const [clientError, setClientError] = useState<string | null>(null)
   const [processing, setProcessing] = useState(false)
@@ -500,9 +507,9 @@ function DimUpload({ disabled, onReady }: { disabled: boolean; onReady: (documen
         current = await api.get<DocumentDto>(`/documents/${current.id}`)
       }
       if (current.status === 'Completed') onReady(current.id)
-      else setFailure(current.errorMessage ?? 'Faylı yoxlayıb yenidən yükləyin.')
+      else setFailure(current.errorMessage ?? t('dim.bank.checkFile'))
     } catch (error) {
-      setFailure(error instanceof Error ? error.message : 'Faylı yoxlayıb yenidən yükləyin.')
+      setFailure(error instanceof Error ? error.message : t('dim.bank.checkFile'))
     } finally {
       setProcessing(false)
     }
@@ -512,8 +519,8 @@ function DimUpload({ disabled, onReady }: { disabled: boolean; onReady: (documen
     setClientError(null)
     setFailure(null)
     upload.reset()
-    if (!/\.(pdf|docx)$/i.test(file.name)) return setClientError('Yalnız PDF və DOCX faylları qəbul edilir.')
-    if (file.size > MAX_FILE_SIZE_BYTES) return setClientError('Fayl 20 MB-dan böyük ola bilməz.')
+    if (!/\.(pdf|docx)$/i.test(file.name)) return setClientError(t('documents.onlyPdfDocx'))
+    if (file.size > MAX_FILE_SIZE_BYTES) return setClientError(t('documents.tooLarge'))
     setProgress(0)
     upload.mutate(file, {
       onSuccess: d => void waitForParsing(d),
@@ -531,11 +538,11 @@ function DimUpload({ disabled, onReady }: { disabled: boolean; onReady: (documen
     <div className="mt-4 flex flex-col gap-3">
       <FileDropzone accept="application/pdf,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx"
         disabled={disabled || upload.isPending || processing}
-        hint={disabled ? 'Əvvəlcə fənni seçin' : 'Maksimum 20 MB · mətn əsaslı PDF və DOCX'} onFile={handleFile} />
+        hint={disabled ? t('dim.bank.pickSubjectFirst') : t('documents.dropHint')} onFile={handleFile} />
       {(upload.isPending || processing) && (
         <div role="status" className="rounded-lg border border-slate-200 p-3 text-sm">
           <div className="mb-2 flex justify-between font-medium">
-            <span>{upload.isPending ? 'Yüklənir…' : 'Suallar çıxarılır…'}</span>
+            <span>{upload.isPending ? t('common.loadingDots') : t('documents.extracting')}</span>
             {upload.isPending && <span className="tabular-nums">{progress}%</span>}
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-slate-100">
@@ -543,9 +550,9 @@ function DimUpload({ disabled, onReady }: { disabled: boolean; onReady: (documen
           </div>
         </div>
       )}
-      {failure && <Alert title="Sənəd emal olunmadı">{failure}</Alert>}
-      {(clientError || (upload.isError && !duplicate)) && <Alert title="Yükləmə alınmadı">{clientError ?? upload.error?.message}</Alert>}
-      {duplicate && <p role="status" className="text-sm text-slate-600">Bu fayl artıq yüklənib — mövcud sənəd açıldı.</p>}
+      {failure && <Alert title={t('dim.bank.processFailed')}>{failure}</Alert>}
+      {(clientError || (upload.isError && !duplicate)) && <Alert title={t('dim.bank.uploadFailed')}>{clientError ?? upload.error?.message}</Alert>}
+      {duplicate && <p role="status" className="text-sm text-slate-600">{t('dim.bank.duplicate')}</p>}
     </div>
   )
 }

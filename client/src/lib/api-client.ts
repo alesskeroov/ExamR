@@ -1,3 +1,4 @@
+import i18n from './i18n'
 
 // Thin fetch wrapper. All requests are same-origin (/api via Vite proxy in dev, served by the API in prod).
 
@@ -17,7 +18,7 @@ export class ApiError extends Error {
   constructor(status: number, problem?: ProblemDetails) {
     super(
       problem?.detail ??
-        (status === 429 ? 'Çox sayda cəhd. Bir az sonra yenidən yoxlayın.' : (problem?.title ?? `Sorğu uğursuz oldu (${status})`)),
+        (status === 429 ? i18n.t('api.tooMany') : (problem?.title ?? i18n.t('api.failed', { status }))),
     )
     this.name = 'ApiError'
     this.status = status
@@ -113,7 +114,7 @@ export async function apiRequest<T>(path: string, { body, headers, ...init }: Re
     await wakeServer()
     response = await send()
     if (wakeUrlOf(response)) {
-      throw new ApiError(503, { detail: 'Server hələ işə düşür. Bir az sonra yenidən cəhd edin.' })
+      throw new ApiError(503, { detail: i18n.t('api.starting') })
     }
   }
 
@@ -142,7 +143,7 @@ export function uploadFile<T>(path: string, file: File, onProgress?: (percent: n
       if (xhr.status >= 200 && xhr.status < 300) resolve(data as T)
       else reject(new ApiError(xhr.status, data as ProblemDetails | undefined))
     }
-    xhr.onerror = () => reject(new Error('Şəbəkə xətası: serverə qoşulmaq mümkün olmadı.'))
+    xhr.onerror = () => reject(new Error(i18n.t('api.network')))
 
     const form = new FormData()
     form.append('file', file)

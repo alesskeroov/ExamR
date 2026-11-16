@@ -1,11 +1,13 @@
 import { Info, TrendingDown } from 'lucide-react'
 import { formatNumber } from '../../lib/format'
 import { useDimReport } from './api'
+import { useTranslation } from 'react-i18next'
 
 /** DİM breakdown under an exam result; renders nothing for ordinary exams. */
 export function DimReportCard({ examId }: { examId: string }) {
+  const { t } = useTranslation()
   const report = useDimReport(examId)
-  if (report.isPending) return <div className="mb-5 h-40 animate-pulse rounded-xl bg-slate-200/60" aria-label="DİM nəticəsi yüklənir" />
+  if (report.isPending) return <div className="mb-5 h-40 animate-pulse rounded-xl bg-slate-200/60" aria-label={t('dim.report.loading')} />
   if (!report.data) return null
 
   const { score, notice } = report.data
@@ -14,19 +16,19 @@ export function DimReportCard({ examId }: { examId: string }) {
   const hasClosed = score.closedMaxPoints > 0
 
   return (
-    <section aria-label="DİM nəticəsi" className="mb-5 rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
+    <section aria-label={t('dim.report.title')} className="mb-5 rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-lg font-semibold">DİM nəticəsi</h2>
+        <h2 className="text-lg font-semibold">{t('dim.report.title')}</h2>
         <p className="text-sm text-slate-500">
-          {report.data.track === 'Buraxilis' ? 'Buraxılış' : 'Blok'}{report.data.groupName && ` · ${report.data.groupName}`} · {report.data.title}
+          {t(`dim.track.${report.data.track}`)}{report.data.groupName && ` · ${report.data.groupName}`} · {report.data.title}
         </p>
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <Metric label="Ölçülən bal" value={score.measuredPoints} max={score.measuredMaxPoints}
-          hint={score.openMaxPoints > 0 ? 'Qapalı və açıq (kodlaşdırılan) tapşırıqların rəsmi düsturla gətirdiyi bal' : 'Qapalı tapşırıqların rəsmi düsturla gətirdiyi bal'} />
-        <Metric label="Təxmini bal" value={score.estimatedPoints} max={score.fullMaxPoints}
-          hint={score.fullMaxPoints === max ? `${max} ballıq şkala üzrə təxmin` : 'Seçilmiş fənlər üzrə təxmin'} />
+        <Metric label={t('dim.report.measured')} value={score.measuredPoints} max={score.measuredMaxPoints}
+          hint={score.openMaxPoints > 0 ? t('dim.report.measuredHintOpen') : t('dim.report.measuredHint')} />
+        <Metric label={t('dim.report.estimated')} value={score.estimatedPoints} max={score.fullMaxPoints}
+          hint={score.fullMaxPoints === max ? t('dim.report.scaleHint', { max }) : t('dim.report.subjectsHint')} />
       </div>
 
       <p className="mt-3 flex gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
@@ -36,16 +38,16 @@ export function DimReportCard({ examId }: { examId: string }) {
 
       <div className="mt-5 overflow-x-auto">
         <table className="w-full min-w-[520px] text-left text-sm">
-          <caption className="sr-only">Fənlər üzrə nəticə</caption>
+          <caption className="sr-only">{t('dim.report.bySubject')}</caption>
           <thead className="text-xs tracking-wide text-slate-500 uppercase">
             <tr className="border-b border-slate-200">
-              <th scope="col" className="py-2 pr-3 font-medium">Fənn</th>
-              <th scope="col" className="px-2 py-2 text-right font-medium">Düzgün</th>
-              <th scope="col" className="px-2 py-2 text-right font-medium">Səhv</th>
-              <th scope="col" className="px-2 py-2 text-right font-medium">Boş</th>
-              {hasClosed && <th scope="col" className="px-2 py-2 text-right font-medium">Qapalı bal</th>}
-              {hasOpen && <th scope="col" className="px-2 py-2 text-right font-medium">Açıq bal</th>}
-              <th scope="col" className="py-2 pl-2 text-right font-medium">Təxmini</th>
+              <th scope="col" className="py-2 pr-3 font-medium">{t('dim.report.subject')}</th>
+              <th scope="col" className="px-2 py-2 text-right font-medium">{t('exam.session.legendCorrect')}</th>
+              <th scope="col" className="px-2 py-2 text-right font-medium">{t('exam.result.wrongShort')}</th>
+              <th scope="col" className="px-2 py-2 text-right font-medium">{t('exam.session.legendBlank')}</th>
+              {hasClosed && <th scope="col" className="px-2 py-2 text-right font-medium">{t('dim.report.closedPoints')}</th>}
+              {hasOpen && <th scope="col" className="px-2 py-2 text-right font-medium">{t('dim.report.openPoints')}</th>}
+              <th scope="col" className="py-2 pl-2 text-right font-medium">{t('dim.report.estimatedShort')}</th>
             </tr>
           </thead>
           <tbody className="tabular-nums">
@@ -61,7 +63,7 @@ export function DimReportCard({ examId }: { examId: string }) {
                 {hasOpen && (
                   <td className="px-2 py-2.5 text-right">
                     {s.openMaxPoints > 0 ? <>{formatNumber(s.openPoints)} <span className="text-slate-400">/ {formatNumber(s.openMaxPoints)}</span>
-                      <span className="block text-xs text-slate-500">{s.openCorrect}/{s.openTotal} düzgün</span></> : '—'}
+                      <span className="block text-xs text-slate-500">{s.openCorrect}/{s.openTotal} {t('dashboard.correctWord')}</span></> : '—'}
                   </td>
                 )}
                 <td className="py-2.5 pl-2 text-right font-medium">{formatNumber(s.estimatedPoints)} <span className="font-normal text-slate-400">/ {formatNumber(s.fullMaxPoints)}</span></td>
@@ -73,10 +75,10 @@ export function DimReportCard({ examId }: { examId: string }) {
 
       <div className="mt-5">
         <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-          <TrendingDown className="size-4 text-rose-600" aria-hidden />Zəif mövzular
+          <TrendingDown className="size-4 text-rose-600" aria-hidden />{t('dim.report.weak')}
         </h3>
         {score.weakTopics.length === 0 ? (
-          <p className="mt-2 text-sm text-slate-500">Zəif mövzu aşkar edilmədi (və ya suallara mövzu təyin olunmayıb).</p>
+          <p className="mt-2 text-sm text-slate-500">{t('dim.report.noWeak')}</p>
         ) : (
           <ul className="mt-2 grid gap-2 sm:grid-cols-2">
             {score.weakTopics.map(t => (

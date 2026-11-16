@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, uploadFile } from '../../lib/api-client'
 import { queryKeys } from '../../lib/query-keys'
 import type { PagedResult } from '../documents/api'
+import i18n from '../../lib/i18n'
 
 export function useSendFeedback() {
   return useMutation({
@@ -359,7 +360,7 @@ export interface CardInput { front: string; back: string; topicKey?: string | nu
 function patchCard(card: StudyCard) {
   return (deck: CardDeck | undefined) => deck && {
     ...deck,
-    topics: deck.topics.some(t => t.key === card.topicKey) ? deck.topics : [...deck.topics, { key: card.topicKey, title: 'Mənim kartlarım', notes: null }],
+    topics: deck.topics.some(t => t.key === card.topicKey) ? deck.topics : [...deck.topics, { key: card.topicKey, title: i18n.t('tutor.myCards'), notes: null }],
     cards: deck.cards.some(c => c.id === card.id) ? deck.cards.map(c => c.id === card.id ? card : c) : [...deck.cards, card],
   }
 }

@@ -10,6 +10,7 @@ import { useAllExams } from '../dashboard/api'
 import { BattleInviteModal } from '../friends/BattleInviteModal'
 import { useFriends, type Friend } from '../friends/api'
 import { useProfileBattles } from './profile-api'
+import { useTranslation } from 'react-i18next'
 
 const card = 'rounded-xl border border-slate-200 bg-white p-5'
 
@@ -27,33 +28,34 @@ function ProfileResults({ tab }: { tab: number }) {
   const graded = completed.filter(exam => exam.scorePercent !== null)
   const average = graded.length ? `${(graded.reduce((sum, exam) => sum + exam.scorePercent!, 0) / graded.length).toFixed(1)}%` : '—'
   const wins = battles.data?.filter(battle => battle.rank === 1).length
+  const { t } = useTranslation()
   const activities = [
-    ...(exams.data ?? []).map(exam => ({ id: exam.id, date: exam.completedAt ?? exam.startedAt, label: exam.status === 'Completed' ? 'İmtahan tamamlandı' : 'İmtahan başladı', detail: exam.source.documentName ?? 'İmtahan', to: exam.status === 'Completed' ? `/exams/${exam.id}/result` : `/exams/${exam.id}` })),
-    ...(battles.data ?? []).map(battle => ({ id: battle.battleId, date: battle.playedAt, label: 'Battle tamamlandı', detail: `${battle.rank}-ci yer · ${battle.score} xal`, to: '/exams' })),
+    ...(exams.data ?? []).map(exam => ({ id: exam.id, date: exam.completedAt ?? exam.startedAt, label: exam.status === 'Completed' ? t('profile.activity.examCompleted') : t('profile.activity.examStarted'), detail: exam.source.documentName ?? t('profile.activity.exam'), to: exam.status === 'Completed' ? `/exams/${exam.id}/result` : `/exams/${exam.id}` })),
+    ...(battles.data ?? []).map(battle => ({ id: battle.battleId, date: battle.playedAt, label: t('profile.activity.battleCompleted'), detail: `${t('profile.place', { rank: battle.rank })} · ${t('profile.points', { count: battle.score })}`, to: '/exams' })),
   ].sort((a, b) => Date.parse(b.date) - Date.parse(a.date)).slice(0, 5)
   return <div className="space-y-4">
-    {(tab === 0 || tab === 1) && exams.isError && <Alert title="İmtahanlar yüklənmədi">{exams.error.message}</Alert>}
-    {(tab === 0 || tab === 2) && battles.isError && <Alert title="Battle nəticələri yüklənmədi">{battles.error.message}</Alert>}
-    {((tab !== 2 && exams.isPending) || (tab !== 1 && battles.isPending)) && <p role="status" className="animate-pulse text-sm text-slate-500">Nəticələr yüklənir…</p>}
+    {(tab === 0 || tab === 1) && exams.isError && <Alert title={t('profile.activity.examsFailed')}>{exams.error.message}</Alert>}
+    {(tab === 0 || tab === 2) && battles.isError && <Alert title={t('profile.activity.battlesFailed')}>{battles.error.message}</Alert>}
+    {((tab !== 2 && exams.isPending) || (tab !== 1 && battles.isPending)) && <p role="status" className="animate-pulse text-sm text-slate-500">{t('profile.activity.loading')}</p>}
     {(tab === 0 || tab === 2) && <RankSummary />}
     {tab === 0 && <>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {[['Tamamlanan imtahan', exams.data ? completed.length : '—'], ['Orta nəticə', average], ['Battle qələbəsi', wins ?? '—'], ['Battle reytinqi', rank.data?.rating ?? '—']].map(([label, value]) => <div key={label} className={card}><p className="text-xs text-slate-500">{label}</p><p className="mt-2 text-xl font-semibold tabular-nums">{value}</p></div>)}
+        {[[t('profile.activity.completedExams'), exams.data ? completed.length : '—'], [t('profile.activity.average'), average], [t('profile.activity.battleWins'), wins ?? '—'], [t('profile.activity.battleRating'), rank.data?.rating ?? '—']].map(([label, value]) => <div key={label} className={card}><p className="text-xs text-slate-500">{label}</p><p className="mt-2 text-xl font-semibold tabular-nums">{value}</p></div>)}
       </div>
-      <section className={card}><h2 className="font-semibold">Son aktivlik</h2>
+      <section className={card}><h2 className="font-semibold">{t('profile.activity.recent')}</h2>
         {activities.length ? <ul className="mt-3 divide-y divide-slate-200">{activities.map(activity => <li key={activity.id} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm"><div className="min-w-0"><Link className="font-medium hover:text-indigo-600" to={activity.to}>{activity.label}</Link><p className="mt-1 text-slate-500">{activity.detail}</p></div><time className="text-xs text-slate-500" dateTime={activity.date}>{formatDate(activity.date)}</time></li>)}</ul>
-          : !exams.isPending && !battles.isPending && !exams.isError && !battles.isError && <p className="mt-3 text-sm text-slate-500">Hələ aktivlik yoxdur. İlk imtahanınızı və ya Battle oyununu başladın.</p>}
+          : !exams.isPending && !battles.isPending && !exams.isError && !battles.isError && <p className="mt-3 text-sm text-slate-500">{t('profile.activity.none')}</p>}
       </section>
     </>}
     {tab === 1 && exams.data && <>
-      {!exams.data.length ? <EmptyState title="Hələ imtahanınız yoxdur" description="İlk imtahanınızdan sonra nəticələr burada görünəcək." action={<Link to="/exams/new" className="text-indigo-600">İmtahan yarat</Link>} />
-        : <section className={card}><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">Son imtahanlar</h2><Link to="/exams" className="text-sm text-indigo-600">Bütün tarixçə</Link></div><ul className="mt-3 divide-y divide-slate-200">{exams.data.slice(0, 10).map(exam => <li key={exam.id} className="py-4"><Link className="text-sm font-medium hover:text-indigo-600" to={exam.status === 'Completed' ? `/exams/${exam.id}/result` : `/exams/${exam.id}`}>{exam.source.documentName ?? 'Sənəd silinib'}</Link><div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500"><time dateTime={exam.startedAt}>{formatDate(exam.startedAt)}</time><span>{exam.questionCount} sual</span><span>{exam.status === 'Completed' ? 'Tamamlanıb' : 'Davam edir'}</span><span>{exam.scorePercent === null ? 'Nəticə yoxdur' : `${exam.scorePercent.toFixed(1)}%`}</span></div></li>)}</ul></section>}
+      {!exams.data.length ? <EmptyState title={t('profile.activity.noExams')} description={t('profile.activity.noExamsText')} action={<Link to="/exams/new" className="text-indigo-600">{t('profile.activity.createExam')}</Link>} />
+        : <section className={card}><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">{t('profile.activity.recentExams')}</h2><Link to="/exams" className="text-sm text-indigo-600">{t('profile.activity.allHistory')}</Link></div><ul className="mt-3 divide-y divide-slate-200">{exams.data.slice(0, 10).map(exam => <li key={exam.id} className="py-4"><Link className="text-sm font-medium hover:text-indigo-600" to={exam.status === 'Completed' ? `/exams/${exam.id}/result` : `/exams/${exam.id}`}>{exam.source.documentName ?? t('profile.activity.docDeleted')}</Link><div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500"><time dateTime={exam.startedAt}>{formatDate(exam.startedAt)}</time><span>{t('common.questions', { count: exam.questionCount })}</span><span>{exam.status === 'Completed' ? t('profile.activity.completed') : t('profile.activity.inProgress')}</span><span>{exam.scorePercent === null ? t('profile.activity.noResult') : `${exam.scorePercent.toFixed(1)}%`}</span></div></li>)}</ul></section>}
     </>}
     {tab === 2 && battles.data && <>
-      <div className="grid grid-cols-3 gap-2">{[['Oynanılan Battle', battles.data.length], ['Qələbə', wins ?? 0], ['Digər nəticələr', battles.data.filter(battle => battle.rank !== 1).length]].map(([label, value]) => <div key={label} className={card}><p className="text-xs text-slate-500">{label}</p><p className="mt-2 text-xl font-semibold">{value}</p></div>)}</div>
-      {!battles.data.length ? <EmptyState title="Hələ Battle nəticəniz yoxdur" description="İlk yarışınızdan sonra nəticələr burada görünəcək." action={<Link to="/battle" className="text-indigo-600">Battle-a keç</Link>} />
-        : <section className={card}><h2 className="font-semibold">Son Battle nəticələri</h2><ul className="mt-3 divide-y divide-slate-200">{battles.data.slice(0, 10).map(battle => <li key={battle.battleId} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"><div><p className="font-medium">{battle.source.documentName ?? 'Battle'} · {battle.rank}-ci yer</p><p className="mt-1 text-xs text-slate-500">{formatDate(battle.playedAt)} · {battle.questionCount} sual · {battle.participantCount} iştirakçı</p></div><span className="font-semibold tabular-nums text-indigo-600">{battle.score} xal{battle.ratingAfter != null && battle.ratingBefore != null && <span className="ml-2 text-xs">({battle.ratingAfter - battle.ratingBefore >= 0 ? "+" : ""}{battle.ratingAfter - battle.ratingBefore} reytinq)</span>}</span></li>)}</ul><Link to="/exams" className="mt-3 inline-block text-sm text-indigo-600">Bütün nəticələr</Link></section>}
-      <p className="text-xs text-slate-500">Battle xalı yarışa aiddir; reytinq isə normallaşdırılmış uzunmüddətli göstəricidir.</p>
+      <div className="grid grid-cols-3 gap-2">{[[t('profile.activity.played'), battles.data.length], [t('profile.activity.wins'), wins ?? 0], [t('profile.activity.otherResults'), battles.data.filter(battle => battle.rank !== 1).length]].map(([label, value]) => <div key={label} className={card}><p className="text-xs text-slate-500">{label}</p><p className="mt-2 text-xl font-semibold">{value}</p></div>)}</div>
+      {!battles.data.length ? <EmptyState title={t('profile.activity.noBattles')} description={t('profile.activity.noBattlesText')} action={<Link to="/battle" className="text-indigo-600">{t('profile.activity.goBattle')}</Link>} />
+        : <section className={card}><h2 className="font-semibold">{t('profile.activity.recentBattles')}</h2><ul className="mt-3 divide-y divide-slate-200">{battles.data.slice(0, 10).map(battle => <li key={battle.battleId} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm"><div><p className="font-medium">{battle.source.documentName ?? 'Battle'} · {t('profile.place', { rank: battle.rank })}</p><p className="mt-1 text-xs text-slate-500">{formatDate(battle.playedAt)} · {t('common.questions', { count: battle.questionCount })} · {t('profile.participants', { count: battle.participantCount })}</p></div><span className="font-semibold tabular-nums text-indigo-600">{t('profile.points', { count: battle.score })}{battle.ratingAfter != null && battle.ratingBefore != null && <span className="ml-2 text-xs">({battle.ratingAfter - battle.ratingBefore >= 0 ? "+" : ""}{battle.ratingAfter - battle.ratingBefore} {t('profile.ratingWord')})</span>}</span></li>)}</ul><Link to="/exams" className="mt-3 inline-block text-sm text-indigo-600">{t('profile.activity.allResults')}</Link></section>}
+      <p className="text-xs text-slate-500">{t('profile.activity.ratingNote')}</p>
       <RankLeaderboard />
     </>}
   </div>
@@ -63,13 +65,14 @@ function ProfileSocial() {
   const friends = useFriends()
   const [inviting, setInviting] = useState<Friend | null>(null)
   const [sent, setSent] = useState(false)
+  const { t } = useTranslation()
   return <div className="space-y-4">
-    {sent && <div role="status"><Alert tone="info" title="Battle dəvəti göndərildi." /></div>}
-    {friends.isPending && <p role="status" className="animate-pulse text-sm text-slate-500">Dostlar yüklənir…</p>}
-    {friends.isError && <Alert title="Dostlar yüklənmədi">{friends.error.message}</Alert>}
-    {friends.data && (!friends.data.friends.length ? <EmptyState title="Dost siyahınız boşdur" description="Dostlar əlavə edin və birlikdə Battle oynayın." action={<Link to="/friends" className="text-indigo-600">Dostları tap</Link>} />
-      : <section className={card}><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">Dostlar · {friends.data.friends.length}</h2><Link to="/friends" className="text-sm text-indigo-600">Dostları idarə et</Link></div><ul className="mt-3 divide-y divide-slate-200">{friends.data.friends.map(friend => <li key={friend.id} className="flex flex-wrap items-center gap-3 py-3">
-        <FriendAvatar friend={friend} /><div className="min-w-0 flex-1"><p className="break-words text-sm font-medium">{friend.displayName}</p><p className="mt-1 text-xs text-slate-500">{friend.isOnline ? 'Onlayn' : 'Oflayn'}</p></div><Button variant="secondary" className="text-xs" onClick={() => { setSent(false); setInviting(friend) }}>Battle-a dəvət et</Button>
+    {sent && <div role="status"><Alert tone="info" title={t('profile.social.inviteSent')} /></div>}
+    {friends.isPending && <p role="status" className="animate-pulse text-sm text-slate-500">{t('profile.social.loading')}</p>}
+    {friends.isError && <Alert title={t('profile.social.failed')}>{friends.error.message}</Alert>}
+    {friends.data && (!friends.data.friends.length ? <EmptyState title={t('profile.social.empty')} description={t('profile.social.emptyText')} action={<Link to="/friends" className="text-indigo-600">{t('profile.social.find')}</Link>} />
+      : <section className={card}><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">{t('profile.social.title', { n: friends.data.friends.length })}</h2><Link to="/friends" className="text-sm text-indigo-600">{t('profile.social.manage')}</Link></div><ul className="mt-3 divide-y divide-slate-200">{friends.data.friends.map(friend => <li key={friend.id} className="flex flex-wrap items-center gap-3 py-3">
+        <FriendAvatar friend={friend} /><div className="min-w-0 flex-1"><p className="break-words text-sm font-medium">{friend.displayName}</p><p className="mt-1 text-xs text-slate-500">{friend.isOnline ? t('common.online') : t('common.offline')}</p></div><Button variant="secondary" className="text-xs" onClick={() => { setSent(false); setInviting(friend) }}>{t('profile.social.invite')}</Button>
       </li>)}</ul></section>)}
     {inviting && <BattleInviteModal friend={inviting} onClose={() => setInviting(null)} onSent={() => { setInviting(null); setSent(true) }} />}
   </div>

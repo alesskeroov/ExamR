@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, apiRequest, ApiError } from '../../lib/api-client'
 import { queryKeys } from '../../lib/query-keys'
 import { useCurrentUser } from '../auth/api'
+import i18n from '../../lib/i18n'
 
 export interface StudyGroup { id: string; name: string; description: string; createdAt: string; memberCount: number }
 export interface GroupMember { id: string; nickname: string; avatarUrl: string | null }
@@ -12,7 +13,7 @@ async function groupList(admin: boolean) {
   try { return await api.get<StudyGroup[]>(admin ? '/admin/groups' : '/groups') }
   catch (error) {
     if (error instanceof ApiError && error.status === 404 && !error.problem?.detail)
-      throw new Error('İşləyən API qrup modulunu tanımır. Yeni backend və qrup migration-u tətbiq edilməlidir.')
+      throw new Error(i18n.t('groups.apiOutdated'))
     throw error
   }
 }

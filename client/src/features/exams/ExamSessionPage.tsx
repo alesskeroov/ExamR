@@ -29,15 +29,17 @@ import { sourceName } from './examSource'
 import { isAnswered, isCodedAnswer } from './coded'
 import { LimitedListeningPlayer, ListeningPlayer } from './ListeningPlayer'
 import { useSwipeNavigation } from './useSwipeNavigation'
+import { useTranslation } from 'react-i18next'
 
 export function ExamSessionPage() {
+  const { t } = useTranslation()
   const { id = '' } = useParams()
   const session = useExamSession(id)
 
   if (session.isPending) {
     return (
       <div className="flex min-h-dvh items-center justify-center text-slate-500">
-        <Loader2 className="size-6 animate-spin" aria-label="Yüklənir" />
+        <Loader2 className="size-6 animate-spin" aria-label={t('common.loading')} />
       </div>
     )
   }
@@ -45,12 +47,12 @@ export function ExamSessionPage() {
   if (session.isError) {
     return (
       <div className="mx-auto max-w-lg px-4 py-16">
-        <Alert title="İmtahan açılmadı">
+        <Alert title={t('exam.session.openFailed')}>
           {session.error.message}{' '}
           <Link to="/exams" className="font-semibold underline">
-            Tarixçəyə qayıt
+            {t('exam.session.backToHistory')}
           </Link>
-          <SupportContact className="mt-2" topic="İmtahan açılmadı" reference={id} />
+          <SupportContact className="mt-2" topic={t('exam.session.openFailed')} reference={id} />
         </Alert>
       </div>
     )
@@ -64,6 +66,7 @@ export function ExamSessionPage() {
 }
 
 function ExamRunner({ session }: { session: ExamSession }) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const examTheme = useExamTheme()
@@ -214,14 +217,14 @@ function ExamRunner({ session }: { session: ExamSession }) {
     <div data-exam-theme={examTheme.theme} className="exam-flow exam-session min-h-dvh bg-slate-50">
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="exam-shell exam-header-bar mx-auto flex min-h-14 items-center gap-2 px-3 py-2 sm:min-h-16 sm:gap-3 sm:px-4 min-[900px]:px-6">
-          <Link to="/" className="hidden items-center gap-2 font-semibold sm:flex" aria-label="ExamR ana səhifə">
+          <Link to="/" className="hidden items-center gap-2 font-semibold sm:flex" aria-label={t('common.homeAria')}>
             <img src="/favicon.svg" alt="" className="size-7" />
           </Link>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-xs leading-5 text-slate-500" title={title ?? undefined}>{title ?? 'İmtahan'}</p>
+            <p className="truncate text-xs leading-5 text-slate-500" title={title ?? undefined}>{title ?? t('profile.activity.exam')}</p>
             <p className="truncate text-[15px] leading-5 font-semibold whitespace-nowrap text-slate-900 tabular-nums">
-              Sual {index + 1}<span className="font-normal text-slate-500"> / {total}</span>
-              <span className="hidden text-sm font-normal text-slate-500 sm:inline"> · {answered} cavablanıb</span>
+              {t('exam.session.question', { n: index + 1 })}<span className="font-normal text-slate-500"> / {total}</span>
+              <span className="hidden text-sm font-normal text-slate-500 sm:inline"> · {t('exam.session.answeredCount', { count: answered })}</span>
             </p>
           </div>
           <ExamTimer expiresAt={session.expiresAt} serverNow={session.serverNow} onExpire={submit} />
@@ -230,10 +233,10 @@ function ExamRunner({ session }: { session: ExamSession }) {
           <div className="hidden sm:block"><NotificationBell safe poll={false} /></div>
           <Button variant="secondary" onClick={() => setConfirmOpen(true)} loading={finish.isPending} className="h-10 shrink-0 px-3 text-sm sm:px-4">
             <Flag className="hidden size-4 sm:block" aria-hidden />
-            Bitir
+            {t('exam.session.finish')}
           </Button>
         </div>
-        <div className="exam-progress h-1" role="progressbar" aria-label="Cavablanan suallar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={answered}>
+        <div className="exam-progress h-1" role="progressbar" aria-label={t('exam.session.answeredQuestions')} aria-valuemin={0} aria-valuemax={total} aria-valuenow={answered}>
           <div className="h-full bg-indigo-600 transition-[width] duration-300" style={{ width: `${(answered / total) * 100}%` }} />
         </div>
       </header>
@@ -241,9 +244,9 @@ function ExamRunner({ session }: { session: ExamSession }) {
       <main ref={layoutRef} className="exam-shell exam-layout mx-auto grid gap-3 px-3 pt-3 sm:px-4 sm:pt-4 min-[900px]:gap-6 min-[900px]:px-6 min-[900px]:pt-6">
         <div ref={swipeRef} data-enter-from={enterFrom} className="exam-swipe flex min-w-0 flex-col gap-4">
           {finish.isError && (
-            <Alert title="İmtahan bitirilmədi">
+            <Alert title={t('exam.session.finishFailed')}>
               {finish.error.message}
-              <SupportContact className="mt-1" lead="Yenidən cəhd edin. Alınmasa, bizə yazın:" topic="İmtahan bitirilmədi" reference={session.id} />
+              <SupportContact className="mt-1" lead={t('exam.session.finishFailedLead')} topic={t('exam.session.finishFailed')} reference={session.id} />
             </Alert>
           )}
 
@@ -277,36 +280,36 @@ function ExamRunner({ session }: { session: ExamSession }) {
             <div className="relative mx-auto grid max-w-2xl grid-cols-[1fr_auto_1fr] items-center gap-2 min-[900px]:flex min-[900px]:max-w-none">
               <SaveStatus
               error={answer.isError ? answer.error.message : revealAnswer.isError ? revealAnswer.error.message : null} />
-              <Button variant="secondary" disabled={index === 0} onClick={() => goTo(index - 1)} aria-label="Əvvəlki sual" className="exam-nav-button min-w-0 gap-1 px-2 whitespace-nowrap sm:gap-2 sm:px-3 min-[900px]:order-1">
+              <Button variant="secondary" disabled={index === 0} onClick={() => goTo(index - 1)} aria-label={t('exam.session.prevQuestion')} className="exam-nav-button min-w-0 gap-1 px-2 whitespace-nowrap sm:gap-2 sm:px-3 min-[900px]:order-1">
                 <ChevronLeft className="size-4 shrink-0" aria-hidden />
-                <span className={cn((canReveal || question.reveal) && 'max-[379px]:sr-only')}>Əvvəlki</span>
+                <span className={cn((canReveal || question.reveal) && 'max-[379px]:sr-only')}>{t('common.previous')}</span>
               </Button>
               <div className="flex items-center gap-2 min-[900px]:hidden">
                 <button type="button" onClick={() => setMapOpen(true)} aria-haspopup="dialog" aria-expanded={mapOpen} aria-controls="exam-question-map"
                   className="exam-map-button inline-flex h-11 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-semibold tabular-nums">
                   <LayoutGrid className="size-4" aria-hidden />
-                  <span className="sr-only">Suallar, </span>{index + 1}/{total}
+                  <span className="sr-only">{t('exam.session.questions')}, </span>{index + 1}/{total}
                 </button>
                 {/* Present when the exam settings allow showing this question's result (Immediate mode). */}
                 {(canReveal || question.reveal) && (
                   <button type="button" onClick={() => (noteOpen ? setNoteClosed(true) : reveal())} aria-pressed={noteOpen}
                     disabled={revealAnswer.isPending}
-                    aria-label={noteOpen ? 'Cavab panelini bağla' : !question.locked ? 'Düzgün cavabı göstər, sual kilidlənəcək' : 'Cavabı göstər'}
+                    aria-label={noteOpen ? t('exam.session.closeAnswer') : !question.locked ? t('exam.session.revealLocks') : t('exam.session.showAnswer')}
                     className={cn('exam-map-button inline-flex h-11 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-semibold', noteOpen && 'exam-map-button-active')}>
                     <Eye className="size-4" aria-hidden />
-                    <span className="max-[419px]:sr-only">Cavab</span>
+                    <span className="max-[419px]:sr-only">{t('exam.session.answer')}</span>
                   </button>
                 )}
               </div>
               {index < total - 1 ? (
-                <Button onClick={() => goTo(index + 1)} aria-label="Növbəti sual" className="exam-nav-button min-w-0 gap-1 px-2 whitespace-nowrap sm:gap-2 sm:px-3 min-[900px]:order-3 min-[900px]:ml-auto">
-                  <span className={cn((canReveal || question.reveal) && 'max-[379px]:sr-only')}>Növbəti</span>
+                <Button onClick={() => goTo(index + 1)} aria-label={t('exam.session.nextQuestion')} className="exam-nav-button min-w-0 gap-1 px-2 whitespace-nowrap sm:gap-2 sm:px-3 min-[900px]:order-3 min-[900px]:ml-auto">
+                  <span className={cn((canReveal || question.reveal) && 'max-[379px]:sr-only')}>{t('common.next')}</span>
                   <ChevronRight className="size-4 shrink-0" aria-hidden />
                 </Button>
               ) : (
                 <Button onClick={() => setConfirmOpen(true)} className="exam-nav-button min-w-0 gap-1 px-2 whitespace-nowrap sm:gap-2 sm:px-3 min-[900px]:order-3 min-[900px]:ml-auto">
                   <Flag className="size-4 shrink-0" aria-hidden />
-                  Bitir
+                  {t('exam.session.finish')}
                 </Button>
               )}
             </div>
@@ -352,6 +355,7 @@ interface QuestionPanelProps {
 }
 
 function QuestionPanel({ question, visualSrc, number, immediate, revealed, canReveal, revealing, onReveal, flagged, onFlag, onChoose, onWrite }: QuestionPanelProps) {
+  const { t } = useTranslation()
   const reveal = revealed ? question.reveal : null
   const headingId = `question-${question.examQuestionId}`
 
@@ -359,23 +363,23 @@ function QuestionPanel({ question, visualSrc, number, immediate, revealed, canRe
     <section aria-labelledby={headingId} className="exam-question-enter min-w-0 rounded-xl border border-slate-200 bg-white px-3.5 pt-2 pb-4 sm:px-6 sm:pb-6 min-[900px]:px-7 min-[900px]:pb-7">
       <div className="mb-1 flex min-h-10 items-center justify-between gap-2 sm:mt-2">
         <p className="flex items-center gap-2 text-xs font-medium tracking-wide text-slate-500 uppercase">
-          Sual {number}
+          {t('exam.session.question', { n: number })}
           {question.locked && (
             <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] tracking-normal text-slate-600 normal-case">
               <Lock className="size-3" aria-hidden />
-              Kilidlənib
+              {t('exam.session.locked')}
             </span>
           )}
         </p>
         <button type="button" onClick={onFlag} aria-pressed={flagged}
           className={cn('-mr-2 inline-flex h-10 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors', flagged ? 'text-amber-800 hover:bg-amber-50' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800')}>
           {flagged ? <BookmarkCheck className="size-4" aria-hidden /> : <Bookmark className="size-4" aria-hidden />}
-          {flagged ? 'İşarələnib' : 'İşarələ'}
+          {flagged ? t('exam.session.flagged') : t('exam.session.flag')}
         </button>
       </div>
       {question.passage && <PassageBox passage={question.passage} className="mb-3" />}
       <h1 id={headingId} className="exam-question-text max-w-[72ch] text-base leading-7 font-semibold text-slate-900 sm:text-[17px] min-[900px]:text-lg min-[900px]:leading-8">
-        {visibleText(question.text, bodyVisuals(question.visuals).length > 0) ?? <span className="sr-only">Sual {number} (şəkilli)</span>}
+        {visibleText(question.text, bodyVisuals(question.visuals).length > 0) ?? <span className="sr-only">{t('exam.session.imageQuestion', { n: number })}</span>}
       </h1>
       <QuestionVisuals visuals={bodyVisuals(question.visuals)} src={visualSrc} className="mt-3" />
 
@@ -425,8 +429,8 @@ function QuestionPanel({ question, visualSrc, number, immediate, revealed, canRe
               <span className="exam-question-text min-w-0 flex-1 leading-6">
                 {visibleText(answerDisplayText(option.text), images.length > 0)}
                 <QuestionVisuals visuals={images} src={visualSrc} size="option" />
-                {isCorrect && <span className="sr-only"> (düzgün cavab)</span>}
-                {isWrongPick && <span className="sr-only"> (sizin cavabınız, yanlış)</span>}
+                {isCorrect && <span className="sr-only"> ({t('exam.session.correctAnswerSr')})</span>}
+                {isWrongPick && <span className="sr-only"> ({t('exam.session.yourWrongSr')})</span>}
               </span>
               {isCorrect && <Check className="mt-1 size-4 shrink-0 text-emerald-700" aria-hidden />}
               {isWrongPick && <X className="mt-1 size-4 shrink-0 text-rose-700" aria-hidden />}
@@ -448,14 +452,14 @@ function QuestionPanel({ question, visualSrc, number, immediate, revealed, canRe
         <div className="mt-4 hidden items-center justify-end min-[900px]:flex">
           <Button variant="secondary" onClick={onReveal} loading={revealing} className="h-11 shrink-0">
             <Eye className="size-4" aria-hidden />
-            Cavabı göstər
+            {t('exam.session.showAnswer')}
           </Button>
         </div>
       )}
 
       {!immediate && !question.isCoded && question.selectedOptionId && (
         <button type="button" onClick={() => onChoose(null)} className="mt-2 min-h-11 text-sm text-slate-500 hover:text-slate-800">
-          Cavabı təmizlə
+          {t('exam.session.clearAnswer')}
         </button>
       )}
     </section>
@@ -473,6 +477,7 @@ function CodedAnswerField({ question, reveal, immediate, labelledBy, onWrite }: 
   labelledBy: string
   onWrite: (text: string | null) => void
 }) {
+  const { t } = useTranslation()
   const [draft, setDraft] = useState(question.answerText ?? '')
   const [invalid, setInvalid] = useState(false)
   const inputId = `coded-${question.examQuestionId}`
@@ -501,7 +506,7 @@ function CodedAnswerField({ question, reveal, immediate, labelledBy, onWrite }: 
   const result = reveal?.isGradable ? reveal : null
   return (
     <div className="mt-4 sm:mt-5">
-      <label htmlFor={inputId} className="text-sm font-medium text-slate-700">Cavabınız</label>
+      <label htmlFor={inputId} className="text-sm font-medium text-slate-700">{t('exam.session.yourAnswer')}</label>
       <div className="mt-1.5 flex flex-wrap items-center gap-2">
         <input id={inputId} aria-describedby={`${labelledBy} ${inputId}-hint`} aria-invalid={invalid || undefined}
           value={draft} inputMode="text" autoComplete="off" autoCapitalize="off" spellCheck={false} maxLength={30} disabled={question.locked}
@@ -513,17 +518,17 @@ function CodedAnswerField({ question, reveal, immediate, labelledBy, onWrite }: 
               : invalid ? 'border-rose-400' : question.answerText ? 'border-sky-500 bg-sky-50' : 'border-slate-300')} />
         {!immediate && question.answerText && !question.locked && (
           <button type="button" onClick={() => { setDraft(''); onWrite(null) }} className="min-h-11 px-2 text-sm text-slate-500 hover:text-slate-800">
-            Cavabı təmizlə
+            {t('exam.session.clearAnswer')}
           </button>
         )}
       </div>
       <p id={`${inputId}-hint`} className={cn('mt-1.5 text-xs', invalid ? 'text-rose-700' : 'text-slate-500')}>
-        {invalid ? 'Cavabı yazın: ədəd, koordinat və ya söz.' : 'Ədəd (2,5 və ya 5/2), koordinat ((3; -4)) və ya söz yazın. Avtomatik yadda saxlanır.'}
+        {invalid ? t('exam.session.codedInvalid') : t('exam.session.codedHint')}
       </p>
       {result && (
         <p role="status" className={cn('mt-3 flex items-start gap-2 rounded-lg px-3 py-2 text-sm', result.isCorrect ? 'bg-emerald-50 text-emerald-900' : 'bg-rose-50 text-rose-900')}>
           {result.isCorrect ? <Check className="mt-0.5 size-4 shrink-0" aria-hidden /> : <X className="mt-0.5 size-4 shrink-0" aria-hidden />}
-          <span>{result.isCorrect ? 'Düzgün cavab!' : 'Yanlış cavab.'} Düzgün cavab: <span className="font-semibold tabular-nums">{result.correctAnswer}</span></span>
+          <span>{result.isCorrect ? t('exam.session.correct') : t('exam.session.wrongDot')} {t('exam.session.correctAnswerIs')} <span className="font-semibold tabular-nums">{result.correctAnswer}</span></span>
         </p>
       )}
     </div>
@@ -531,11 +536,12 @@ function CodedAnswerField({ question, reveal, immediate, labelledBy, onWrite }: 
 }
 
 function RevealNote({ reveal, className }: { reveal: NonNullable<ExamSessionQuestion['reveal']>; className?: string }) {
+  const { t } = useTranslation()
   if (!reveal.isGradable) {
     return (
       <p role="status" className={cn('mt-4 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-amber-800', className)}>
         <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
-        Bu sualın düzgün cavabı məlum deyil, ballanmayacaq.
+        {t('exam.session.ungraded')}
       </p>
     )
   }
@@ -551,6 +557,7 @@ function AnswerSheet({ reveal, options, selectedOptionId, onClose }: {
   selectedOptionId: string | null
   onClose: () => void
 }) {
+  const { t } = useTranslation()
   const correctOption = options.find(o => o.id === reveal.correctOptionId)
   const correct = reveal.isGradable && reveal.correctOptionId === selectedOptionId
   const tone = !reveal.isGradable ? 'border-amber-200 bg-amber-50 text-amber-900' : correct ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-rose-200 bg-rose-50 text-rose-900'
@@ -558,14 +565,14 @@ function AnswerSheet({ reveal, options, selectedOptionId, onClose }: {
     <div role="status" className={cn('exam-answer-sheet relative mx-auto mb-2.5 max-w-2xl rounded-xl border py-2 pr-11 pl-3 text-sm min-[900px]:hidden', tone)}>
       <p className="flex items-center gap-1.5 font-semibold">
         {!reveal.isGradable ? <AlertTriangle className="size-4 shrink-0" aria-hidden /> : correct ? <Check className="size-4 shrink-0" aria-hidden /> : <X className="size-4 shrink-0" aria-hidden />}
-        {!reveal.isGradable ? 'Düzgün cavab məlum deyil' : correct ? 'Düzgün cavab!' : 'Yanlış cavab'}
+        {!reveal.isGradable ? t('exam.session.unknownAnswer') : correct ? t('exam.session.correct') : t('exam.session.wrong')}
       </p>
       {reveal.isGradable && correctOption && (
         <p className="exam-question-text exam-answer-sheet-body mt-1 leading-6">
-          <span className="font-semibold">Düzgün variant {correctOption.label}: </span>{answerDisplayText(correctOption.text)}
+          <span className="font-semibold">{t('exam.session.correctOption', { label: correctOption.label })} </span>{answerDisplayText(correctOption.text)}
         </p>
       )}
-      <button type="button" onClick={onClose} aria-label="Cavab panelini bağla"
+      <button type="button" onClick={onClose} aria-label={t('exam.session.closeAnswer')}
         className="absolute top-0.5 right-0.5 grid size-10 place-items-center rounded-lg opacity-70 hover:opacity-100">
         <X className="size-4" aria-hidden />
       </button>
@@ -575,9 +582,10 @@ function AnswerSheet({ reveal, options, selectedOptionId, onClose }: {
 
 /** Answers save silently; only a failed save is reported. The element also spaces the desktop action bar. */
 function SaveStatus({ error }: { error: string | null }) {
+  const { t } = useTranslation()
   return (
     <p aria-live="polite" className="exam-save-status pointer-events-none absolute inset-x-0 bottom-full mb-2 text-center text-xs text-rose-600 min-[900px]:static min-[900px]:order-2 min-[900px]:mb-0 min-[900px]:flex-1">
-      {error ? `Saxlanmadı: ${error}` : ''}
+      {error ? t('exam.session.notSaved', { error }) : ''}
     </p>
   )
 }
@@ -596,17 +604,18 @@ interface QuestionNavigatorProps {
 
 /** Sidebar from laptop width; on smaller screens a bottom sheet opened from the action bar. */
 function QuestionNavigator({ questions, current, immediate, isShown, flagged, onSelect, open, onClose, examId }: QuestionNavigatorProps) {
+  const { t } = useTranslation()
   const answeredCount = questions.filter(isAnswered).length
   return (
     <>
       <div aria-hidden onClick={onClose} className="exam-sheet-backdrop" data-open={open} />
-      <nav id="exam-question-map" aria-label="Suallar" data-open={open}
+      <nav id="exam-question-map" aria-label={t('exam.session.questions')} data-open={open}
         className="exam-sheet min-w-0 border border-slate-200 bg-white p-4 min-[900px]:order-last min-[900px]:sticky min-[900px]:top-24 min-[900px]:self-start">
         <span className="exam-sheet-handle" aria-hidden />
         <div className="mb-3 flex items-center gap-2">
-          <h2 className="text-sm font-semibold">Suallar</h2>
-          <span className="ml-auto text-xs text-slate-500 tabular-nums">{answeredCount} cavablanıb · {questions.length - answeredCount} boş</span>
-          <button type="button" onClick={onClose} aria-label="Sualları bağla"
+          <h2 className="text-sm font-semibold">{t('exam.session.questions')}</h2>
+          <span className="ml-auto text-xs text-slate-500 tabular-nums">{t('exam.session.answeredCount', { count: answeredCount })} · {t('exam.session.blankCount', { count: questions.length - answeredCount })}</span>
+          <button type="button" onClick={onClose} aria-label={t('exam.session.closeQuestions')}
             className="-mr-2 grid size-10 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 min-[900px]:hidden">
             <X className="size-5" aria-hidden />
           </button>
@@ -627,7 +636,7 @@ function QuestionNavigator({ questions, current, immediate, isShown, flagged, on
                   type="button"
                   onClick={() => onSelect(i)}
                   aria-current={i === current ? 'step' : undefined}
-                  aria-label={`Sual ${i + 1}${isAnswered(q) ? ', cavablanıb' : ''}${q.locked ? ', kilidlənib' : ''}${isFlagged ? ', işarələnib' : ''}`}
+                  aria-label={[t('exam.session.question', { n: i + 1 }), isAnswered(q) && t('exam.session.stateAnswered'), q.locked && t('exam.session.stateLocked'), isFlagged && t('exam.session.stateFlagged')].filter(Boolean).join(', ')}
                   className={cn(
                     'relative flex h-11 w-full items-center justify-center rounded-md border text-xs font-semibold tabular-nums transition-colors duration-150 min-[900px]:h-9',
                     state === 'empty' && 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50',
@@ -646,23 +655,23 @@ function QuestionNavigator({ questions, current, immediate, isShown, flagged, on
           })}
         </ol>
         <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-slate-500">
-          <Legend className="border-slate-300 bg-white" label="Boş" />
-          <Legend className="border-sky-600 bg-sky-600" label="Cavablanıb" />
+          <Legend className="border-slate-300 bg-white" label={t('exam.session.legendBlank')} />
+          <Legend className="border-sky-600 bg-sky-600" label={t('exam.session.legendAnswered')} />
           {immediate && (
             <>
-              <Legend className="border-emerald-600 bg-emerald-600" label="Düzgün" />
-              <Legend className="border-rose-600 bg-rose-600" label="Yanlış" />
+              <Legend className="border-emerald-600 bg-emerald-600" label={t('exam.session.legendCorrect')} />
+              <Legend className="border-rose-600 bg-rose-600" label={t('exam.session.legendWrong')} />
             </>
           )}
-          <Legend className="rounded-full border-amber-500 bg-amber-500" label="İşarələnmiş" />
+          <Legend className="rounded-full border-amber-500 bg-amber-500" label={t('exam.session.legendFlagged')} />
         </div>
         {/* Quiet, always reachable: a stuck exam needs a way out without a banner distracting everyone else. */}
-        <a href={supportMailto({ topic: 'İmtahan problemi', reference: examId })}
-          onClick={event => { event.currentTarget.href = supportMailto({ topic: 'İmtahan problemi', reference: examId }) }}
+        <a href={supportMailto({ topic: t('exam.session.problemTopic'), reference: examId })}
+          onClick={event => { event.currentTarget.href = supportMailto({ topic: t('exam.session.problemTopic'), reference: examId }) }}
           className="mt-4 inline-block text-xs text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline">
-          Problem var? Bizə yazın
+          {t('exam.session.problemLink')}
         </a>
-        <p className="mt-3 hidden text-xs text-slate-400 min-[900px]:block">Klaviatura: ← → keçid, A–F seçim</p>
+        <p className="mt-3 hidden text-xs text-slate-400 min-[900px]:block">{t('exam.session.keyboardHint')}</p>
       </nav>
     </>
   )
@@ -679,6 +688,7 @@ function Legend({ className, label }: { className: string; label: string }) {
 
 /** Counts down to the server deadline, corrected for the difference between client and server clocks. */
 function ExamTimer({ expiresAt, serverNow, onExpire }: { expiresAt: string; serverNow: string; onExpire: () => void }) {
+  const { t } = useTranslation()
   const [offset] = useState(() => Date.parse(serverNow) - Date.now())
   const [remaining, setRemaining] = useState(() => Date.parse(expiresAt) - (Date.now() + offset))
   const expiredRef = useRef(false)
@@ -710,10 +720,10 @@ function ExamTimer({ expiresAt, serverNow, onExpire }: { expiresAt: string; serv
       )}
     >
       <Clock className="size-4 shrink-0" aria-hidden />
-      <span aria-label={`Qalan vaxt ${label}`}>{label}</span>
+      <span aria-label={t('exam.session.timeLeft', { time: label })}>{label}</span>
       {/* Announce only at the 5- and 1-minute marks, not every second. */}
       <span className="sr-only" aria-live="polite">
-        {minutesLeft === 5 || minutesLeft === 1 ? `${minutesLeft} dəqiqə qalıb` : ''}
+        {minutesLeft === 5 || minutesLeft === 1 ? t('exam.session.minutesLeft', { count: minutesLeft }) : ''}
       </span>
     </div>
   )
@@ -730,6 +740,7 @@ interface FinishDialogProps {
 }
 
 function FinishDialog({ open, answered, unanswered, flagged, onReviewUnanswered, onCancel, onConfirm }: FinishDialogProps) {
+  const { t } = useTranslation()
   const ref = useRef<HTMLDialogElement>(null)
 
   useEffect(() => {
@@ -751,29 +762,29 @@ function FinishDialog({ open, answered, unanswered, flagged, onReviewUnanswered,
       className="exam-dialog m-auto w-[calc(100%-2rem)] max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl backdrop:bg-slate-900/40 sm:p-6"
     >
       <h2 id="finish-title" className="text-lg font-semibold">
-        İmtahanı bitirmək istəyirsiniz?
+        {t('exam.session.finishTitle')}
       </h2>
       <dl className={cn('mt-4 grid gap-2 text-center', flagged > 0 ? 'grid-cols-3' : 'grid-cols-2')}>
-        <div className="rounded-lg bg-slate-50 px-3 py-2"><dt className="text-xs text-slate-500">Cavablanıb</dt><dd className="text-lg font-semibold tabular-nums">{answered}</dd></div>
-        <div className={cn('rounded-lg px-3 py-2', unanswered > 0 ? 'bg-amber-50' : 'bg-slate-50')}><dt className="text-xs text-slate-500">Boş</dt><dd className={cn('text-lg font-semibold tabular-nums', unanswered > 0 && 'text-amber-800')}>{unanswered}</dd></div>
+        <div className="rounded-lg bg-slate-50 px-3 py-2"><dt className="text-xs text-slate-500">{t('exam.session.legendAnswered')}</dt><dd className="text-lg font-semibold tabular-nums">{answered}</dd></div>
+        <div className={cn('rounded-lg px-3 py-2', unanswered > 0 ? 'bg-amber-50' : 'bg-slate-50')}><dt className="text-xs text-slate-500">{t('exam.session.legendBlank')}</dt><dd className={cn('text-lg font-semibold tabular-nums', unanswered > 0 && 'text-amber-800')}>{unanswered}</dd></div>
         {flagged > 0 && (
-          <div className="rounded-lg bg-slate-50 px-3 py-2"><dt className="text-xs text-slate-500">İşarələnmiş</dt><dd className="text-lg font-semibold tabular-nums">{flagged}</dd></div>
+          <div className="rounded-lg bg-slate-50 px-3 py-2"><dt className="text-xs text-slate-500">{t('exam.session.legendFlagged')}</dt><dd className="text-lg font-semibold tabular-nums">{flagged}</dd></div>
         )}
       </dl>
       <p id="finish-description" className="mt-3 text-sm text-slate-600">
-        {unanswered > 0 ? `${unanswered} sual cavabsızdır. Bitirdikdən sonra cavabları dəyişmək mümkün olmayacaq.` : 'Bütün suallar cavablanıb. Bitirdikdən sonra cavabları dəyişmək mümkün olmayacaq.'}
+        {unanswered > 0 ? t('exam.session.finishUnanswered', { count: unanswered }) : t('exam.session.finishAllAnswered')}
       </p>
       <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         {unanswered > 0 ? (
           <Button variant="secondary" onClick={onReviewUnanswered} autoFocus>
-            İlk boş suala keç
+            {t('exam.session.firstBlank')}
           </Button>
         ) : (
           <Button variant="secondary" onClick={onCancel} autoFocus>
-            İmtahana qayıt
+            {t('exam.session.backToExam')}
           </Button>
         )}
-        <Button onClick={onConfirm}>Bəli, bitir</Button>
+        <Button onClick={onConfirm}>{t('exam.session.confirmFinish')}</Button>
       </div>
     </dialog>
   )
@@ -781,6 +792,7 @@ function FinishDialog({ open, answered, unanswered, flagged, onReviewUnanswered,
 
 /** Reading theme menu; the choice applies at once and is remembered for later exams on this device. */
 function ThemePicker({ theme, onChange }: { theme: ExamTheme; onChange: (theme: ExamTheme) => void }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -794,22 +806,22 @@ function ThemePicker({ theme, onChange }: { theme: ExamTheme; onChange: (theme: 
   return (
     <div ref={rootRef} className="relative shrink-0">
       <button type="button" onClick={() => setOpen(value => !value)} aria-expanded={open} aria-haspopup="true"
-        aria-label="Oxuma teması" title="Oxuma teması"
+        aria-label={t('examTheme.aria')} title={t('examTheme.aria')}
         className="grid size-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900">
         <Palette className="size-4" aria-hidden />
       </button>
       {open && (
         <div className="exam-theme-menu">
-          <p className="px-2 pt-1 pb-1.5 text-xs font-semibold text-slate-500">Oxuma teması</p>
-          <div role="radiogroup" aria-label="Oxuma teması" className="flex flex-col">
+          <p className="px-2 pt-1 pb-1.5 text-xs font-semibold text-slate-500">{t('examTheme.aria')}</p>
+          <div role="radiogroup" aria-label={t('examTheme.aria')} className="flex flex-col">
             {examThemes.map(option => (
               <button key={option.id} type="button" role="radio" aria-checked={theme === option.id}
                 onClick={() => { onChange(option.id); setOpen(false) }}
                 className="exam-theme-option flex items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-slate-50">
                 <span aria-hidden className="exam-theme-swatch" style={{ background: option.swatch }} />
                 <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold text-slate-900">{option.label}</span>
-                  <span className="block text-xs text-slate-500">{option.hint}</span>
+                  <span className="block text-sm font-semibold text-slate-900">{t(`examTheme.${option.id}.label`)}</span>
+                  <span className="block text-xs text-slate-500">{t(`examTheme.${option.id}.hint`)}</span>
                 </span>
                 {theme === option.id && <Check className="size-4 shrink-0 text-slate-700" aria-hidden />}
               </button>
@@ -823,6 +835,7 @@ function ThemePicker({ theme, onChange }: { theme: ExamTheme; onChange: (theme: 
 
 /** Optional distraction-free mode; browsers only allow it after a click, so it is offered rather than forced. */
 function FullscreenToggle() {
+  const { t } = useTranslation()
   const [active, setActive] = useState(() => !!document.fullscreenElement)
   useEffect(() => {
     const update = () => setActive(!!document.fullscreenElement)
@@ -834,7 +847,7 @@ function FullscreenToggle() {
   if (!document.fullscreenEnabled) return null
   return (
     <button type="button" onClick={() => (active ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => undefined)}
-      aria-pressed={active} aria-label={active ? 'Tam ekrandan çıx' : 'Tam ekran'} title={active ? 'Tam ekrandan çıx' : 'Tam ekran'}
+      aria-pressed={active} aria-label={active ? t('exam.session.exitFullscreen') : t('exam.session.fullscreen')} title={active ? t('exam.session.exitFullscreen') : t('exam.session.fullscreen')}
       className="hidden size-9 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 sm:grid">
       {active ? <Minimize2 className="size-4" aria-hidden /> : <Maximize2 className="size-4" aria-hidden />}
     </button>

@@ -1,6 +1,7 @@
 import { X } from 'lucide-react'
 import { useEffect, useId, useRef, type ReactNode } from 'react'
 import { cn } from '../../lib/utils'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   title: string
@@ -16,6 +17,7 @@ interface Props {
 
 /** Modal built on the native dialog element: focus stays inside, Esc and the backdrop close it. */
 export function GuideDialog({ title, onClose, children, variant = 'sheet', actions, tall = false }: Props) {
+  const { t } = useTranslation()
   const dialog = useRef<HTMLDialogElement>(null)
   const titleId = useId()
   useEffect(() => {
@@ -40,7 +42,7 @@ export function GuideDialog({ title, onClose, children, variant = 'sheet', actio
       <header className="tutor-border flex shrink-0 items-center gap-2 border-b px-4 py-2.5 sm:px-5">
         <h2 id={titleId} className="min-w-0 flex-1 truncate text-base font-semibold">{title}</h2>
         {actions}
-        <button type="button" onClick={onClose} aria-label="Bağla"
+        <button type="button" onClick={onClose} aria-label={t('common.close')}
           className="grid size-10 shrink-0 place-items-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900">
           <X className="size-5" />
         </button>

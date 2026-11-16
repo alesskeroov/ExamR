@@ -6,6 +6,7 @@ import { useDocumentSearch, type CardDeck, type SearchHit } from './api'
 import { placeLabel } from './place-label'
 import { SelectionToCard } from './SelectionToCard'
 import { Frame, Skeleton } from './TutorShared'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   chatId: string
@@ -19,6 +20,7 @@ const maxQuery = 500
 
 /** "Axtar": the student types a question or a few words and sees the matching passages of the material, without AI. */
 export function GuideSearch({ chatId, deck, documentId, format, onOpen }: Props) {
+  const { t } = useTranslation()
   const [term, setTerm] = useState('')
   const [query, setQuery] = useState('')
   const search = useDocumentSearch(documentId, query)
@@ -32,26 +34,26 @@ export function GuideSearch({ chatId, deck, documentId, format, onOpen }: Props)
   return (
     <Frame>
       <form onSubmit={submit} role="search" className="flex flex-col gap-2">
-        <label htmlFor={inputId} className="text-sm font-semibold text-slate-700">Materialda axtar</label>
+        <label htmlFor={inputId} className="text-sm font-semibold text-slate-700">{t('tutor.search.label')}</label>
         <div className="flex gap-2">
           <div className="tutor-border flex h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border bg-white px-3">
             <Search className="size-4 shrink-0 text-slate-400" aria-hidden />
             <input id={inputId} type="search" value={term} onChange={e => setTerm(e.target.value)} maxLength={maxQuery}
-              placeholder="Məsələn: capex nədir?" className="min-w-0 flex-1 bg-transparent text-base text-slate-900 outline-none placeholder:text-slate-400 sm:text-sm" />
+              placeholder={t('tutor.search.placeholder')} className="min-w-0 flex-1 bg-transparent text-base text-slate-900 outline-none placeholder:text-slate-400 sm:text-sm" />
           </div>
-          <button type="submit" disabled={term.trim().length === 0} className="btn-primary h-11 shrink-0 rounded-xl px-4 text-sm font-semibold disabled:opacity-60">Axtar</button>
+          <button type="submit" disabled={term.trim().length === 0} className="btn-primary h-11 shrink-0 rounded-xl px-4 text-sm font-semibold disabled:opacity-60">{t('friends.search')}</button>
         </div>
-        <p className="text-xs text-slate-500">Sözlərə görə ən uyğun hissələr göstərilir. Vacib hissəni seçib öz kartınızı yarada bilərsiniz.</p>
+        <p className="text-xs text-slate-500">{t('tutor.search.hint')}</p>
       </form>
 
-      {search.isFetching && <Skeleton label="Axtarılır…" />}
-      {search.isError && <Alert title="Axtarış alınmadı">{search.error.message}</Alert>}
+      {search.isFetching && <Skeleton label={t('friends.searching')} />}
+      {search.isError && <Alert title={t('friends.searchFailed')}>{search.error.message}</Alert>}
       {search.data && !search.isFetching && (search.data.chunks.length === 0 ? (
-        <EmptyState icon={<FileSearch className="size-8" aria-hidden />} title="Uyğun hissə tapılmadı"
-          description="Başqa sözlərlə və ya materialdakı terminlərlə yenidən yoxlayın." />
+        <EmptyState icon={<FileSearch className="size-8" aria-hidden />} title={t('tutor.search.none')}
+          description={t('tutor.search.noneText')} />
       ) : (
         <SelectionToCard chatId={chatId} deck={deck}>
-          <ol className="flex flex-col gap-3" aria-label="Axtarış nəticələri">
+          <ol className="flex flex-col gap-3" aria-label={t('tutor.search.results')}>
             {search.data.chunks.map((hit, i) => {
               const place = placeLabel(format, hit.pageFrom, hit.pageTo)
               return (
@@ -60,7 +62,7 @@ export function GuideSearch({ chatId, deck, documentId, format, onOpen }: Props)
                     <span className="font-semibold text-slate-700">{i + 1}.</span>
                     {hit.section && <span className="font-medium text-slate-700">{hit.section}</span>}
                     {place && <span>{place}</span>}
-                    <button type="button" onClick={() => onOpen(hit)} className="ml-auto font-semibold text-indigo-700 underline-offset-2 hover:underline">Mənbəni aç</button>
+                    <button type="button" onClick={() => onOpen(hit)} className="ml-auto font-semibold text-indigo-700 underline-offset-2 hover:underline">{t('tutor.search.openSource')}</button>
                   </div>
                   <p className="mt-2 text-[15px] leading-relaxed whitespace-pre-line break-words text-slate-800 sm:text-sm">{hit.text}</p>
                 </li>

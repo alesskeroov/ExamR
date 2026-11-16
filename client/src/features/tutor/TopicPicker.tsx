@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { cn } from '../../lib/utils'
 import type { CardTopic, TopicStats } from './api'
 import { GuideDialog } from './GuideDialog'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   topics: CardTopic[]
@@ -20,7 +21,9 @@ const fold = (text: string) => text.toLocaleLowerCase('az')
  * Topic chooser that stays readable with long names and in the dark theme (the native select popup is neither):
  * a button that opens a searchable list with each topic's progress.
  */
-export function TopicPicker({ topics, stats, value, onChange, allLabel = 'Bütün mövzular', className }: Props) {
+export function TopicPicker({ topics, stats, value, onChange, allLabel: allLabelProp, className }: Props) {
+  const { t } = useTranslation()
+  const allLabel = allLabelProp ?? t('tutor.topics.all')
   const [open, setOpen] = useState(false)
   const [term, setTerm] = useState('')
   const current = topics.find(t => t.key === value)
@@ -38,26 +41,26 @@ export function TopicPicker({ topics, stats, value, onChange, allLabel = 'Bütü
         <ChevronDown className="size-4 shrink-0 text-slate-400" aria-hidden />
       </button>
       {open && (
-        <GuideDialog title="Mövzu seç" onClose={close} tall={topics.length > 6}>
+        <GuideDialog title={t('tutor.topics.pick')} onClose={close} tall={topics.length > 6}>
           {topics.length > 6 && (
             <div className="shrink-0 px-4 pt-3 sm:px-5">
               <label className="tutor-border flex h-11 items-center gap-2 rounded-xl border px-3">
                 <Search className="size-4 shrink-0 text-slate-400" aria-hidden />
-                <span className="sr-only">Mövzu axtar</span>
+                <span className="sr-only">{t('tutor.topics.search')}</span>
                 {/* 16px text on phones so iOS does not zoom into the field. */}
-                <input type="search" value={term} onChange={e => setTerm(e.target.value)} placeholder="Mövzu axtar…"
+                <input type="search" value={term} onChange={e => setTerm(e.target.value)} placeholder={t('tutor.topics.searchPlaceholder')}
                   className="min-w-0 flex-1 bg-transparent text-base text-slate-900 outline-none placeholder:text-slate-400 sm:text-sm" />
               </label>
             </div>
           )}
-          <ul role="listbox" aria-label="Mövzular" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2 pb-[max(.5rem,env(safe-area-inset-bottom))] sm:px-3">
+          <ul role="listbox" aria-label={t('tutor.topics.aria')} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2 pb-[max(.5rem,env(safe-area-inset-bottom))] sm:px-3">
             {!query && <Option label={allLabel} selected={!value} onPick={() => pick('')} />}
             {shown.map(({ topic, number }) => {
               const s = stats.get(topic.key)
               return <Option key={topic.key} number={number} label={topic.title} selected={topic.key === value}
                 done={s?.mastered ?? 0} total={s?.total ?? 0} onPick={() => pick(topic.key)} />
             })}
-            {shown.length === 0 && <li className="px-3 py-8 text-center text-sm text-slate-500">Mövzu tapılmadı.</li>}
+            {shown.length === 0 && <li className="px-3 py-8 text-center text-sm text-slate-500">{t('tutor.topics.none')}</li>}
           </ul>
         </GuideDialog>
       )}

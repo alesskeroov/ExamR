@@ -26,10 +26,12 @@ import { NotificationBell } from '../friends/NotificationBell'
 import { BattleMessageButton, ChatPanel } from './ChatPanel'
 import { RoomInviteModal } from './RoomInviteModal'
 import { useBattleRoom, type BattleParticipant, type BattleState, type ConnectionStatus } from './api'
+import { useTranslation } from 'react-i18next'
 
 type Room = ReturnType<typeof useBattleRoom>
 
 export function BattleRoomPage() {
+  const { t } = useTranslation()
   const { code = '' } = useParams()
   const navigate = useNavigate()
   const confirm = useConfirm()
@@ -58,9 +60,9 @@ export function BattleRoomPage() {
   if (room.fatal) {
     return (
       <Centered>
-        <Alert title="Otağa qoşulmaq mümkün olmadı">{room.fatal}</Alert>
+        <Alert title={t('battle.room.joinFailed')}>{room.fatal}</Alert>
         <Link to="/battle" className="mt-4 inline-flex h-10 items-center rounded-lg btn-primary px-4 font-medium">
-          Battle səhifəsinə qayıt
+          {t('battle.room.backToBattle')}
         </Link>
       </Centered>
     )
@@ -69,8 +71,8 @@ export function BattleRoomPage() {
   if (!state || !myId) {
     return (
       <Centered>
-        <Loader2 className="size-6 animate-spin text-slate-400" aria-label="Qoşulur" />
-        <p className="mt-3 text-slate-500">Otağa qoşulur…</p>
+        <Loader2 className="size-6 animate-spin text-slate-400" aria-label={t('battle.room.connecting')} />
+        <p className="mt-3 text-slate-500">{t('battle.room.joining')}</p>
       </Centered>
     )
   }
@@ -90,7 +92,7 @@ export function BattleRoomPage() {
     <div className="flex min-h-dvh flex-col bg-slate-50">
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-[1200px] items-center gap-3 px-4">
-          <Link to="/" aria-label="ExamR ana səhifə" className="shrink-0">
+          <Link to="/" aria-label={t('common.homeAria')} className="shrink-0">
             <img src="/favicon.svg" alt="" className="size-7" />
           </Link>
           <div className="min-w-0 flex-1">
@@ -104,7 +106,7 @@ export function BattleRoomPage() {
           <NotificationBell safe />
           <Button variant="ghost" className="h-9 px-2 sm:px-3" onClick={leave}>
             <LogOut className="size-4" aria-hidden />
-            <span className="hidden sm:inline">Çıx</span>
+            <span className="hidden sm:inline">{t('battle.room.leave')}</span>
           </Button>
         </div>
       </header>
@@ -112,13 +114,13 @@ export function BattleRoomPage() {
       <div className="mx-auto grid w-full max-w-[1200px] flex-1 gap-6 px-4 py-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <main className="flex min-w-0 flex-col gap-4">
           <div className="flex items-center justify-between gap-3">
-            <Link to="/battle/rooms" className="text-sm font-medium text-slate-600 hover:text-indigo-600">Otaqlarım</Link>
+            <Link to="/battle/rooms" className="text-sm font-medium text-slate-600 hover:text-indigo-600">{t('nav.items.rooms')}</Link>
             {isHost && <Button variant="ghost" className="h-8 px-2 text-xs" onClick={async () => {
-              if (await confirm({ title: 'Otaq bağlansın?', description: 'Otaq bütün iştirakçılar üçün bağlanacaq.', confirmLabel: 'Otağı bağla', danger: true }) && await room.closeRoom()) navigate('/battle/rooms')
-            }}>Otağı bağla</Button>}
+              if (await confirm({ title: t('battle.rooms.closeTitle'), description: t('battle.room.closeText'), confirmLabel: t('battle.rooms.close'), danger: true }) && await room.closeRoom()) navigate('/battle/rooms')
+            }}>{t('battle.rooms.close')}</Button>}
           </div>
           {room.actionError && (
-            <Alert title={room.actionError} action={<Button variant="ghost" onClick={room.clearActionError}>Bağla</Button>} />
+            <Alert title={room.actionError} action={<Button variant="ghost" onClick={room.clearActionError}>{t('common.close')}</Button>} />
           )}
           {state.status === 'Lobby' && <Lobby state={state} room={room} isHost={isHost} myId={myId} />}
           {(state.status === 'Question' || state.status === 'Reveal') && (
@@ -138,7 +140,7 @@ export function BattleRoomPage() {
             <button
               type="button"
               onClick={closeChat}
-              aria-label="Çatı bağla"
+              aria-label={t('battle.room.closeChat')}
               className="absolute top-2.5 right-3 z-10 rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"
             >
               <X className="size-5" />
@@ -152,6 +154,7 @@ export function BattleRoomPage() {
 }
 
 function Lobby({ state, room, isHost, myId }: { state: BattleState; room: Room; isHost: boolean; myId: string }) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
   const online = state.participants.filter((p) => p.isConnected).length
@@ -170,7 +173,7 @@ function Lobby({ state, room, isHost, myId }: { state: BattleState; room: Room; 
   return (
     <>
       <section className="rounded-2xl bg-[#1d2140] p-6 text-center text-white shadow-sm sm:p-8">
-        <p className="text-indigo-100">Otaq kodu</p>
+        <p className="text-indigo-100">{t('battle.home.code')}</p>
         <p className="mt-1 font-mono text-5xl font-bold tracking-[0.25em] sm:text-6xl">{state.code}</p>
         <button
           type="button"
@@ -178,32 +181,32 @@ function Lobby({ state, room, isHost, myId }: { state: BattleState; room: Room; 
           className="mt-4 inline-flex items-center gap-2 rounded-lg bg-white/15 px-4 py-2 font-medium hover:bg-white/25"
         >
           {copied ? <Check className="size-4" aria-hidden /> : <Copy className="size-4" aria-hidden />}
-          {copied ? 'Link kopyalandı' : 'Dəvət linkini kopyala'}
+          {copied ? t('battle.room.linkCopied') : t('battle.room.copyLink')}
         </button>
         <p className="mt-4 text-sm text-indigo-100">
-          {state.settings.questionCount} sual · hər suala {state.settings.secondsPerQuestion} saniyə
+          {t('common.questions', { count: state.settings.questionCount })} · {t('battle.room.perQuestion', { count: state.settings.secondsPerQuestion })}
         </p>
-        <button type="button" onClick={() => setInviteOpen(true)} className="mt-4 block w-full text-sm font-medium underline underline-offset-4">Dost dəvət et</button>
+        <button type="button" onClick={() => setInviteOpen(true)} className="mt-4 block w-full text-sm font-medium underline underline-offset-4">{t('battle.invite.title')}</button>
       </section>
       {inviteOpen && <RoomInviteModal code={state.code} isFull={state.participants.length >= 10} onClose={() => setInviteOpen(false)} />}
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="font-semibold">
-            İştirakçılar <span className="text-slate-400 tabular-nums">{state.participants.length}/10</span>
+            {t('battle.room.participants')} <span className="text-slate-400 tabular-nums">{state.participants.length}/10</span>
           </h2>
           {isHost ? (
             <Button onClick={room.start} disabled={online < 2}>
-              Yarışı başlat
+              {t('battle.room.start')}
             </Button>
           ) : (
             <p className="flex items-center gap-2 text-slate-500">
               <Loader2 className="size-4 animate-spin" aria-hidden />
-              Host-un başlatması gözlənilir…
+              {t('battle.room.waitingHost')}
             </p>
           )}
         </div>
-        {isHost && online < 2 && <p className="mb-4 text-slate-500">Başlamaq üçün ən azı 2 onlayn iştirakçı lazımdır. Kodu dostlarınızla paylaşın.</p>}
+        {isHost && online < 2 && <p className="mb-4 text-slate-500">{t('battle.room.needTwo')}</p>}
         <ul className="grid gap-2 sm:grid-cols-2">
           {state.participants.map((p) => (
             <li key={p.userId} className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 px-3 py-2.5">
@@ -212,8 +215,8 @@ function Lobby({ state, room, isHost, myId }: { state: BattleState; room: Room; 
                 <span className="flex items-center gap-1.5 truncate font-medium">
                   {p.displayName}
                   {p.userId === myId && <span className="text-slate-400">(siz)</span>}
-                  {p.isHost && <Crown className="size-4 shrink-0 text-amber-500" aria-label="Host" />}
-                  {p.isMuted && <MicOff className="size-4 shrink-0 text-slate-400" aria-label="Səssiz" />}
+                  {p.isHost && <Crown className="size-4 shrink-0 text-amber-500" aria-label={t('battle.host')} />}
+                  {p.isMuted && <MicOff className="size-4 shrink-0 text-slate-400" aria-label={t('battle.room.muted')} />}
                 </span>
                 <span className="text-xs text-slate-500">{p.isConnected ? 'onlayn' : 'oflayn'}</span>
               </span>
@@ -227,30 +230,31 @@ function Lobby({ state, room, isHost, myId }: { state: BattleState; room: Room; 
 }
 
 function HostActions({ participant, room }: { participant: BattleParticipant; room: Room }) {
+  const { t } = useTranslation()
   const confirm = useConfirm()
   return (
     <span className="flex shrink-0 gap-1">
       <button type="button" className="rounded-lg px-2 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100"
         aria-label={`${participant.displayName}: Host et`} onClick={async () => {
-          if (await confirm({ title: 'Host səlahiyyəti ötürülsün?', description: `${participant.displayName} yeni Host olacaq. Siz adi iştirakçı olacaqsınız.`, confirmLabel: 'Host et' })) void room.transferHost(participant.userId)
-        }}>Host et</button>
+          if (await confirm({ title: t('battle.room.transferTitle'), description: t('battle.room.transferText', { name: participant.displayName }), confirmLabel: t('battle.room.makeHost') })) void room.transferHost(participant.userId)
+        }}>{t('battle.room.makeHost')}</button>
       <button
         type="button"
         onClick={() => room.setMuted(participant.userId, !participant.isMuted)}
         className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-        aria-label={participant.isMuted ? `${participant.displayName}: səsi aç` : `${participant.displayName}: səssiz et`}
-        title={participant.isMuted ? 'Səsi aç' : 'Səssiz et'}
+        aria-label={`${participant.displayName}: ${participant.isMuted ? t('battle.room.unmute') : t('battle.room.mute')}`}
+        title={participant.isMuted ? t('battle.room.unmute') : t('battle.room.mute')}
       >
         {participant.isMuted ? <Mic className="size-4" /> : <MicOff className="size-4" />}
       </button>
       <button
         type="button"
         onClick={async () => {
-          if (await confirm({ title: 'İştirakçı çıxarılsın?', description: `${participant.displayName} otaqdan çıxarılacaq.`, confirmLabel: 'Otaqdan çıxar', danger: true })) void room.kick(participant.userId)
+          if (await confirm({ title: t('battle.room.kickTitle'), description: t('battle.room.kickText', { name: participant.displayName }), confirmLabel: t('battle.room.kick'), danger: true })) void room.kick(participant.userId)
         }}
         className="rounded-lg p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600"
-        aria-label={`${participant.displayName}: otaqdan çıxar`}
-        title="Otaqdan çıxar"
+        aria-label={`${participant.displayName}: ${t('battle.room.kick')}`}
+        title={t('battle.room.kick')}
       >
         <UserX className="size-4" />
       </button>
@@ -259,6 +263,7 @@ function HostActions({ participant, room }: { participant: BattleParticipant; ro
 }
 
 function Stage({ state, room, isHost, myId }: { state: BattleState; room: Room; isHost: boolean; myId: string }) {
+  const { t } = useTranslation()
   const question = state.question!
   const reveal = state.reveal
   const mine = state.participants.find((p) => p.userId === myId)
@@ -281,7 +286,7 @@ function Stage({ state, room, isHost, myId }: { state: BattleState; room: Room; 
         )}
         {isHost && (
           <Button variant="secondary" className="h-9" onClick={room.advance}>
-            {reveal ? (isLast ? 'Nəticələr' : 'Növbəti sual') : 'Sualı bitir'}
+            {reveal ? (isLast ? t('battle.room.results') : t('exam.session.nextQuestion')) : t('battle.room.endQuestion')}
           </Button>
         )}
       </div>
@@ -290,12 +295,12 @@ function Stage({ state, room, isHost, myId }: { state: BattleState; room: Room; 
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
         <h1 className="text-lg leading-8 font-medium break-words text-slate-900 sm:text-xl">
-          {visibleText(question.text, images.length > 0) ?? <span className="sr-only">Şəkilli sual</span>}
+          {visibleText(question.text, images.length > 0) ?? <span className="sr-only">{t('exam.result.imageQuestion')}</span>}
         </h1>
         <QuestionVisuals visuals={images} src={visualSrc} className="mt-3" />
       </section>
 
-      <div role="radiogroup" aria-label="Variantlar" className="flex flex-col gap-2.5">
+      <div role="radiogroup" aria-label={t('battle.room.options')} className="flex flex-col gap-2.5">
         {question.options.map((option) => {
           const isCorrect = reveal?.correctOptionId === option.id
           const isMine = answered === option.id
@@ -330,9 +335,9 @@ function Stage({ state, room, isHost, myId }: { state: BattleState; room: Room; 
                 {visibleText(option.text, optionVisuals(question.visuals, option.id).length > 0)}
                 <QuestionVisuals visuals={optionVisuals(question.visuals, option.id)} src={visualSrc} size="option" />
               </span>
-              {isCorrect && <Check className="mt-1 size-4 shrink-0 text-emerald-700" aria-label="Düzgün cavab" />}
-              {isWrongPick && <X className="mt-1 size-4 shrink-0 text-rose-700" aria-label="Sizin cavabınız, yanlış" />}
-              {isMine && !reveal && <Check className="mt-1 size-4 shrink-0 text-indigo-600" aria-label="Seçilmiş cavab" />}
+              {isCorrect && <Check className="mt-1 size-4 shrink-0 text-emerald-700" aria-label={t('exam.result.correctAnswer')} />}
+              {isWrongPick && <X className="mt-1 size-4 shrink-0 text-rose-700" aria-label={t('battle.room.yourWrong')} />}
+              {isMine && !reveal && <Check className="mt-1 size-4 shrink-0 text-indigo-600" aria-label={t('battle.room.selected')} />}
             </button>
           )
         })}
@@ -340,7 +345,7 @@ function Stage({ state, room, isHost, myId }: { state: BattleState; room: Room; 
 
       {!reveal && answered && (
         <p role="status" className="text-center font-medium text-slate-600">
-          Cavabınız qəbul edildi — digərləri gözlənilir…
+          {t('battle.room.accepted')}
         </p>
       )}
 
@@ -352,7 +357,7 @@ function Stage({ state, room, isHost, myId }: { state: BattleState; room: Room; 
             mine.lastCorrect ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-800',
           )}
         >
-          {mine.lastCorrect ? `Düzgün! +${formatNumber(mine.lastPoints ?? 0)} xal` : answered ? 'Yanlış cavab · 0 xal' : 'Cavab verilmədi · 0 xal'}
+          {mine.lastCorrect ? t('battle.room.correctPoints', { points: formatNumber(mine.lastPoints ?? 0) }) : answered ? t('battle.room.wrongPoints') : t('battle.room.noAnswerPoints')}
         </div>
       )}
 
@@ -363,6 +368,7 @@ function Stage({ state, room, isHost, myId }: { state: BattleState; room: Room; 
 
 /** Shrinking bar + seconds left, synced to the server deadline. */
 function Countdown({ endsAt, seconds, offset }: { endsAt: string; seconds: number; offset: number }) {
+  const { t } = useTranslation()
   const remaining = () => Math.max(0, Date.parse(endsAt) - (Date.now() + offset))
   const [left, setLeft] = useState(remaining)
 
@@ -375,7 +381,7 @@ function Countdown({ endsAt, seconds, offset }: { endsAt: string; seconds: numbe
   const secondsLeft = Math.ceil(left / 1000)
 
   return (
-    <div className="flex items-center gap-3" role="timer" aria-label={`${secondsLeft} saniyə qalıb`}>
+    <div className="flex items-center gap-3" role="timer" aria-label={t('battle.room.secondsLeft', { count: secondsLeft })}>
       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200">
         <div
           className={cn('h-full rounded-full transition-[width] duration-100 ease-linear', secondsLeft <= 5 ? 'bg-rose-500' : 'bg-indigo-600')}
@@ -390,10 +396,11 @@ function Countdown({ endsAt, seconds, offset }: { endsAt: string; seconds: numbe
 }
 
 function Leaderboard({ participants, myId, room, isHost }: { participants: BattleParticipant[]; myId: string; room?: Room; isHost?: boolean }) {
+  const { t } = useTranslation()
   const ranks = usePlayerRanks(participants.map(p => p.userId))
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-      <h2 className="mb-3 font-semibold">Liderlər cədvəli</h2>
+      <h2 className="mb-3 font-semibold">{t('battle.room.leaderboard')}</h2>
       <ol className="flex flex-col gap-1.5">
         {participants.map((p) => (
           <li
@@ -410,7 +417,7 @@ function Leaderboard({ participants, myId, room, isHost }: { participants: Battl
               </span>
             )}
             <span className="w-16 text-right font-bold tabular-nums">{formatNumber(p.score)}</span>
-            {p.isHost && <Crown className="size-4 text-amber-500" aria-label="Host" />}
+            {p.isHost && <Crown className="size-4 text-amber-500" aria-label={t('battle.host')} />}
             {isHost && room && !p.isHost && <HostActions participant={p} room={room} />}
           </li>
         ))}
@@ -420,6 +427,7 @@ function Leaderboard({ participants, myId, room, isHost }: { participants: Battl
 }
 
 function FinalResults({ state, myId }: { state: BattleState; myId: string }) {
+  const { t } = useTranslation()
   const [first, second, third] = state.participants
   const mine = state.participants.find((p) => p.userId === myId)
   const podium = [
@@ -431,10 +439,10 @@ function FinalResults({ state, myId }: { state: BattleState; myId: string }) {
   return (
     <>
       <section className="rounded-2xl bg-[#1d2140] p-6 text-white shadow-sm">
-        <h1 className="text-center text-2xl font-bold">Yarış bitdi!</h1>
+        <h1 className="text-center text-2xl font-bold">{t('battle.room.finished')}</h1>
         {mine && (
           <p className="mt-1 text-center text-indigo-100">
-            Siz {mine.rank}-ci yerdəsiniz · {formatNumber(mine.score)} xal · {mine.correctCount}/{state.settings.questionCount} düzgün
+            {t('battle.room.yourPlace', { rank: mine.rank, score: formatNumber(mine.score), correct: mine.correctCount, total: state.settings.questionCount })}
           </p>
         )}
         <div className="mt-6 flex items-end justify-center gap-3" aria-label="TOP 3">
@@ -458,10 +466,10 @@ function FinalResults({ state, myId }: { state: BattleState; myId: string }) {
 
       <div className="flex flex-wrap justify-center gap-3">
         <Link to="/battle" className="inline-flex h-10 items-center rounded-lg btn-primary px-4 font-medium">
-          Yeni yarış
+          {t('history.newBattle')}
         </Link>
         <Link to="/exams?tab=battle" className="inline-flex h-10 items-center rounded-lg border border-slate-300 bg-white px-4 font-medium text-slate-700 hover:bg-slate-50">
-          Tarixçə
+          {t('nav.items.history')}
         </Link>
       </div>
     </>
@@ -469,11 +477,12 @@ function FinalResults({ state, myId }: { state: BattleState; myId: string }) {
 }
 
 function ConnectionBadge({ status }: { status: ConnectionStatus }) {
+  const { t } = useTranslation()
   if (status === 'connected') {
     return (
       <span className="hidden items-center gap-1.5 text-xs font-medium text-emerald-700 sm:flex">
         <Wifi className="size-4" aria-hidden />
-        Bağlıdır
+        {t('battle.room.connected')}
       </span>
     )
   }
@@ -481,7 +490,7 @@ function ConnectionBadge({ status }: { status: ConnectionStatus }) {
   return (
     <span role="status" className="flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800">
       {status === 'disconnected' ? <WifiOff className="size-4" aria-hidden /> : <Loader2 className="size-4 animate-spin" aria-hidden />}
-      {status === 'disconnected' ? 'Bağlantı kəsildi' : 'Yenidən qoşulur…'}
+      {status === 'disconnected' ? t('battle.room.disconnected') : t('battle.room.reconnecting')}
     </span>
   )
 }

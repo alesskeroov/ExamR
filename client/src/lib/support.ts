@@ -1,3 +1,4 @@
+import i18n, { localeTag } from './i18n'
 /** The one support address shown across the site; override per deployment with VITE_SUPPORT_EMAIL. */
 export const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL?.trim() || 'examr.contact@gmail.com'
 
@@ -12,11 +13,11 @@ export interface SupportTopic {
 export function supportMailto({ topic, reference }: SupportTopic) {
   const subject = `[ExamR] ${topic}${reference ? ` · ${reference}` : ''}`
   const lines = [
-    `Bölmə: ${window.location.pathname}`,
-    ...(reference ? [`İstinad: ${reference}`] : []),
-    `Tarix: ${new Date().toLocaleString('az-AZ', { timeZone: 'Asia/Baku' })} (Bakı vaxtı)`,
+    i18n.t('common.support.mailSection', { path: window.location.pathname }),
+    ...(reference ? [i18n.t('common.support.mailReference', { ref: reference })] : []),
+    i18n.t('common.support.mailDate', { date: new Date().toLocaleString(localeTag(), { timeZone: 'Asia/Baku' }) }),
     '',
-    'Problemi qısa təsvir edin:',
+    i18n.t('common.support.mailBody'),
     '',
   ]
   return `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\n'))}`
