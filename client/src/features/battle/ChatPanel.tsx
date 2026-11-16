@@ -48,7 +48,7 @@ export function ChatPanel({ messages, myUserId, muted, disabled, onSend, classNa
           return (
             <li key={m.id} className={cn('flex max-w-[85%] flex-col', mine ? 'items-end self-end' : 'items-start')}>
               <span className="mb-0.5 flex items-center gap-1.5 text-xs text-slate-500">
-                {m.avatarUrl ? <img src={m.avatarUrl} alt="" className="size-5 rounded-full object-cover" /> : <span className="flex size-5 items-center justify-center rounded-full bg-slate-200 text-[10px] font-medium text-slate-600" aria-hidden>{m.displayName.charAt(0).toUpperCase()}</span>}
+                {m.avatarUrl ? <img src={m.avatarUrl} alt="" className="size-5 shrink-0 rounded-full object-cover" /> : <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[10px] font-medium text-slate-600" aria-hidden>{m.displayName.charAt(0).toUpperCase()}</span>}
                 {mine ? t('battle.chat.you') : m.displayName} · <time dateTime={m.sentAt}>{time(m.sentAt)}</time>
               </span>
               <p

@@ -80,5 +80,5 @@ function ProfileSocial() {
 
 function FriendAvatar({ friend }: { friend: Friend }) {
   const [failed, setFailed] = useState<string | null>(null)
-  return friend.avatarUrl && failed !== friend.avatarUrl ? <img src={friend.avatarUrl} alt="" onError={() => setFailed(friend.avatarUrl)} className="size-10 rounded-full object-cover" /> : <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-full bg-indigo-50 text-sm font-semibold text-indigo-600">{friend.displayName.slice(0, 1).toUpperCase()}</span>
+  return friend.avatarUrl && failed !== friend.avatarUrl ? <img src={friend.avatarUrl} alt="" onError={() => setFailed(friend.avatarUrl)} className="size-10 shrink-0 rounded-full object-cover" /> : <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-full bg-indigo-50 text-sm font-semibold text-indigo-600">{friend.displayName.slice(0, 1).toUpperCase()}</span>
 }
