@@ -6,7 +6,7 @@ import { useTheme } from '../../lib/use-theme'
 import { ProductPreview } from './ProductPreview'
 import './landing.css'
 import { useTranslation } from 'react-i18next'
-import { LanguageSwitcher } from '../../components/common/LanguageSwitcher'
+import { LanguageRadios, LanguageSwitcher } from '../../components/common/LanguageSwitcher'
 
 const nav = [['#imkanlar', 'modes'], ['#nece-isleyir', 'steps'], ['#haqqimizda', 'why'], ['#suallar', 'faq']] as const
 const YEAR = new Date().getFullYear()
@@ -106,6 +106,11 @@ export function LandingPage() {
           </a>)}
         </nav>
         <div className="lp-sheet-bottom">
+          {/* On phones the header has no room for the language menu, so all three flags are offered here. */}
+          <div className="lp-theme-switch">
+            <span className="lp-theme-switch-label">{t('common.language')}</span>
+            <LanguageRadios />
+          </div>
           <div className="lp-theme-switch" role="radiogroup" aria-label={t('landing.appearance')}>
             <span className="lp-theme-switch-label">{t('landing.appearance')}</span>
             <div>
