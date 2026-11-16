@@ -5,6 +5,7 @@ import { useMemo, useRef, useState } from 'react'
 import { Alert } from '../../components/common/Alert'
 import { cn } from '../../lib/utils'
 import { useIndexDocument, useTutorDocuments, type TutorDocument } from './api'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   onStart: (documentId: string) => void
@@ -20,6 +21,7 @@ const accept = '.pdf,.docx,.pptx,application/pdf,application/vnd.openxmlformats-
 
 /** Start of a new chat: pick (or upload) the one document this conversation will be about. */
 export function TutorDocumentPicker({ onStart, starting, startError, resumable = [] }: Props) {
+  const { t } = useTranslation()
   const { data, isLoading, isError, refetch } = useTutorDocuments()
   const monthly = useUsageLimit('Upload')
   const index = useIndexDocument()
@@ -37,9 +39,9 @@ export function TutorDocumentPicker({ onStart, starting, startError, resumable =
     if (!file || monthly.blocked) return
     const name = file.name.toLowerCase()
     const error = name.endsWith('.pdf') || name.endsWith('.docx') || name.endsWith('.pptx') ? null
-      : name.endsWith('.doc') ? 'Köhnə .doc formatı dəstəklənmir. Faylı Word-də .docx kimi saxlayıb yenidən yükləyin.'
-      : name.endsWith('.ppt') ? 'Köhnə .ppt formatı dəstəklənmir. Faylı PowerPoint-də .pptx kimi saxlayıb yenidən yükləyin.'
-      : 'Öyrənmə bələdçisi yalnız PDF, Word (.docx) və PowerPoint (.pptx) faylları qəbul edir.'
+      : name.endsWith('.doc') ? t('tutor.picker.oldDoc')
+      : name.endsWith('.ppt') ? t('tutor.picker.oldPpt')
+      : t('tutor.picker.types')
     setTypeError(error)
     if (error) return
     setProgress(0)
@@ -48,15 +50,15 @@ export function TutorDocumentPicker({ onStart, starting, startError, resumable =
 
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:py-12">
-      <h1 className="text-2xl font-bold tracking-tight sm:text-[28px]">Hansı sənəd üzərində işləyək?</h1>
-      <p className="mt-2 text-slate-600">Sənəddəki aydın sual–cavab əlaqələrindən kartlar hazırlanır. Digər mətnlər konspekt kimi oxunur.</p>
+      <h1 className="text-2xl font-bold tracking-tight sm:text-[28px]">{t('tutor.picker.title')}</h1>
+      <p className="mt-2 text-slate-600">{t('tutor.picker.text')}</p>
 
       <UsageMeter kind="Upload" />
       <div className="mt-6 flex flex-col gap-2 sm:flex-row">
         <label className="relative flex-1">
-          <span className="sr-only">Sənəd axtar</span>
+          <span className="sr-only">{t('tutor.picker.search')}</span>
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-slate-400" aria-hidden />
-          <input value={term} onChange={e => setTerm(e.target.value)} placeholder="Sənəd axtar…" type="search"
+          <input value={term} onChange={e => setTerm(e.target.value)} placeholder={t('tutor.picker.searchPlaceholder')} type="search"
             className="h-11 w-full border border-slate-300 bg-white pr-3 pl-9 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
         </label>
         <input ref={input} type="file" accept={accept} disabled={monthly.blocked || progress !== null} className="sr-only" tabIndex={-1} aria-hidden
@@ -64,23 +66,23 @@ export function TutorDocumentPicker({ onStart, starting, startError, resumable =
         <button type="button" onClick={() => input.current?.click()} disabled={monthly.blocked || progress !== null}
           className="btn-primary inline-flex h-11 items-center justify-center gap-2 rounded-[10px] px-4 text-sm font-semibold disabled:opacity-70">
           {progress !== null ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Upload className="size-4" aria-hidden />}
-          {progress !== null ? `Yüklənir ${progress}%` : 'Yeni sənəd yüklə'}
+          {progress !== null ? t('tutor.picker.uploading', { n: progress }) : t('documents.uploadNew')}
         </button>
       </div>
-      <p className="mt-2 text-xs text-slate-500">PDF, Word (.docx) və ya PowerPoint (.pptx): konspekt, slaydlar, açıq sual–cavab və ya düzgün cavabı işarələnmiş testlər · ən çox 50 MB. Skan edilmiş PDF-lər hələ dəstəklənmir; şəkil kimi saxlanılmış slaydlar şəkil olaraq göstərilir.</p>
+      <p className="mt-2 text-xs text-slate-500">{t('tutor.picker.hint')}</p>
 
-      {typeError && <div className="mt-4"><Alert title="Fayl növü dəstəklənmir">{typeError}</Alert></div>}
-      {index.isError && <div className="mt-4"><Alert title="Sənəd hazırlana bilmədi">{index.error.message}</Alert></div>}
-      {startError && <div className="mt-4"><Alert title="Bu sənəddən kart hazırlanmadı">{startError}</Alert></div>}
+      {typeError && <div className="mt-4"><Alert title={t('tutor.picker.unsupported')}>{typeError}</Alert></div>}
+      {index.isError && <div className="mt-4"><Alert title={t('tutor.picker.indexFailed')}>{index.error.message}</Alert></div>}
+      {startError && <div className="mt-4"><Alert title={t('tutor.picker.startFailed')}>{startError}</Alert></div>}
 
       <div className="mt-6">
         {isLoading ? (
-          <ul className="space-y-2" aria-label="Yüklənir">{[0, 1, 2].map(i => <li key={i} className="h-16 animate-pulse rounded-xl bg-slate-100" />)}</ul>
+          <ul className="space-y-2" aria-label={t('common.loading')}>{[0, 1, 2].map(i => <li key={i} className="h-16 animate-pulse rounded-xl bg-slate-100" />)}</ul>
         ) : isError ? (
-          <Alert title="Sənədlər yüklənmədi" action={<button type="button" onClick={() => refetch()} className="text-sm font-semibold underline">Yenidən cəhd et</button>} />
+          <Alert title={t('documents.listFailed')} action={<button type="button" onClick={() => refetch()} className="text-sm font-semibold underline">{t('common.retry')}</button>} />
         ) : documents.length === 0 ? (
           <p className="tutor-border rounded-xl border border-dashed px-4 py-10 text-center text-sm text-slate-500">
-            {term ? 'Axtarışa uyğun sənəd yoxdur.' : 'Hələ sənəd yoxdur. Yuxarıdan ilk sənədinizi yükləyin.'}
+            {term ? t('tutor.picker.noMatch') : t('tutor.picker.empty')}
           </p>
         ) : (
           <ul className="space-y-2">
@@ -96,6 +98,7 @@ export function TutorDocumentPicker({ onStart, starting, startError, resumable =
 }
 
 function DocumentRow({ doc, resumable, busy, onStart, onIndex }: { doc: TutorDocument; resumable: boolean; busy: boolean; onStart: () => void; onIndex: () => void }) {
+  const { t } = useTranslation()
   const ready = doc.status === 'Completed'
   const working = doc.status === 'Pending' || doc.status === 'Processing'
   return (
@@ -106,21 +109,21 @@ function DocumentRow({ doc, resumable, busy, onStart, onIndex }: { doc: TutorDoc
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold">{doc.fileName}</p>
         <p className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
-          {ready && <><CheckCircle2 className="size-3.5 text-emerald-600" aria-hidden />Hazırdır{doc.pageCount ? ` · ${doc.pageCount} ${doc.format === 'pptx' ? 'slayd' : 'səhifə'}` : ''}</>}
-          {working && <><Loader2 className="size-3.5 animate-spin" aria-hidden />Hazırlanır…</>}
-          {doc.status === 'Failed' && <><TriangleAlert className="size-3.5 text-rose-600" aria-hidden />Emal alınmadı</>}
-          {doc.status === null && 'Hələ hazırlanmayıb'}
+          {ready && <><CheckCircle2 className="size-3.5 text-emerald-600" aria-hidden />{t('documents.status.Completed')}{doc.pageCount ? ` · ${doc.format === 'pptx' ? t('tutor.picker.slides', { count: doc.pageCount }) : t('documents.pages', { count: doc.pageCount })}` : ''}</>}
+          {working && <><Loader2 className="size-3.5 animate-spin" aria-hidden />{t('tutor.picker.preparing')}</>}
+          {doc.status === 'Failed' && <><TriangleAlert className="size-3.5 text-rose-600" aria-hidden />{t('tutor.picker.failed')}</>}
+          {doc.status === null && t('tutor.picker.notPrepared')}
         </p>
       </div>
       {ready ? (
         <button type="button" onClick={onStart} disabled={busy}
           className="btn-primary inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold disabled:opacity-70">
-          {busy && <Loader2 className="size-4 animate-spin" aria-hidden />}{resumable ? 'Davam et' : 'Başla'}
+          {busy && <Loader2 className="size-4 animate-spin" aria-hidden />}{resumable ? t('dashboard.continue') : t('dim.page.start')}
         </button>
       ) : !working && (
         <button type="button" onClick={onIndex} disabled={busy}
           className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-70">
-          {busy && <Loader2 className="size-4 animate-spin" aria-hidden />}{doc.status === 'Failed' ? 'Yenidən cəhd et' : 'Hazırla'}
+          {busy && <Loader2 className="size-4 animate-spin" aria-hidden />}{doc.status === 'Failed' ? t('common.retry') : t('tutor.picker.prepare')}
         </button>
       )}
     </li>

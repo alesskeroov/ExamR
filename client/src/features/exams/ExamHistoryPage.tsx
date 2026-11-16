@@ -11,43 +11,45 @@ import { cn } from '../../lib/utils'
 import { BattleHistoryList } from '../battle/BattleHistoryList'
 import { useExamHistory, type ExamSummary } from './api'
 import { sourceName, sourceRange } from './examSource'
+import { useTranslation } from 'react-i18next'
 
 type Tab = 'exams' | 'battle'
 
 export function ExamHistoryPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const tab: Tab = searchParams.get('tab') === 'battle' ? 'battle' : 'exams'
+  const { t } = useTranslation()
 
   return (
     <>
       <PageHeader
-        title="Tarixçə"
-        description="Keçmiş imtahanlarınız, yarışlarınız və nəticələriniz."
+        title={t('history.title')}
+        description={t('history.description')}
         actions={
           <Link
             to={tab === 'battle' ? '/battle' : '/exams/new'}
             className="inline-flex h-10 items-center gap-2 rounded-lg btn-primary px-4 font-medium"
           >
             <PlayCircle className="size-4" aria-hidden />
-            {tab === 'battle' ? 'Yeni yarış' : 'Yeni imtahan'}
+            {tab === 'battle' ? t('history.newBattle') : t('history.newExam')}
           </Link>
         }
       />
 
-      <div role="tablist" aria-label="Tarixçə növü" className="mb-6 inline-flex rounded-lg bg-slate-100 p-1">
-        {(['exams', 'battle'] as const).map((t) => (
+      <div role="tablist" aria-label={t('history.tabsAria')} className="mb-6 inline-flex rounded-lg bg-slate-100 p-1">
+        {(['exams', 'battle'] as const).map((id) => (
           <button
-            key={t}
+            key={id}
             type="button"
             role="tab"
-            aria-selected={tab === t}
-            onClick={() => setSearchParams(t === 'battle' ? { tab: 'battle' } : {})}
+            aria-selected={tab === id}
+            onClick={() => setSearchParams(id === 'battle' ? { tab: 'battle' } : {})}
             className={cn(
               'h-10 rounded-md px-4 font-medium transition-colors duration-150 sm:h-8',
-              tab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900',
+              tab === id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900',
             )}
           >
-            {t === 'exams' ? 'İmtahanlar' : 'Battle'}
+            {id === 'exams' ? t('profile.tabs.exams.label') : 'Battle'}
           </button>
         ))}
       </div>
@@ -60,16 +62,17 @@ export function ExamHistoryPage() {
 function ExamHistoryList() {
   const [page, setPage] = useState(1)
   const history = useExamHistory(page)
+  const { t } = useTranslation()
   const totalPages = history.data ? Math.max(1, Math.ceil(history.data.totalCount / history.data.pageSize)) : 1
 
   return (
     <>
       {history.isPending ? (
-        <div className="h-48 animate-pulse rounded-xl bg-slate-200/60" aria-label="Yüklənir" />
+        <div className="h-48 animate-pulse rounded-xl bg-slate-200/60" aria-label={t('common.loading')} />
       ) : history.isError ? (
-        <Alert title="Tarixçə yüklənmədi">{history.error.message}</Alert>
+        <Alert title={t('history.loadFailed')}>{history.error.message}</Alert>
       ) : history.data.items.length === 0 ? (
-        <EmptyState icon={<History className="size-8" />} title="Hələ imtahan yoxdur" description="İlk imtahanınızı başladın — nəticələr burada saxlanılacaq." />
+        <EmptyState icon={<History className="size-8" />} title={t('history.empty')} description={t('history.emptyText')} />
       ) : (
         <>
           <ul className="flex flex-col gap-2">
@@ -82,13 +85,13 @@ function ExamHistoryList() {
           {totalPages > 1 && (
             <div className="mt-6 flex items-center justify-center gap-3">
               <Button variant="secondary" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
-                Əvvəlki
+                {t('common.previous')}
               </Button>
               <span className="text-slate-500 tabular-nums">
                 {page} / {totalPages}
               </span>
               <Button variant="secondary" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-                Növbəti
+                {t('common.next')}
               </Button>
             </div>
           )}
@@ -101,6 +104,7 @@ function ExamHistoryList() {
 function HistoryRow({ exam }: { exam: ExamSummary }) {
   const inProgress = exam.status === 'InProgress'
   const score = exam.scorePercent
+  const { t } = useTranslation()
   const scoreTone = score === null ? 'text-slate-400' : score >= 80 ? 'text-emerald-700' : score >= 50 ? 'text-amber-700' : 'text-rose-700'
 
   return (
@@ -116,18 +120,18 @@ function HistoryRow({ exam }: { exam: ExamSummary }) {
           {sourceName(exam.source)}
         </p>
         <p className="text-slate-700">
-          {sourceRange(exam.source) && `Suallar ${sourceRange(exam.source)} · `}
-          {exam.questionCount} sual
+          {sourceRange(exam.source) && `${t('history.questionsRange', { range: sourceRange(exam.source) })} · `}
+          {t('common.questions', { count: exam.questionCount })}
         </p>
         <p className="text-slate-500">
-          {formatDate(exam.startedAt)} · {exam.revealMode === 'Immediate' ? 'cavablar dərhal' : 'cavablar sonda'}
-          {!inProgress && ` · ${exam.correct} düzgün, ${exam.incorrect} yanlış, ${exam.unanswered} cavabsız`}
+          {formatDate(exam.startedAt)} · {exam.revealMode === 'Immediate' ? t('history.revealImmediate') : t('history.revealEnd')}
+          {!inProgress && ` · ${t('history.counts', { correct: exam.correct, incorrect: exam.incorrect, unanswered: exam.unanswered })}`}
         </p>
       </div>
       {inProgress ? (
-        <StatusBadge tone="info">Davam edir</StatusBadge>
+        <StatusBadge tone="info">{t('profile.activity.inProgress')}</StatusBadge>
       ) : exam.completionReason === 'TimeExpired' ? (
-        <StatusBadge tone="warning">Vaxt bitdi</StatusBadge>
+        <StatusBadge tone="warning">{t('history.timeUp')}</StatusBadge>
       ) : null}
       <ChevronRight className="size-4 shrink-0 text-slate-400" aria-hidden />
     </Link>

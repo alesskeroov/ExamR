@@ -4,6 +4,7 @@ import { Alert } from '../../components/common/Alert'
 import { cn } from '../../lib/utils'
 import { GuideDialog } from '../tutor/GuideDialog'
 import { useCourseCandidates, useSetCourseDocuments, type CourseCandidate, type CourseDetail, type CourseRole } from './api'
+import { useTranslation } from 'react-i18next'
 
 const limits: Record<CourseRole, number> = { Material: 10, Bank: 3 }
 
@@ -14,6 +15,7 @@ interface Props {
 
 /** Picks the course's lecture files (guide) and question banks (exam PDFs) from the files the student can read. */
 export function CourseFilesDialog({ course, onClose }: Props) {
+  const { t } = useTranslation()
   const candidates = useCourseCandidates(true)
   const save = useSetCourseDocuments(course.id)
   const [picked, setPicked] = useState<Record<CourseRole, string[]>>(() => ({
@@ -34,7 +36,7 @@ export function CourseFilesDialog({ course, onClose }: Props) {
         <legend className="mb-1 text-sm font-semibold text-slate-700">{title} <span className="font-normal text-slate-500">· {picked[role].length}/{limits[role]}</span></legend>
         <p className="text-xs text-slate-500">{hint}</p>
         {items.length === 0
-          ? <p className="tutor-border rounded-xl border border-dashed px-3 py-4 text-center text-sm text-slate-500">Uyğun fayl yoxdur.</p>
+          ? <p className="tutor-border rounded-xl border border-dashed px-3 py-4 text-center text-sm text-slate-500">{t('courses.noFiles')}</p>
           : <ul className="tutor-border overflow-hidden rounded-xl border bg-white">
             {items.map((item: CourseCandidate, i) => {
               const checked = picked[role].includes(item.documentId)
@@ -54,21 +56,21 @@ export function CourseFilesDialog({ course, onClose }: Props) {
   }
 
   return (
-    <GuideDialog title="Fənnin faylları" onClose={onClose} tall>
+    <GuideDialog title={t('courses.files')} onClose={onClose} tall>
       <div className="guide-scroll flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 py-4 sm:px-5">
-        {candidates.isLoading && <p role="status" className="text-sm text-slate-500">Fayllar yüklənir…</p>}
-        {candidates.isError && <Alert title="Fayllar yüklənmədi">{candidates.error.message}</Alert>}
+        {candidates.isLoading && <p role="status" className="text-sm text-slate-500">{t('courses.filesLoading')}</p>}
+        {candidates.isError && <Alert title={t('courses.filesFailed')}>{candidates.error.message}</Alert>}
         {candidates.data && <>
-          {section('Material', 'Mühazirə materialları', 'Bələdçidə oxuduğunuz PDF, Word və PowerPoint faylları.')}
-          {section('Bank', 'Sual bankları', 'İmtahan və test həll etdiyiniz, variantlı suallardan ibarət fayllar.')}
+          {section('Material', t('courses.materials'), t('courses.materialsHint'))}
+          {section('Bank', t('courses.banks'), t('courses.banksHint'))}
         </>}
-        {save.isError && <Alert title="Yadda saxlanmadı">{save.error.message}</Alert>}
+        {save.isError && <Alert title={t('questions.notSaved')}>{save.error.message}</Alert>}
       </div>
       <div className="tutor-border flex shrink-0 flex-col-reverse gap-2 border-t px-4 py-3 sm:flex-row sm:justify-end sm:px-5">
-        <button type="button" onClick={onClose} className="tutor-shared-action sm:px-5">Ləğv et</button>
+        <button type="button" onClick={onClose} className="tutor-shared-action sm:px-5">{t('common.cancel')}</button>
         <button type="button" disabled={save.isPending || !candidates.data} onClick={() => save.mutate({ materials: picked.Material, banks: picked.Bank }, { onSuccess: onClose })}
           className="btn-primary inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold disabled:opacity-60">
-          {save.isPending ? 'Saxlanılır…' : <><FileText className="size-4" aria-hidden />Yadda saxla</>}
+          {save.isPending ? t('tutor.card.saving') : <><FileText className="size-4" aria-hidden />{t('questions.saveButton')}</>}
         </button>
       </div>
     </GuideDialog>

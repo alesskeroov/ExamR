@@ -1,10 +1,12 @@
 import { ArrowUp } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { cn } from '../../lib/utils'
+import { useTranslation } from 'react-i18next'
 
 /** Floating "back to top" button that appears once the page has been scrolled down by `threshold` pixels. */
 export function ScrollToTopButton({ threshold = 600 }: { threshold?: number }) {
   const [visible, setVisible] = useState(false)
+  const { t } = useTranslation()
 
   useEffect(() => {
     const update = () => setVisible(window.scrollY > threshold)
@@ -17,8 +19,8 @@ export function ScrollToTopButton({ threshold = 600 }: { threshold?: number }) {
     <button
       type="button"
       onClick={() => window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })}
-      aria-label="Yuxarı qalx"
-      title="Yuxarı qalx"
+      aria-label={t('common.scrollTop')}
+      title={t('common.scrollTop')}
       aria-hidden={!visible}
       tabIndex={visible ? 0 : -1}
       className={cn(

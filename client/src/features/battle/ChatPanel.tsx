@@ -2,6 +2,8 @@ import { MessageCircle, MicOff, Send } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { cn } from '../../lib/utils'
 import { MAX_MESSAGE_LENGTH, type ChatMessage } from './api'
+import { useTranslation } from 'react-i18next'
+import { localeTag } from '../../lib/i18n'
 
 interface ChatPanelProps {
   messages: ChatMessage[]
@@ -12,10 +14,11 @@ interface ChatPanelProps {
   className?: string
 }
 
-const time = (iso: string) => new Date(iso).toLocaleTimeString('az-AZ', { hour: '2-digit', minute: '2-digit' })
+const time = (iso: string) => new Date(iso).toLocaleTimeString(localeTag(), { hour: '2-digit', minute: '2-digit' })
 
 /** Room chat. Text is rendered as plain React text, so HTML/script in messages is shown, never executed. */
 export function ChatPanel({ messages, myUserId, muted, disabled, onSend, className }: ChatPanelProps) {
+  const { t } = useTranslation()
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const listRef = useRef<HTMLOListElement>(null)
@@ -35,18 +38,18 @@ export function ChatPanel({ messages, myUserId, muted, disabled, onSend, classNa
   }
 
   return (
-    <section aria-label="Otaq çatı" className={cn('flex min-h-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm', className)}>
-      <h2 className="border-b border-slate-200 px-4 py-3 font-semibold">Chat</h2>
+    <section aria-label={t('battle.chat.aria')} className={cn('flex min-h-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm', className)}>
+      <h2 className="border-b border-slate-200 px-4 py-3 font-semibold">{t('battle.chat.title')}</h2>
 
       <ol ref={listRef} aria-live="polite" className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-3">
-        {messages.length === 0 && <li className="m-auto text-center text-slate-400">Hələ mesaj yoxdur. Salam deyin!</li>}
+        {messages.length === 0 && <li className="m-auto text-center text-slate-400">{t('battle.chat.empty')}</li>}
         {messages.map((m) => {
           const mine = m.userId === myUserId
           return (
             <li key={m.id} className={cn('flex max-w-[85%] flex-col', mine ? 'items-end self-end' : 'items-start')}>
               <span className="mb-0.5 flex items-center gap-1.5 text-xs text-slate-500">
                 {m.avatarUrl ? <img src={m.avatarUrl} alt="" className="size-5 rounded-full object-cover" /> : <span className="flex size-5 items-center justify-center rounded-full bg-slate-200 text-[10px] font-medium text-slate-600" aria-hidden>{m.displayName.charAt(0).toUpperCase()}</span>}
-                {mine ? 'Siz' : m.displayName} · <time dateTime={m.sentAt}>{time(m.sentAt)}</time>
+                {mine ? t('battle.chat.you') : m.displayName} · <time dateTime={m.sentAt}>{time(m.sentAt)}</time>
               </span>
               <p
                 className={cn(
@@ -64,25 +67,25 @@ export function ChatPanel({ messages, myUserId, muted, disabled, onSend, classNa
       {muted ? (
         <p className="flex items-center gap-2 border-t border-slate-200 px-4 py-3 text-amber-800">
           <MicOff className="size-4" aria-hidden />
-          Host sizi səssiz rejimə keçirib.
+          {t('battle.chat.muted')}
         </p>
       ) : (
         <form onSubmit={submit} className="flex items-end gap-2 border-t border-slate-200 p-3">
           <label className="min-w-0 flex-1">
-            <span className="sr-only">Mesaj</span>
+            <span className="sr-only">{t('battle.chat.message')}</span>
             <input
               value={text}
               onChange={(e) => setText(e.target.value)}
               maxLength={MAX_MESSAGE_LENGTH}
               disabled={disabled}
-              placeholder="Mesaj yazın…"
+              placeholder={t('battle.chat.placeholder')}
               className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none disabled:bg-slate-50"
             />
           </label>
           <button
             type="submit"
             disabled={disabled || sending || !text.trim()}
-            aria-label="Göndər"
+            aria-label={t('battle.chat.send')}
             className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-indigo-300"
           >
             <Send className="size-4" aria-hidden />
@@ -100,11 +103,12 @@ export function ChatPanel({ messages, myUserId, muted, disabled, onSend, classNa
 
 /** Mobile only: floating button that opens the chat sheet, with an unread counter. */
 export function BattleMessageButton({ unread, onClick }: { unread: number; onClick: () => void }) {
+  const { t } = useTranslation()
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label={unread > 0 ? `Chat, ${unread} yeni mesaj` : 'Chat'}
+      aria-label={unread > 0 ? t('battle.chat.unread', { count: unread }) : t('battle.chat.title')}
       className="fixed right-4 bottom-4 z-30 flex size-14 items-center justify-center rounded-full bg-indigo-600 text-white shadow-lg hover:bg-indigo-700 lg:hidden"
     >
       <MessageCircle className="size-6" aria-hidden />

@@ -11,12 +11,16 @@ import { useMyDocuments } from '../documents/api'
 import { useActiveExam, type ExamSummary } from '../exams/api'
 import { sourceName } from '../exams/examSource'
 import { useAllExams, useHealth } from './api'
+import { useTranslation } from 'react-i18next'
+import i18n from '../../lib/i18n'
 
 // Built by hand: many browsers ship without Azerbaijani date names and fall back to "M11 2, Mon".
-const days = ['Bazar', 'Bazar ertəsi', 'Çərşənbə axşamı', 'Çərşənbə', 'Cümə axşamı', 'Cümə', 'Şənbə']
-const months = ['yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun', 'iyul', 'avqust', 'sentyabr', 'oktyabr', 'noyabr', 'dekabr']
 const now = new Date()
-const today = `${days[now.getDay()]}, ${now.getDate()} ${months[now.getMonth()]}`
+const today = () => i18n.t('dashboard.today', {
+  weekday: (i18n.t('common.weekdays', { returnObjects: true }) as string[])[now.getDay()],
+  day: now.getDate(),
+  month: (i18n.t('common.months', { returnObjects: true }) as string[])[now.getMonth()],
+})
 const pct = (value: number | null) => (value === null ? '—' : `${Math.round(value)}%`)
 /** 70%+ reads as good, under 50% as needing work. */
 const scoreTone = (value: number | null) => (value === null ? '' : value >= 70 ? 'ds-good' : value < 50 ? 'ds-bad' : '')
@@ -31,6 +35,7 @@ export function DashboardPage() {
   const exams = useAllExams()
   const active = useActiveExam()
   const myDocs = useMyDocuments()
+  const { t } = useTranslation()
 
   // History arrives newest first.
   const completed = (exams.data ?? []).filter(e => e.status === 'Completed')
@@ -40,21 +45,21 @@ export function DashboardPage() {
   return <div>
     <header className="mb-8 flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
       <div className="min-w-0">
-        <p className="ds-label">{today}</p>
-        <h1 className="mt-1.5 truncate text-[28px] font-bold leading-tight tracking-[-0.04em] sm:text-[34px]">Salam, {user && <ScrambleText text={user.displayName || user.nickname} play={freshLogin} />}</h1>
+        <p className="ds-label">{today()}</p>
+        <h1 className="mt-1.5 truncate text-[28px] font-bold leading-tight tracking-[-0.04em] sm:text-[34px]">{t('dashboard.hello')} {user && <ScrambleText text={user.displayName || user.nickname} play={freshLogin} />}</h1>
       </div>
       <div className="flex gap-2">
-        <Link to="/upload" className="inline-flex h-10 items-center rounded-[10px] border border-line bg-surface px-3.5 text-sm font-semibold transition-colors hover:bg-sunken">Sənəd yüklə</Link>
-        <Link to="/exams/new" className="btn-primary inline-flex h-10 items-center rounded-[10px] px-3.5 text-sm font-semibold transition-colors">İmtahana başla</Link>
+        <Link to="/upload" className="inline-flex h-10 items-center rounded-[10px] border border-line bg-surface px-3.5 text-sm font-semibold transition-colors hover:bg-sunken">{t('nav.items.upload')}</Link>
+        <Link to="/exams/new" className="btn-primary inline-flex h-10 items-center rounded-[10px] px-3.5 text-sm font-semibold transition-colors">{t('nav.items.newExam')}</Link>
       </div>
     </header>
 
     {/* The one raised surface on the page: what to do next. Everything else is ruled rows. */}
     <div className={cn('grid gap-8 lg:gap-12', !firstRun && 'lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]')}>
-      <section aria-label="Növbəti addım" className="rounded-2xl border border-line bg-surface p-6 sm:p-8 lg:self-start">
+      <section aria-label={t('dashboard.nextStep')} className="rounded-2xl border border-line bg-surface p-6 sm:p-8 lg:self-start">
         {loading ? <Skeleton lines={3} /> : active.data
-          ? <NextStep label="Yarımçıq imtahan" title="Başladığın imtahan hələ bitməyib." body="Vaxt işləməyə davam edir. Qaldığın sualdan davam et.">
-              <Link to={`/exams/${active.data.id}`} className="btn-primary inline-flex h-11 items-center rounded-[10px] px-4 text-sm font-semibold">Davam et</Link>
+          ? <NextStep label={t('dashboard.unfinished.label')} title={t('dashboard.unfinished.title')} body={t('dashboard.unfinished.body')}>
+              <Link to={`/exams/${active.data.id}`} className="btn-primary inline-flex h-11 items-center rounded-[10px] px-4 text-sm font-semibold">{t('dashboard.continue')}</Link>
             </NextStep>
           : completed.length
             ? <LastResult exam={completed[0]} />
@@ -84,9 +89,10 @@ function Scorecard({ exams, loading }: { exams: ExamSummary[]; loading: boolean 
   const average = scored.length ? scored.reduce((sum, e) => sum + e.scorePercent!, 0) / scored.length : null
   const answered = exams.reduce((sum, e) => sum + e.questionCount - (e.unanswered ?? 0), 0)
   const trend = scored.slice(0, 12).reverse().map(e => e.scorePercent!)
-  const stats: [string, string][] = [['İmtahan', String(exams.length)], ['Orta bal', pct(average)], ['Cavablanmış sual', String(answered)]]
+  const { t } = useTranslation()
+  const stats: [string, string][] = [[t('dashboard.stats.exams'), String(exams.length)], [t('dashboard.stats.average'), pct(average)], [t('dashboard.stats.answered'), String(answered)]]
   return <section aria-labelledby="dash-score">
-    <SectionHead id="dash-score" title="Göstəricilər" />
+    <SectionHead id="dash-score" title={t('dashboard.stats.title')} />
     {loading ? <Skeleton lines={3} /> : <>
       <dl className="grid grid-cols-3 divide-x divide-line border-b border-line">
         {stats.map(([k, v]) => <div key={k} className="min-w-0 px-3 py-4 first:pl-0">
@@ -96,10 +102,10 @@ function Scorecard({ exams, loading }: { exams: ExamSummary[]; loading: boolean 
       </dl>
       <div className="pt-5">
         <div className="flex items-baseline justify-between gap-3 text-[13px]">
-          <span className="font-semibold">Bal dinamikası</span>
-          {trend.length >= 2 && <span className="text-muted">son <span className="ds-num">{trend.length}</span> imtahan</span>}
+          <span className="font-semibold">{t('dashboard.stats.trend')}</span>
+          {trend.length >= 2 && <span className="text-muted">{t('dashboard.stats.lastN', { count: trend.length })}</span>}
         </div>
-        {trend.length >= 2 ? <ScoreLine values={trend} /> : <p className="mt-2 text-[13.5px] text-muted">Xətt ikinci imtahandan sonra görünəcək.</p>}
+        {trend.length >= 2 ? <ScoreLine values={trend} /> : <p className="mt-2 text-[13.5px] text-muted">{t('dashboard.stats.trendLater')}</p>}
       </div>
     </>}
   </section>
@@ -108,7 +114,8 @@ function Scorecard({ exams, loading }: { exams: ExamSummary[]; loading: boolean 
 function ScoreLine({ values }: { values: number[] }) {
   const x = (i: number) => (i / (values.length - 1)) * 100
   const last = values[values.length - 1]
-  return <div className="relative mt-3 h-28" role="img" aria-label={`Son ${values.length} imtahanın balı: ${values.map(v => `${Math.round(v)}%`).join(', ')}`}>
+  const { t } = useTranslation()
+  return <div className="relative mt-3 h-28" role="img" aria-label={t('dashboard.stats.lineAria', { count: values.length, values: values.map(v => `${Math.round(v)}%`).join(', ') })}>
     <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 size-full overflow-visible" aria-hidden>
       <line x1="0" x2="100" y1="30" y2="30" className="stroke-line" strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
       <polyline points={values.map((v, i) => `${x(i)},${100 - v}`).join(' ')} fill="none" className="stroke-accent" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
@@ -119,13 +126,14 @@ function ScoreLine({ values }: { values: number[] }) {
 }
 
 function RecentExams({ exams }: { exams: ExamSummary[] }) {
+  const { t } = useTranslation()
   return <section aria-labelledby="dash-recent">
-    <SectionHead id="dash-recent" title="Son imtahanlar" link={<Link to="/exams" className="ds-link text-[13px]">Hamısı</Link>} />
+    <SectionHead id="dash-recent" title={t('profile.activity.recentExams')} link={<Link to="/exams" className="ds-link text-[13px]">{t('dashboard.all')}</Link>} />
     <ul className="ds-rows">{exams.slice(0, 5).map(e => <li key={e.id}>
       <Link to={`/exams/${e.id}/result`} className="group flex items-center justify-between gap-4 py-3">
         <span className="min-w-0">
           <span className="block truncate text-[14.5px] font-semibold group-hover:underline group-hover:underline-offset-4">{sourceName(e.source)}</span>
-          <span className="text-xs text-muted">{formatDate(e.completedAt ?? e.startedAt)}, <span className="ds-num">{e.correct ?? 0}/{e.questionCount}</span> düzgün</span>
+          <span className="text-xs text-muted">{formatDate(e.completedAt ?? e.startedAt)}, <span className="ds-num">{e.correct ?? 0}/{e.questionCount}</span> {t('dashboard.correctWord')}</span>
         </span>
         <span className={cn('ds-num shrink-0 text-[15px] font-semibold', scoreTone(e.scorePercent))}>{pct(e.scorePercent)}</span>
       </Link>
@@ -145,17 +153,18 @@ function SourceScores({ exams }: { exams: ExamSummary[] }) {
   }
   const rows = [...groups.values()].map(g => ({ ...g, average: g.scores.reduce((a, b) => a + b, 0) / g.scores.length }))
     .sort((a, b) => a.average - b.average).slice(0, 5)
+  const { t } = useTranslation()
   if (!rows.length) return null
   return <section aria-labelledby="dash-sources">
-    <SectionHead id="dash-sources" title="Sənədlər üzrə orta bal" />
+    <SectionHead id="dash-sources" title={t('dashboard.byDocument')} />
     <ul className="ds-rows">{rows.map(r => <li key={r.latest.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 py-3">
       <span className="min-w-0">
         <span className="block truncate text-[14.5px] font-semibold">{r.name}</span>
-        <span className="text-xs text-muted"><span className="ds-num">{r.scores.length}</span> imtahan</span>
+        <span className="text-xs text-muted">{t('dashboard.examCount', { count: r.scores.length })}</span>
       </span>
       <span className="flex items-center gap-4">
         <span className={cn('ds-num w-11 text-right text-[15px] font-semibold', scoreTone(r.average))}>{pct(r.average)}</span>
-        <Link to={retakeLink(r.latest)} className="ds-link text-[13px]" aria-label={`${r.name}: yenidən sına`}>Təkrar et</Link>
+        <Link to={retakeLink(r.latest)} className="ds-link text-[13px]" aria-label={t('dashboard.retryAria', { name: r.name })}>{t('dashboard.repeat')}</Link>
       </span>
       <div className="col-span-2 h-1 overflow-hidden rounded-full bg-line" aria-hidden>
         <div className={cn('h-full rounded-full', r.average < 50 ? 'bg-bad' : 'bg-ink')} style={{ width: `${Math.max(2, r.average)}%` }} />
@@ -175,38 +184,40 @@ function NextStep({ label, title, body, children }: { label: string; title: stri
 
 function LastResult({ exam }: { exam: ExamSummary }) {
   const score = exam.scorePercent
-  const verdict = score === null ? 'Nəticə hesablanmadı.' : score >= 85 ? 'Çox yaxşı nəticə.' : score >= 70 ? 'Yaxşı nəticə — bir az daha.' : score >= 50 ? 'Ortadır. Səhvlərə bax.' : 'Bu mövzunu təkrar etmək lazımdır.'
+  const { t } = useTranslation()
+  const verdict = t(`dashboard.verdict.${score === null ? 'none' : score >= 85 ? 'great' : score >= 70 ? 'good' : score >= 50 ? 'average' : 'weak'}`)
   return <div>
-    <p className="ds-label">Son imtahan · {formatDate(exam.completedAt ?? exam.startedAt)}</p>
+    <p className="ds-label">{t('dashboard.lastExam', { date: formatDate(exam.completedAt ?? exam.startedAt) })}</p>
     <div className="mt-3 flex flex-wrap items-end gap-x-6 gap-y-2">
       <span className={cn('ds-num text-[56px] font-bold leading-none sm:text-[72px]', score !== null && score < 50 && 'ds-bad')}>{pct(score)}</span>
       <span className="mb-1.5 min-w-0">
         <span className="block max-w-[28ch] truncate text-[17px] font-semibold">{sourceName(exam.source)}</span>
-        <span className="ds-muted text-sm"><span className="ds-num">{exam.correct ?? 0}</span> düzgün · <span className="ds-num">{exam.incorrect ?? 0}</span> səhv · <span className="ds-num">{exam.unanswered ?? 0}</span> boş</span>
+        <span className="ds-muted text-sm"><span className="ds-num">{exam.correct ?? 0}</span> {t('dashboard.correctWord')} · <span className="ds-num">{exam.incorrect ?? 0}</span> {t('dashboard.wrongWord')} · <span className="ds-num">{exam.unanswered ?? 0}</span> {t('dashboard.blankWord')}</span>
       </span>
     </div>
     <p className="mt-4 text-[15px] font-medium"><span className="ds-mark">{verdict}</span></p>
     <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-3">
-      <Link to={retakeLink(exam)} className="btn-primary inline-flex h-11 items-center rounded-[10px] px-4 text-sm font-semibold">Yenidən sına</Link>
-      <Link to={`/exams/${exam.id}/result`} className="ds-link text-sm">Cavablara bax</Link>
+      <Link to={retakeLink(exam)} className="btn-primary inline-flex h-11 items-center rounded-[10px] px-4 text-sm font-semibold">{t('dashboard.retry')}</Link>
+      <Link to={`/exams/${exam.id}/result`} className="ds-link text-sm">{t('dashboard.viewAnswers')}</Link>
     </div>
   </div>
 }
 
 function Onboarding({ hasDocument }: { hasDocument: boolean }) {
+  const { t } = useTranslation()
   const steps = [
-    { done: hasDocument, title: 'Sənəd yüklə', text: 'Sual-cavab olan PDF və ya DOCX faylı.', to: '/upload' },
-    { done: false, title: 'İlk imtahanı ver', text: 'Sual aralığını və sayını seç, vaxt başlasın.', to: '/exams/new' },
-    { done: false, title: 'Nəticəni təhlil et', text: 'Səhvlərinə nəticə səhifəsində bax.', to: '/exams' },
+    { done: hasDocument, title: t('dashboard.onboarding.s1Title'), text: t('dashboard.onboarding.s1Text'), to: '/upload' },
+    { done: false, title: t('dashboard.onboarding.s2Title'), text: t('dashboard.onboarding.s2Text'), to: '/exams/new' },
+    { done: false, title: t('dashboard.onboarding.s3Title'), text: t('dashboard.onboarding.s3Text'), to: '/exams' },
   ]
   const next = steps.findIndex(s => !s.done)
   return <div>
-    <p className="ds-label">Başlanğıc</p>
-    <h2 className="mt-3 text-[24px] font-bold leading-[1.15] tracking-[-0.035em] sm:text-[30px]">Üç addımda ilk nəticən.</h2>
+    <p className="ds-label">{t('dashboard.onboarding.label')}</p>
+    <h2 className="mt-3 text-[24px] font-bold leading-[1.15] tracking-[-0.035em] sm:text-[30px]">{t('dashboard.onboarding.title')}</h2>
     <ol className="mt-6 grid gap-3 lg:grid-cols-3">{steps.map((s, i) => <li key={s.title}>
       <Link to={s.to} className={cn('group flex items-start gap-4 rounded-xl px-3 py-3 transition-colors hover:bg-[var(--app-sunken)]', i === next && 'ds-sunken')}>
         <span className={cn('ds-num mt-0.5 grid size-7 shrink-0 place-items-center rounded-full border text-xs font-semibold', s.done ? 'border-transparent bg-[var(--app-ink)] text-[var(--app-on-ink)]' : 'border-[var(--app-border)]')}>
-          {s.done ? <Check className="size-3.5" strokeWidth={3} aria-label="Edilib" /> : i + 1}
+          {s.done ? <Check className="size-3.5" strokeWidth={3} aria-label={t('dashboard.onboarding.done')} /> : i + 1}
         </span>
         <span className="min-w-0 flex-1"><span className={cn('block font-semibold', s.done && 'ds-muted line-through')}>{s.title}</span><span className="ds-muted text-sm">{s.text}</span></span>
         {i === next && <ArrowRight className="mt-1 size-4 shrink-0 transition-transform group-hover:translate-x-0.5" aria-hidden />}
@@ -216,7 +227,8 @@ function Onboarding({ hasDocument }: { hasDocument: boolean }) {
 }
 
 function Skeleton({ lines }: { lines: number }) {
-  return <div className="grid gap-3 py-2" role="status" aria-label="Yüklənir">{Array.from({ length: lines }, (_, i) => <div key={i} className="h-5 animate-pulse rounded bg-[var(--app-sunken)]" style={{ width: `${90 - i * 15}%` }} />)}</div>
+  const { t } = useTranslation()
+  return <div className="grid gap-3 py-2" role="status" aria-label={t('common.loading')}>{Array.from({ length: lines }, (_, i) => <div key={i} className="h-5 animate-pulse rounded bg-[var(--app-sunken)]" style={{ width: `${90 - i * 15}%` }} />)}</div>
 }
 
 type Tone = 'ok' | 'error' | 'pending'
@@ -227,9 +239,10 @@ export function SystemStatus() {
   const health = useHealth()
   const apiTone: Tone = health.isPending ? 'pending' : health.isError ? 'error' : 'ok'
   const dbTone: Tone = health.isPending ? 'pending' : health.data?.databaseConnected ? 'ok' : 'error'
-  return <section aria-label="Sistem vəziyyəti" className="mb-6 flex flex-wrap gap-x-8 gap-y-3 border-y border-[var(--app-border)] py-3 text-sm">
-    <StatusItem icon={<Server className="size-4" aria-hidden />} label="API" tone={apiTone} value={apiTone === 'ok' ? 'Əlçatandır' : apiTone === 'error' ? 'Əlçatan deyil' : 'Yoxlanılır…'} />
-    <StatusItem icon={<Database className="size-4" aria-hidden />} label="SQL Server" tone={dbTone} value={dbTone === 'ok' ? 'Qoşulub' : dbTone === 'error' ? 'Qoşulmayıb' : 'Yoxlanılır…'} />
+  const { t } = useTranslation()
+  return <section aria-label={t('dashboard.system.aria')} className="mb-6 flex flex-wrap gap-x-8 gap-y-3 border-y border-[var(--app-border)] py-3 text-sm">
+    <StatusItem icon={<Server className="size-4" aria-hidden />} label="API" tone={apiTone} value={apiTone === 'ok' ? t('dashboard.system.up') : apiTone === 'error' ? t('dashboard.system.down') : t('common.checking')} />
+    <StatusItem icon={<Database className="size-4" aria-hidden />} label="SQL Server" tone={dbTone} value={dbTone === 'ok' ? t('dashboard.system.connected') : dbTone === 'error' ? t('dashboard.system.disconnected') : t('common.checking')} />
   </section>
 }
 

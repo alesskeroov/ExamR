@@ -18,8 +18,10 @@ import { documentStatus } from './documentStatus'
 import { Button } from '../../components/common/Button'
 import { DocumentSharingModal } from './DocumentSharingModal'
 import { SharedDocuments } from './SharedDocuments'
+import { useTranslation } from 'react-i18next'
 
 export function UploadPage({ admin = false }: { admin?: boolean }) {
+  const { t } = useTranslation()
   const monthly = useUsageLimit('Upload')
   const [searchParams, setSearchParams] = useSearchParams()
   const selectedId = searchParams.get('doc')
@@ -34,11 +36,11 @@ export function UploadPage({ admin = false }: { admin?: boolean }) {
     setClientError(null)
     upload.reset()
     if (!/\.(pdf|docx)$/i.test(file.name)) {
-      setClientError('Yalnız PDF və DOCX faylları qəbul edilir.')
+      setClientError(t('documents.onlyPdfDocx'))
       return
     }
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      setClientError('Fayl 20 MB-dan böyük ola bilməz.')
+      setClientError(t('documents.tooLarge'))
       return
     }
 
@@ -52,7 +54,7 @@ export function UploadPage({ admin = false }: { admin?: boolean }) {
 
   return (
     <>
-      <PageHeader title={admin ? "Sənədlərin idarə edilməsi" : "Sənəd yüklə"} description="PDF və Word (.docx) fayllarından sualları və cavabları avtomatik çıxarın." />
+      <PageHeader title={admin ? t('documents.manageTitle') : t('nav.items.upload')} description={t('documents.description')} />
 
       <div className="flex flex-col gap-6">
         <div id="document-upload" className="flex min-w-0 flex-col gap-6">
@@ -60,14 +62,14 @@ export function UploadPage({ admin = false }: { admin?: boolean }) {
           <FileDropzone
             accept="application/pdf,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx"
             disabled={upload.isPending || monthly.blocked}
-            hint="Maksimum 20 MB · mətn əsaslı PDF və DOCX"
+            hint={t('documents.dropHint')}
             onFile={handleFile}
           />
 
           {upload.isPending && (
             <div role="status" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="mb-2 flex justify-between font-medium">
-                <span>Yüklənir…</span>
+                <span>{t('common.loadingDots')}</span>
                 <span className="tabular-nums">{progress}%</span>
               </div>
               <div className="h-2 overflow-hidden rounded-full bg-slate-100">
@@ -90,7 +92,7 @@ export function UploadPage({ admin = false }: { admin?: boolean }) {
                     }}
                     className="mt-1 font-semibold text-rose-900 underline underline-offset-2 hover:no-underline"
                   >
-                    Mövcud nəticəni göstər
+                    {t('documents.showExisting')}
                   </button>
                 )}
               </div>
@@ -107,6 +109,7 @@ export function UploadPage({ admin = false }: { admin?: boolean }) {
 }
 
 function RecentDocuments({ admin, selectedId, onSelect, onDeleted }: { admin: boolean; selectedId: string | null; onSelect: (id: string) => void; onDeleted: (id: string) => void }) {
+  const { t } = useTranslation()
   const [sharing, setSharing] = useState<{ id: string; name: string } | null>(null)
   const [page, setPage] = useState(1)
   const remove = useDeleteDocument()
@@ -116,21 +119,21 @@ function RecentDocuments({ admin, selectedId, onSelect, onDeleted }: { admin: bo
   return (
     <section aria-labelledby="recent-heading" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 id="recent-heading" className="font-semibold">Mənim sənədlərim{data ? ` (${formatNumber(data.totalCount)})` : ''}</h2>
+        <h2 id="recent-heading" className="font-semibold">{t('documents.mine')}{data ? ` (${formatNumber(data.totalCount)})` : ''}</h2>
         <button type="button" onClick={() => {
           // The dropzone owns the file input; scroll to it and open the picker directly.
           const zone = document.getElementById('document-upload')
           zone?.scrollIntoView({ behavior: 'smooth', block: 'start' })
           zone?.querySelector<HTMLInputElement>('input[type="file"]:not(:disabled)')?.click()
-        }} className="rounded-lg btn-primary px-4 py-2 text-sm font-medium transition-colors">Yeni sənəd yüklə</button>
+        }} className="rounded-lg btn-primary px-4 py-2 text-sm font-medium transition-colors">{t('documents.uploadNew')}</button>
       </div>
       {remove.error && <div className="mb-3"><Alert title={remove.error.message} /></div>}
       {isPending ? (
         <div className="h-32 animate-pulse rounded-xl bg-slate-200/60" aria-hidden />
       ) : error ? (
-        <Alert title={error.message} action={<button type="button" onClick={() => void refetch()}>Yenidən cəhd et</button>} />
+        <Alert title={error.message} action={<button type="button" onClick={() => void refetch()}>{t('common.retry')}</button>} />
       ) : data.items.length === 0 ? (
-        <EmptyState title="Hələ sənəd yükləməmisiniz" description="Yuxarıdakı yükləmə sahəsindən PDF və ya DOCX seçin." />
+        <EmptyState title={t('documents.empty')} description={t('documents.emptyText')} />
       ) : (
         <ul className="flex flex-col gap-1.5">
           {data.items.map((document) => {
@@ -153,37 +156,37 @@ function RecentDocuments({ admin, selectedId, onSelect, onDeleted }: { admin: bo
                     <span className="block truncate font-medium">{document.originalFileName}</span>
                     <span className="block text-xs text-slate-500">
                       {formatDate(document.createdAt)}
-                      {document.status === 'Completed' && ` · ${formatNumber(document.questionCount)} sual`}
-                      {admin && ` · ${{ Private: 'Yalnız mən', Users: 'İstifadəçilər', Groups: 'Qruplar', UsersAndGroups: 'İstifadəçilər və qruplar', Everyone: 'Hamı' }[document.sharingStatus] ?? 'Server yenilənməlidir'}`}
+                      {document.status === 'Completed' && ` · ${t('common.questions', { count: document.questionCount })}`}
+                      {admin && ` · ${document.sharingStatus ? t(`documents.sharing.${document.sharingStatus}`) : t('documents.sharing.unknown')}`}
                     </span>
                   </span>
-                  {document.status !== 'Completed' && <StatusBadge tone={status.tone}>{status.label}</StatusBadge>}
+                  {document.status !== 'Completed' && <StatusBadge tone={status.tone}>{t(`documents.status.${document.status}`)}</StatusBadge>}
                 </button>
-                {admin && document.canEdit && <Button variant="secondary" className="h-9 px-3 text-xs" disabled={!document.sharingStatus} onClick={() => setSharing({ id: document.id, name: document.originalFileName })}>Paylaşım</Button>}
+                {admin && document.canEdit && <Button variant="secondary" className="h-9 px-3 text-xs" disabled={!document.sharingStatus} onClick={() => setSharing({ id: document.id, name: document.originalFileName })}>{t('documents.share')}</Button>}
                 {document.canEdit && <button
                   type="button"
                   disabled={remove.isPending || document.status === 'Processing'}
-                  aria-label={`${document.originalFileName} sənədini sil`}
-                  title="Sənədi sil"
+                  aria-label={t('documents.deleteAria', { name: document.originalFileName })}
+                  title={t('documents.delete')}
                   onClick={async () => {
-                    if (!await confirm({ title: 'Sənəd silinsin?', description: `“${document.originalFileName}” və ona bağlı suallar və məşq nəticələri silinəcək. Bu əməliyyatı geri qaytarmaq mümkün deyil.`, confirmLabel: 'Sənədi sil', danger: true })) return
+                    if (!await confirm({ title: t('documents.deleteTitle'), description: t('documents.deleteText', { name: document.originalFileName }), confirmLabel: t('documents.delete'), danger: true })) return
                     remove.mutate(document.id, { onSuccess: () => {
                       onDeleted(document.id)
                       if (data.items.length === 1 && page > 1) setPage(p => p - 1)
                     } })
                   }}
                   className="inline-flex shrink-0 items-center gap-2 rounded-lg p-3 text-rose-600 hover:bg-rose-50 disabled:opacity-40"
-                ><Trash2 className="size-4" aria-hidden />Sil</button>}
+                ><Trash2 className="size-4" aria-hidden />{t('common.delete')}</button>}
               </li>
             )
           })}
         </ul>
       )}
       {data && data.totalCount > data.pageSize && (
-        <nav aria-label="Yüklənmiş sənədlərin səhifələri" className="mt-4 flex items-center justify-between gap-2 text-sm">
-          <button type="button" disabled={page === 1 || isPending} onClick={() => setPage(p => p - 1)} className="rounded-lg border border-slate-200 px-3 py-2 disabled:opacity-40">Əvvəlki</button>
+        <nav aria-label={t('documents.pagesAria')} className="mt-4 flex items-center justify-between gap-2 text-sm">
+          <button type="button" disabled={page === 1 || isPending} onClick={() => setPage(p => p - 1)} className="rounded-lg border border-slate-200 px-3 py-2 disabled:opacity-40">{t('common.previous')}</button>
           <span>{page} / {Math.ceil(data.totalCount / data.pageSize)}</span>
-          <button type="button" disabled={page * data.pageSize >= data.totalCount || isPending} onClick={() => setPage(p => p + 1)} className="rounded-lg border border-slate-200 px-3 py-2 disabled:opacity-40">Növbəti</button>
+          <button type="button" disabled={page * data.pageSize >= data.totalCount || isPending} onClick={() => setPage(p => p + 1)} className="rounded-lg border border-slate-200 px-3 py-2 disabled:opacity-40">{t('common.next')}</button>
         </nav>
       )}
       {sharing && <DocumentSharingModal documentId={sharing.id} name={sharing.name} onClose={() => setSharing(null)} />}

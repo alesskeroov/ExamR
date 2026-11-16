@@ -7,6 +7,7 @@ import type { PagedResult } from '../documents/api'
 import type { ExamOption, ExamSource } from '../exams/api'
 import type { VisualDto } from '../../lib/visuals'
 import { useCurrentUser } from '../auth/api'
+import i18n from '../../lib/i18n'
 
 export type BattleStatus = 'Lobby' | 'Question' | 'Reveal' | 'Finished' | 'Closed'
 
@@ -131,7 +132,7 @@ export function useBattleHistory(page: number) {
 /** Server errors arrive as "... HubException: <message>"; keep only the message. */
 export function hubErrorMessage(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
-  return message.includes('HubException: ') ? message.split('HubException: ').pop()! : 'Serverlə əlaqə kəsildi.'
+  return message.includes('HubException: ') ? message.split('HubException: ').pop()! : i18n.t('battle.disconnected')
 }
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected'
@@ -226,7 +227,7 @@ export function useBattleRoom(code: string) {
   const invoke = useCallback(async (method: string, ...args: unknown[]) => {
     const connection = connectionRef.current
     if (!connection || connection.state !== HubConnectionState.Connected) {
-      setActionError('Bağlantı bərpa olunur, bir az gözləyin.')
+      setActionError(i18n.t('battle.reconnecting'))
       return false
     }
 

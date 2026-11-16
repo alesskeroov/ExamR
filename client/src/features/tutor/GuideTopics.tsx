@@ -6,6 +6,7 @@ import { studyCards, topicStats, type CardDeck, type LearnScope } from './api'
 import { SelectionToCard } from './SelectionToCard'
 import { SlideGallery } from './SlideGallery'
 import { Frame } from './TutorShared'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   chatId: string
@@ -14,7 +15,7 @@ interface Props {
   onLearn: (scope: LearnScope) => void
 }
 
-const steps = ['Konspekti oxu', 'Kartlarla yoxla', 'Bilmədiyini axtar']
+const steps = ['read', 'check', 'search'] as const
 
 const fold = (text: string) => text.toLocaleLowerCase('az')
 
@@ -23,6 +24,7 @@ const fold = (text: string) => text.toLocaleLowerCase('az')
  * text selected in the notes can become an own card.
  */
 export function GuideTopics({ chatId, documentId, deck, onLearn }: Props) {
+  const { t } = useTranslation()
   const [term, setTerm] = useState('')
   const stats = useMemo(() => topicStats(deck), [deck])
   const cards = studyCards(deck)
@@ -38,10 +40,10 @@ export function GuideTopics({ chatId, documentId, deck, onLearn }: Props) {
   if (deck.pictureSlides) {
     return (
       <Frame>
-        <Alert tone="info" title="Slaydlar şəkil kimi saxlanılıb">
-          Mətn avtomatik oxunmur. Slaydlara baxın, vacib məqamı «Kart yarat» ilə öz kartınız kimi yazın, sonra «Öyrən» bölməsində təkrarlayın.
+        <Alert tone="info" title={t('tutor.topics.imageSlides')}>
+          {t('tutor.topics.imageSlidesText')}
         </Alert>
-        {total > 0 && <p className="text-sm text-slate-600">{total} öz kartınız var · {mastered} mənimsənilib</p>}
+        {total > 0 && <p className="text-sm text-slate-600">{t('tutor.topics.ownCards', { total, mastered })}</p>}
         <SlideGallery chatId={chatId} documentId={documentId} deck={deck} count={deck.pictureSlides} />
       </Frame>
     )
@@ -49,56 +51,56 @@ export function GuideTopics({ chatId, documentId, deck, onLearn }: Props) {
 
   return (
     <Frame>
-      <ol aria-label="Necə öyrənək" className="grid grid-cols-3 gap-2">
+      <ol aria-label={t('tutor.topics.howAria')} className="grid grid-cols-3 gap-2">
         {steps.map((step, i) => (
           <li key={step} className="tutor-border flex items-center gap-2 rounded-xl border bg-white px-3 py-2 text-xs font-medium text-slate-700 sm:text-sm">
             <span className="grid size-6 shrink-0 place-items-center rounded-full bg-indigo-50 text-xs font-semibold text-indigo-700">{i + 1}</span>
-            <span className="min-w-0 leading-snug">{step}</span>
+            <span className="min-w-0 leading-snug">{t(`tutor.topics.steps.${step}`)}</span>
           </li>
         ))}
       </ol>
-      {total === 0 && <Alert tone="info" title="Avtomatik kart tapılmadı">Sənəddə qalın yazılmış termin, cədvəl və ya tərif tapılmadı. Mövzuların altından konspekti oxuyun, vacib hissəni seçib «Seçilmiş mətndən kart et» düyməsi ilə öz kartınızı yaradın.</Alert>}
-      {deck.warning && <Alert tone="info" title="Qeyd">{deck.warning}</Alert>}
+      {total === 0 && <Alert tone="info" title={t('tutor.topics.noCards')}>{t('tutor.topics.noCardsText')}</Alert>}
+      {deck.warning && <Alert tone="info" title={t('tutor.topics.note')}>{deck.warning}</Alert>}
 
-      {total > 0 && <section aria-label="Ümumi gedişat" className="tutor-border rounded-3xl border bg-white p-5 sm:p-6">
+      {total > 0 && <section aria-label={t('tutor.topics.progressAria')} className="tutor-border rounded-3xl border bg-white p-5 sm:p-6">
         <div className="flex items-end justify-between gap-4">
           <div>
-            <p className="text-sm text-slate-500">Mənimsənilib</p>
+            <p className="text-sm text-slate-500">{t('tutor.topics.mastered')}</p>
             <p className="mt-1 text-4xl font-bold tracking-tight text-slate-900 tabular-nums">{percent}%</p>
           </div>
           <p className="pb-1 text-right text-sm text-slate-500 tabular-nums">
-            <span className="font-semibold text-slate-900">{mastered}</span> / {total} kart
-            <span className="block text-xs">{deck.topics.length} mövzu</span>
+            <span className="font-semibold text-slate-900">{mastered}</span> / {t('tutor.topics.cards', { count: total })}
+            <span className="block text-xs">{t('tutor.topics.topicCount', { count: deck.topics.length })}</span>
           </p>
         </div>
-        <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={mastered} aria-label="Mənimsənilmiş kartlar">
+        <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={mastered} aria-label={t('tutor.topics.masteredCards')}>
           <div className="h-full rounded-full bg-emerald-500 transition-[width]" style={{ width: `${percent}%` }} />
         </div>
 
         <button type="button" disabled={total === 0} onClick={() => onLearn({ kind: 'all' })}
           className="btn-primary mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-[15px] font-semibold">
-          <Play className="size-4" aria-hidden />{seen === 0 ? 'Öyrənməyə başla' : mastered === total ? 'Hamısını təkrarla' : 'Davam et'}
+          <Play className="size-4" aria-hidden />{seen === 0 ? t('tutor.topics.start') : mastered === total ? t('tutor.topics.repeatAll') : t('dashboard.continue')}
         </button>
         <div className="mt-2 grid grid-cols-2 gap-2">
           <button type="button" onClick={() => onLearn({ kind: 'weak' })} disabled={weak === 0} className="tutor-shared-action">
-            <Flame className="size-4 text-rose-600" aria-hidden />Zəif kartlar{weak > 0 ? ` · ${weak}` : ''}
+            <Flame className="size-4 text-rose-600" aria-hidden />{t('tutor.topics.weakCards')}{weak > 0 ? ` · ${weak}` : ''}
           </button>
           <button type="button" disabled={total === 0} onClick={() => onLearn({ kind: 'mixed' })} className="tutor-shared-action">
-            <Shuffle className="size-4" aria-hidden />Qarışıq
+            <Shuffle className="size-4" aria-hidden />{t('tutor.topics.mixed')}
           </button>
         </div>
       </section>}
 
       <section aria-labelledby="topics-title" className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
-          <h2 id="topics-title" className="text-base font-semibold">Mövzular</h2>
-          <span className="text-xs text-slate-500">Kartlarla məşq et və ya konspekti oxu</span>
+          <h2 id="topics-title" className="text-base font-semibold">{t('tutor.topics.aria')}</h2>
+          <span className="text-xs text-slate-500">{t('tutor.topics.subtitle')}</span>
         </div>
         {deck.topics.length > 8 && (
           <label className="tutor-border flex h-11 items-center gap-2 rounded-xl border bg-white px-3">
             <Search className="size-4 shrink-0 text-slate-400" aria-hidden />
-            <span className="sr-only">Mövzu axtar</span>
-            <input type="search" value={term} onChange={e => setTerm(e.target.value)} placeholder="Mövzu axtar…"
+            <span className="sr-only">{t('tutor.topics.search')}</span>
+            <input type="search" value={term} onChange={e => setTerm(e.target.value)} placeholder={t('tutor.topics.searchPlaceholder')}
               className="min-w-0 flex-1 bg-transparent text-base text-slate-900 outline-none placeholder:text-slate-400 sm:text-sm" />
           </label>
         )}
@@ -112,7 +114,7 @@ export function GuideTopics({ chatId, documentId, deck, onLearn }: Props) {
                   className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-slate-50">
                   <span className={cn('grid size-8 shrink-0 place-items-center rounded-full text-xs font-semibold tabular-nums',
                     complete ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600')}>
-                    {complete ? <Check className="size-4" aria-label="Mənimsənilib" /> : number}
+                    {complete ? <Check className="size-4" aria-label={t('tutor.topics.mastered')} /> : number}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="line-clamp-2 text-[15px] leading-snug font-medium text-slate-900">{topic.title}</span>
@@ -121,26 +123,26 @@ export function GuideTopics({ chatId, documentId, deck, onLearn }: Props) {
                         <span className="block h-full rounded-full bg-emerald-500" style={{ width: `${s.total ? (s.mastered / s.total) * 100 : 0}%` }} />
                       </span>
                       <span className="shrink-0 text-xs text-slate-500 tabular-nums">
-                        {s.mastered}/{s.total}{s.weak > 0 && <span className="text-rose-600"> · {s.weak} zəif</span>}
+                        {s.mastered}/{s.total}{s.weak > 0 && <span className="text-rose-600"> · {t('tutor.topics.weakN', { n: s.weak })}</span>}
                       </span>
-                    </span> : <span className="mt-1 block text-xs text-slate-500">Oxu materialı</span>}
+                    </span> : <span className="mt-1 block text-xs text-slate-500">{t('tutor.topics.readingMaterial')}</span>}
                   </span>
                   <ChevronRight className="size-4 shrink-0 text-slate-400" aria-hidden />
                 </button>
                 {topic.notes && (
                   <details className="px-4 pb-4">
-                    <summary className="cursor-pointer py-2 text-sm font-semibold text-indigo-700">Konspekti oxu</summary>
+                    <summary className="cursor-pointer py-2 text-sm font-semibold text-indigo-700">{t('tutor.topics.steps.read')}</summary>
                     <SelectionToCard chatId={chatId} deck={deck} topicKey={topic.key}
                       className="guide-scroll mt-2 flex max-h-[60dvh] flex-col gap-3 overflow-y-auto break-words text-[15px] leading-relaxed text-slate-700 sm:text-sm">
                       {topic.notes.split('\n\n').map((paragraph, j) => <p key={j} className="whitespace-pre-wrap">{paragraph}</p>)}
                     </SelectionToCard>
-                    <p className="mt-2 text-xs text-slate-500">Vacib hissəni seçin — öz kartınızı yaratmaq üçün düymə görünəcək.</p>
+                    <p className="mt-2 text-xs text-slate-500">{t('tutor.topics.selectHint')}</p>
                   </details>
                 )}
               </li>
             )
           })}
-          {shown.length === 0 && <li className="px-4 py-8 text-center text-sm text-slate-500">Mövzu tapılmadı.</li>}
+          {shown.length === 0 && <li className="px-4 py-8 text-center text-sm text-slate-500">{t('tutor.topics.none')}</li>}
         </ul>
       </section>
     </Frame>

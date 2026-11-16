@@ -1,4 +1,5 @@
 import { useId } from 'react'
+import { useTranslation } from 'react-i18next'
 
 // Metal ramps per tier: highlight, base, shadow. The shape also escalates with the tier, so the emblem reads
 // without colour too: shield (Bronze/Silver/Gold) → crest (Platinum) → cut gem (Diamond) → crown (Master).
@@ -13,9 +14,10 @@ const metals: Record<string, [string, string, string]> = {
 
 /** Tier emblem drawn in a 48×48 grid; stays legible from 16px badges up to large profile headers. */
 export function RankEmblem({ name, size = 20, className }: { name: string; size?: number; className?: string }) {
+  const { t } = useTranslation()
   const id = useId().replace(/:/g, '')
   const [light, base, dark] = metals[name] ?? metals.Bronze
-  return <svg viewBox="0 0 48 48" width={size} height={size} className={className} role="img" aria-label={`${name} rank`}>
+  return <svg viewBox="0 0 48 48" width={size} height={size} className={className} role="img" aria-label={t('battle.rankAria', { rank: t(`battle.rank.${name}`, { defaultValue: name }) })}>
     <defs>
       <linearGradient id={`${id}-m`} x1="0" y1="0" x2="0.6" y2="1">
         <stop offset="0" stopColor={light} /><stop offset=".55" stopColor={base} /><stop offset="1" stopColor={dark} />

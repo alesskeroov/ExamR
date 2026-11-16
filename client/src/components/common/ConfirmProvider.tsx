@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 
 import { AlertTriangle, Check } from 'lucide-react'
 import { ConfirmContext, type Confirmation } from '../../lib/use-confirm'
 import { Button } from './Button'
+import { useTranslation } from 'react-i18next'
 
 export function ConfirmProvider({ children }: { children: ReactNode }) {
   const [request, setRequest] = useState<Confirmation | null>(null)
@@ -30,6 +31,7 @@ function ConfirmationDialog({ request, onFinish }: { request: Confirmation; onFi
   const dialog = useRef<HTMLDialogElement>(null)
   const titleId = useId()
   const descriptionId = useId()
+  const { t } = useTranslation()
   useEffect(() => {
     const element = dialog.current
     element?.showModal()
@@ -44,8 +46,8 @@ function ConfirmationDialog({ request, onFinish }: { request: Confirmation; onFi
     <h2 id={titleId} className="text-lg font-semibold text-slate-900">{request.title}</h2>
     <p id={descriptionId} className="mt-2 break-words text-sm leading-6 text-slate-600">{request.description}</p>
     <div className="mt-6 flex justify-end gap-3">
-      <Button variant="secondary" autoFocus onClick={() => onFinish(false)}>Ləğv et</Button>
-      <Button className={request.danger ? 'bg-rose-600 hover:bg-rose-700' : undefined} onClick={() => onFinish(true)}>{request.confirmLabel ?? 'Təsdiq et'}</Button>
+      <Button variant="secondary" autoFocus onClick={() => onFinish(false)}>{t('common.cancel')}</Button>
+      <Button className={request.danger ? 'bg-rose-600 hover:bg-rose-700' : undefined} onClick={() => onFinish(true)}>{request.confirmLabel ?? t('common.confirm')}</Button>
     </div>
   </dialog>
 }

@@ -8,26 +8,27 @@ import { CardViewer } from './CardViewer'
 import { KindAccent, KindBadge, KindPrompt, ReviewBadge } from './FlipCard'
 import { TopicPicker } from './TopicPicker'
 import { Frame } from './TutorShared'
+import { useTranslation } from 'react-i18next'
 
 type Status = 'all' | 'new' | 'learning' | 'weak' | 'mastered'
 const statuses: { id: Status; label: string }[] = [
-  { id: 'all', label: 'Hamısı' },
-  { id: 'new', label: 'Yeni' },
-  { id: 'learning', label: 'Öyrənilir' },
-  { id: 'weak', label: 'Zəif' },
-  { id: 'mastered', label: 'Mənimsənilib' },
+  { id: 'all', label: 'exam.setup.all' },
+  { id: 'new', label: 'tutor.status.new' },
+  { id: 'learning', label: 'tutor.status.learning' },
+  { id: 'weak', label: 'tutor.status.weak' },
+  { id: 'mastered', label: 'tutor.topics.mastered' },
 ]
 /** Views next to the study status: cards to check, and cards the student hid (shown only here). */
 type View = 'study' | 'review' | 'hidden'
 const kinds: { id: CardKind | 'all'; label: string }[] = [
-  { id: 'all', label: 'Bütün növlər' },
-  { id: 'Question', label: 'Suallar' },
-  { id: 'Term', label: 'Anlayışlar' },
-  { id: 'List', label: 'Siyahılar' },
-  { id: 'Table', label: 'Cədvəllər' },
-  { id: 'Cloze', label: 'Boşluqlar' },
-  { id: 'Test', label: 'Testlər' },
-  { id: 'Custom', label: 'Mənim kartlarım' },
+  { id: 'all', label: 'tutor.kinds.all' },
+  { id: 'Question', label: 'tutor.kinds.Question' },
+  { id: 'Term', label: 'tutor.kinds.Term' },
+  { id: 'List', label: 'tutor.kinds.List' },
+  { id: 'Table', label: 'tutor.kinds.Table' },
+  { id: 'Cloze', label: 'tutor.kinds.Cloze' },
+  { id: 'Test', label: 'tutor.kinds.Test' },
+  { id: 'Custom', label: 'tutor.myCards' },
 ]
 const statusDot: Record<Exclude<Status, 'all'>, string> = {
   new: 'bg-slate-300', learning: 'bg-amber-400', weak: 'bg-rose-500', mastered: 'bg-emerald-500',
@@ -50,6 +51,7 @@ interface Props {
 
 /** "Kartlarım": every card as a tile; a tap opens it large to read and flip. Filters, search and pages. Cards are private. */
 export function GuideCardList({ chatId, deck, onSource }: Props) {
+  const { t } = useTranslation()
   const [term, setTerm] = useState('')
   const [topic, setTopic] = useState('')
   const [kind, setKind] = useState<CardKind | 'all'>('all')
@@ -85,52 +87,52 @@ export function GuideCardList({ chatId, deck, onSource }: Props) {
       <header className="flex items-start gap-3">
         <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-indigo-50 text-indigo-700" aria-hidden><ListChecks className="size-5" /></span>
         <div className="min-w-0">
-          <h2 className="text-base font-semibold">Kartlarım</h2>
-          <p className="mt-0.5 text-sm text-slate-600">Karta toxun — böyük açılsın, sonra çevir. Kartlar yalnız sənə görünür.</p>
+          <h2 className="text-base font-semibold">{t('tutor.cards.title')}</h2>
+          <p className="mt-0.5 text-sm text-slate-600">{t('tutor.cards.text')}</p>
         </div>
         <button type="button" onClick={() => setCreating(true)}
           className="btn-primary ml-auto inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl px-3 text-sm font-semibold sm:px-4">
-          <Plus className="size-4" aria-hidden /><span className="sr-only sm:not-sr-only">Kart əlavə et</span>
+          <Plus className="size-4" aria-hidden /><span className="sr-only sm:not-sr-only">{t('tutor.cards.add')}</span>
         </button>
       </header>
 
       {(reviewCount > 0 || hiddenCount > 0 || view !== 'study') && (
-        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Görünüş">
-          <Chip active={view === 'study'} onClick={() => filter(setView)('study')}>Öyrənilən kartlar</Chip>
-          {(reviewCount > 0 || view === 'review') && <Chip active={view === 'review'} onClick={() => filter(setView)('review')}>Yoxlanmalı · {reviewCount}</Chip>}
-          {(hiddenCount > 0 || view === 'hidden') && <Chip active={view === 'hidden'} onClick={() => filter(setView)('hidden')}>Gizlədilən · {hiddenCount}</Chip>}
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label={t('landing.appearance')}>
+          <Chip active={view === 'study'} onClick={() => filter(setView)('study')}>{t('tutor.cards.studied')}</Chip>
+          {(reviewCount > 0 || view === 'review') && <Chip active={view === 'review'} onClick={() => filter(setView)('review')}>{t('tutor.flip.review')} · {reviewCount}</Chip>}
+          {(hiddenCount > 0 || view === 'hidden') && <Chip active={view === 'hidden'} onClick={() => filter(setView)('hidden')}>{t('tutor.cards.hidden')} · {hiddenCount}</Chip>}
         </div>
       )}
       {view === 'review' && (
-        <p className="text-sm text-slate-600">Bu kartlar avtomatik çıxarılıb və səhv ola bilər. Kartı açın: düzəldin, gizlədin və ya silin.</p>
+        <p className="text-sm text-slate-600">{t('tutor.cards.reviewText')}</p>
       )}
 
       <div className="grid gap-2 sm:grid-cols-[1fr_minmax(0,18rem)]">
         <label className="tutor-border flex h-10 min-w-0 items-center gap-2 rounded-xl border bg-white px-3">
           <Search className="size-4 shrink-0 text-slate-400" aria-hidden />
-          <span className="sr-only">Kartlarda axtar</span>
-          <input type="search" value={term} onChange={e => filter(setTerm)(e.target.value)} placeholder="Kartlarda axtar…"
+          <span className="sr-only">{t('tutor.cards.search')}</span>
+          <input type="search" value={term} onChange={e => filter(setTerm)(e.target.value)} placeholder={t('tutor.cards.searchPlaceholder')}
             className="min-w-0 flex-1 bg-transparent text-base text-slate-900 outline-none placeholder:text-slate-400 sm:text-sm" />
         </label>
         <TopicPicker topics={deck.topics} stats={stats} value={topic} onChange={filter(setTopic)} />
       </div>
 
-      <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Filtrlər">
+      <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label={t('questions.filtersAria')}>
         {presentKinds.length > 2 && presentKinds.map(k => (
-          <Chip key={k.id} active={kind === k.id} onClick={() => filter(setKind)(k.id)}>{k.label}</Chip>
+          <Chip key={k.id} active={kind === k.id} onClick={() => filter(setKind)(k.id)}>{t(k.label)}</Chip>
         ))}
         {presentKinds.length > 2 && <span className="tutor-border mx-1 w-px shrink-0 self-stretch border-l" aria-hidden />}
         {statuses.map(s => {
           const count = s.id === 'all' ? visible.length : visible.filter(c => statusOf(c) === s.id).length
-          return <Chip key={s.id} active={status === s.id} onClick={() => filter(setStatus)(s.id)}>{s.label} · {count}</Chip>
+          return <Chip key={s.id} active={status === s.id} onClick={() => filter(setStatus)(s.id)}>{t(s.label)} · {count}</Chip>
         })}
       </div>
 
       {shown.length === 0 ? (
-        <EmptyState icon={<ListChecks className="size-8" aria-hidden />} title="Kart tapılmadı" description="Axtarışı və ya filtrləri dəyişin." />
+        <EmptyState icon={<ListChecks className="size-8" aria-hidden />} title={t('tutor.cards.none')} description={t('questions.notFoundFilters')} />
       ) : (
         <>
-          <p className="text-xs text-slate-500">{shown.length} kart{pages > 1 ? ` · səhifə ${current + 1} / ${pages}` : ''}</p>
+          <p className="text-xs text-slate-500">{t('tutor.topics.cards', { count: shown.length })}{pages > 1 ? ` · ${t('tutor.cards.page', { n: current + 1, total: pages })}` : ''}</p>
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {pageCards.map((card, i) => (
               <li key={card.id}>
@@ -152,6 +154,7 @@ export function GuideCardList({ chatId, deck, onSource }: Props) {
 }
 
 function CardTile({ card, topic, onOpen }: { card: StudyCard; topic: string; onOpen: () => void }) {
+  const { t } = useTranslation()
   const state = statusOf(card)
   return (
     <button type="button" onClick={onOpen}
@@ -166,7 +169,7 @@ function CardTile({ card, topic, onOpen }: { card: StudyCard; topic: string; onO
       <p className="mt-1 line-clamp-4 text-[15px] leading-snug font-semibold text-slate-900">{card.front}</p>
       <span className="mt-auto flex items-center gap-1.5 pt-3 text-xs text-slate-500">
         <span className={cn('size-2 rounded-full', statusDot[state])} aria-hidden />
-        {statuses.find(s => s.id === state)!.label}
+        {t(statuses.find(s => s.id === state)!.label)}
       </span>
     </button>
   )
@@ -184,10 +187,11 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 
 /** Page numbers around the current page, with the first and last always reachable. */
 function Pager({ page, pages, onPage }: { page: number; pages: number; onPage: (page: number) => void }) {
+  const { t } = useTranslation()
   const numbers = [...new Set([0, page - 1, page, page + 1, pages - 1])].filter(n => n >= 0 && n < pages).sort((a, b) => a - b)
   return (
-    <nav aria-label="Səhifələr" className="flex items-center justify-center gap-1.5">
-      <button type="button" onClick={() => onPage(page - 1)} disabled={page === 0} aria-label="Əvvəlki səhifə"
+    <nav aria-label={t('questions.pagesAria')} className="flex items-center justify-center gap-1.5">
+      <button type="button" onClick={() => onPage(page - 1)} disabled={page === 0} aria-label={t('tutor.cards.prevPage')}
         className="tutor-border grid size-10 place-items-center rounded-xl border bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40">
         <ChevronLeft className="size-4" />
       </button>
@@ -201,7 +205,7 @@ function Pager({ page, pages, onPage }: { page: number; pages: number; onPage: (
           </button>
         </span>
       ))}
-      <button type="button" onClick={() => onPage(page + 1)} disabled={page === pages - 1} aria-label="Növbəti səhifə"
+      <button type="button" onClick={() => onPage(page + 1)} disabled={page === pages - 1} aria-label={t('tutor.cards.nextPage')}
         className="tutor-border grid size-10 place-items-center rounded-xl border bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40">
         <ChevronRight className="size-4" />
       </button>

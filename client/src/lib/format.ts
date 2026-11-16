@@ -1,6 +1,6 @@
-const numberFormat = new Intl.NumberFormat('az-AZ')
+import { localeTag } from './i18n'
 
-export const formatNumber = (value: number) => numberFormat.format(value)
+export const formatNumber = (value: number) => new Intl.NumberFormat(localeTag()).format(value)
 
 /** "01.11.2026 19:34" — built manually because browsers often lack az-AZ month names. */
 export function formatDate(iso: string) {

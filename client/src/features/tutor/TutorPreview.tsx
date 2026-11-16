@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { cn } from '../../lib/utils'
 import { useDocumentChunks, type ChatSource } from './api'
 import { placeLabel } from './place-label'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   documentId: string
@@ -14,20 +15,21 @@ interface Props {
 
 /** PDF: the browser's own viewer at the cited page. DOCX/TXT have no pages, so the indexed text parts are shown instead. */
 export function TutorPreview({ documentId, fileName, format, source, onClose }: Props) {
+  const { t } = useTranslation()
   const isPdf = format === 'pdf'
   return (
-    <section aria-label="Sənəd önizləməsi" className="tutor-surface flex h-full min-h-0 flex-col">
+    <section aria-label={t('tutor.preview.aria')} className="tutor-surface flex h-full min-h-0 flex-col">
       <header className="tutor-border flex h-14 shrink-0 items-center gap-2 border-b px-4">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold">{fileName}</p>
           <p className="text-xs text-slate-500">
             {source
               // A search hit has no source number: only its place is shown.
-              ? [source.number > 0 ? `Mənbə ${source.number}` : null, placeLabel(format, source.pageFrom, source.pageTo)].filter(Boolean).join(' · ') || 'Önizləmə'
-              : 'Önizləmə'}
+              ? [source.number > 0 ? t('tutor.preview.source', { n: source.number }) : null, placeLabel(format, source.pageFrom, source.pageTo)].filter(Boolean).join(' · ') || t('tutor.preview.title')
+              : t('tutor.preview.title')}
           </p>
         </div>
-        <button type="button" onClick={onClose} aria-label="Önizləməni bağla" className="grid size-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900">
+        <button type="button" onClick={onClose} aria-label={t('tutor.preview.close')} className="grid size-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900">
           <X className="size-4" />
         </button>
       </header>
@@ -44,6 +46,7 @@ export function TutorPreview({ documentId, fileName, format, source, onClose }: 
 }
 
 function PdfFrame({ documentId, page }: { documentId: string; page: number }) {
+  const { t } = useTranslation()
   const [url, setUrl] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
   useEffect(() => {
@@ -60,26 +63,27 @@ function PdfFrame({ documentId, page }: { documentId: string; page: number }) {
     return () => { revoked = true; if (objectUrl) URL.revokeObjectURL(objectUrl) }
   }, [documentId])
 
-  if (failed) return <p className="p-4 text-sm text-rose-700" role="alert">Sənəd açıla bilmədi.</p>
-  if (!url) return <div className="grid h-full place-items-center text-slate-400"><Loader2 className="size-5 animate-spin" aria-label="Yüklənir" /></div>
+  if (failed) return <p className="p-4 text-sm text-rose-700" role="alert">{t('tutor.preview.openFailed')}</p>
+  if (!url) return <div className="grid h-full place-items-center text-slate-400"><Loader2 className="size-5 animate-spin" aria-label={t('common.loading')} /></div>
   return (
     <div className="flex h-full flex-col gap-2">
       {/* Remounted per page: built-in PDF viewers only honour #page on load. */}
-      <iframe key={page} title="PDF önizləmə" src={`${url}#page=${page}`} className="tutor-border min-h-0 w-full flex-1 rounded-lg border bg-white" />
+      <iframe key={page} title={t('tutor.preview.pdf')} src={`${url}#page=${page}`} className="tutor-border min-h-0 w-full flex-1 rounded-lg border bg-white" />
       <a href={`${url}#page=${page}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 self-end text-xs font-medium text-indigo-700 hover:underline">
-        Yeni pəncərədə aç <ExternalLink className="size-3.5" aria-hidden />
+        {t('tutor.preview.newWindow')} <ExternalLink className="size-3.5" aria-hidden />
       </a>
     </div>
   )
 }
 
 function ChunkList({ documentId, ordinal }: { documentId: string; ordinal: number | null }) {
+  const { t } = useTranslation()
   const { data, isLoading, isError } = useDocumentChunks(documentId, true)
   const active = useRef<HTMLLIElement | null>(null)
   useEffect(() => { active.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }) }, [ordinal, data])
 
-  if (isLoading) return <div className="grid h-full place-items-center text-slate-400"><Loader2 className="size-5 animate-spin" aria-label="Yüklənir" /></div>
-  if (isError || !data) return <p className="p-4 text-sm text-rose-700" role="alert">Mətn yüklənə bilmədi.</p>
+  if (isLoading) return <div className="grid h-full place-items-center text-slate-400"><Loader2 className="size-5 animate-spin" aria-label={t('common.loading')} /></div>
+  if (isError || !data) return <p className="p-4 text-sm text-rose-700" role="alert">{t('tutor.preview.textFailed')}</p>
   return (
     <ol className="h-full space-y-2 overflow-y-auto pr-1">
       {data.items.map(chunk => (

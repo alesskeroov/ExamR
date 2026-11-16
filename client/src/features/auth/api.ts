@@ -3,6 +3,7 @@ import { api, ApiError } from '../../lib/api-client'
 import { clearToken } from '../../lib/auth-token'
 import { markFreshLogin } from '../../lib/fresh-login'
 import { queryKeys } from '../../lib/query-keys'
+import i18n from '../../lib/i18n'
 
 export interface User {
   id: string
@@ -18,7 +19,7 @@ export interface User {
 }
 
 export function normalizeUser(user: User): User {
-  return { ...user, nickname: user.nickname?.trim() || user.displayName || 'İstifadəçi', avatarUrl: user.avatarUrl ?? null }
+  return { ...user, nickname: user.nickname?.trim() || user.displayName || i18n.t('common.user'), avatarUrl: user.avatarUrl ?? null }
 }
 
 interface AuthResponse {

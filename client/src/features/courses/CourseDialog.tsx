@@ -2,6 +2,7 @@ import { useId, useState, type FormEvent } from 'react'
 import { Alert } from '../../components/common/Alert'
 import { GuideDialog } from '../tutor/GuideDialog'
 import { useSaveCourse, type CourseDetail } from './api'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   /** The course to rename / re-date; none = a new course. */
@@ -12,6 +13,7 @@ interface Props {
 
 /** Name and exam date of a subject. */
 export function CourseDialog({ course, onClose, onSaved }: Props) {
+  const { t } = useTranslation()
   const [name, setName] = useState(course?.name ?? '')
   const [examDate, setExamDate] = useState(course?.examDate ?? '')
   const save = useSaveCourse()
@@ -26,24 +28,24 @@ export function CourseDialog({ course, onClose, onSaved }: Props) {
   }
 
   return (
-    <GuideDialog title={course ? 'Fənni redaktə et' : 'Yeni fənn'} onClose={onClose}>
+    <GuideDialog title={course ? t('courses.edit') : t('courses.new')} onClose={onClose}>
       <form onSubmit={submit} className="flex flex-col gap-4 px-4 py-4 sm:px-5">
         <div className="flex flex-col gap-1.5">
-          <label htmlFor={nameId} className="text-sm font-semibold text-slate-700">Fənnin adı</label>
-          <input id={nameId} value={name} onChange={e => setName(e.target.value)} maxLength={100} required autoFocus placeholder="Məsələn: Makroiqtisadiyyat"
+          <label htmlFor={nameId} className="text-sm font-semibold text-slate-700">{t('courses.name')}</label>
+          <input id={nameId} value={name} onChange={e => setName(e.target.value)} maxLength={100} required autoFocus placeholder={t('courses.namePlaceholder')}
             className="tutor-border h-11 rounded-xl border bg-white px-3 text-base text-slate-900 outline-none focus:border-indigo-400 sm:text-sm" />
         </div>
         <div className="flex flex-col gap-1.5">
-          <label htmlFor={dateId} className="text-sm font-semibold text-slate-700">İmtahan tarixi <span className="font-normal text-slate-500">(istəyə görə)</span></label>
+          <label htmlFor={dateId} className="text-sm font-semibold text-slate-700">{t('courses.examDate')} <span className="font-normal text-slate-500">{t('courses.optional')}</span></label>
           <input id={dateId} type="date" value={examDate} onChange={e => setExamDate(e.target.value)}
             className="tutor-border h-11 rounded-xl border bg-white px-3 text-base text-slate-900 outline-none focus:border-indigo-400 sm:text-sm" />
-          <p className="text-xs text-slate-500">Tarixə görə gündəlik iş həcmi hesablanır.</p>
+          <p className="text-xs text-slate-500">{t('courses.dateHint')}</p>
         </div>
-        {save.isError && <Alert title="Yadda saxlanmadı">{save.error.message}</Alert>}
+        {save.isError && <Alert title={t('questions.notSaved')}>{save.error.message}</Alert>}
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <button type="button" onClick={onClose} className="tutor-shared-action sm:px-5">Ləğv et</button>
+          <button type="button" onClick={onClose} className="tutor-shared-action sm:px-5">{t('common.cancel')}</button>
           <button type="submit" disabled={!valid || save.isPending} className="btn-primary inline-flex h-11 items-center justify-center rounded-xl px-5 text-sm font-semibold disabled:opacity-60">
-            {save.isPending ? 'Saxlanılır…' : 'Yadda saxla'}
+            {save.isPending ? t('tutor.card.saving') : t('questions.saveButton')}
           </button>
         </div>
       </form>

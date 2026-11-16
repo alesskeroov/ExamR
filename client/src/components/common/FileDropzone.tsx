@@ -1,6 +1,7 @@
 import { FileUp } from 'lucide-react'
 import { useRef, useState, type DragEvent } from 'react'
 import { cn } from '../../lib/utils'
+import { useTranslation } from 'react-i18next'
 
 interface FileDropzoneProps {
   accept: string
@@ -13,6 +14,7 @@ interface FileDropzoneProps {
 export function FileDropzone({ accept, disabled, hint, onFile }: FileDropzoneProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
+  const { t } = useTranslation()
 
   function handleDrop(event: DragEvent) {
     event.preventDefault()
@@ -39,7 +41,7 @@ export function FileDropzone({ accept, disabled, hint, onFile }: FileDropzonePro
         <FileUp className="size-6" aria-hidden />
       </div>
       <p className="font-medium">
-        {dragging ? 'Faylı buraxın' : 'Faylı bura sürüşdürün və ya'}{' '}
+        {dragging ? t('common.dropzone.drop') : t('common.dropzone.drag')}{' '}
         {!dragging && (
           <button
             type="button"
@@ -47,7 +49,7 @@ export function FileDropzone({ accept, disabled, hint, onFile }: FileDropzonePro
             onClick={() => inputRef.current?.click()}
             className="font-semibold text-indigo-600 hover:text-indigo-700 disabled:cursor-not-allowed"
           >
-            seçin
+            {t('common.dropzone.choose')}
           </button>
         )}
       </p>

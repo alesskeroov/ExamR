@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ApiError } from '../../lib/api-client'
 import { cn } from '../../lib/utils'
 import { examAudioUrl, useStartAudioPlay, type ExamAudio } from './api'
+import { useTranslation } from 'react-i18next'
 
 const boxClass = 'rounded-xl border border-indigo-200 bg-indigo-50/60 px-3.5 py-3 sm:px-5'
 
@@ -17,15 +18,16 @@ export function ListeningPlayer({ src, title, className, hint = true, onPlayingC
   hint?: boolean
   onPlayingChange?: (playing: boolean) => void
 }) {
+  const { t } = useTranslation()
   return (
-    <section data-no-swipe aria-label={`Dinləmə: ${title}`} className={className ?? boxClass}>
+    <section data-no-swipe aria-label={t('exam.listening.aria', { title })} className={className ?? boxClass}>
       <Heading title={title} />
       {/* Native controls: keyboard and screen-reader accessible, with seeking (the API serves byte ranges). */}
       <audio controls preload="metadata" src={src} className="mt-2 w-full"
         onPlay={() => onPlayingChange?.(true)} onPause={() => onPlayingChange?.(false)} onEnded={() => onPlayingChange?.(false)}>
-        Brauzeriniz səsi oxuya bilmir.
+        {t('exam.listening.unsupported')}
       </audio>
-      {hint && <p className="mt-1.5 text-xs text-indigo-900/70">Bu səs bir neçə suala aiddir; suallar arasında keçəndə dayanmır.</p>}
+      {hint && <p className="mt-1.5 text-xs text-indigo-900/70">{t('exam.listening.shared')}</p>}
     </section>
   )
 }
@@ -40,6 +42,7 @@ export function LimitedListeningPlayer({ examId, audio, onPlayingChange }: {
   audio: ExamAudio
   onPlayingChange?: (playing: boolean) => void
 }) {
+  const { t } = useTranslation()
   const startPlay = useStartAudioPlay(examId)
   const element = useRef<HTMLAudioElement>(null)
   const max = audio.maxPlays ?? 0
@@ -67,7 +70,7 @@ export function LimitedListeningPlayer({ examId, audio, onPlayingChange }: {
         if (src === null) setSrc(examAudioUrl(examId, audio.id))
         else { player.currentTime = 0; void player.play() }
       },
-      onError: e => setError(e instanceof ApiError && e.status === 409 ? 'Bu səsin dinləmə limiti bitib.' : e.message),
+      onError: e => setError(e instanceof ApiError && e.status === 409 ? t('exam.listening.limitReached') : e.message),
     })
   }
 
@@ -80,11 +83,11 @@ export function LimitedListeningPlayer({ examId, audio, onPlayingChange }: {
 
   const percent = time.duration > 0 ? Math.min(100, (time.current / time.duration) * 100) : 0
   return (
-    <section data-no-swipe aria-label={`Dinləmə: ${audio.title}`} className={boxClass}>
+    <section data-no-swipe aria-label={t('exam.listening.aria', { title: audio.title })} className={boxClass}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <Heading title={audio.title} />
         <span className={cn('ml-auto text-xs font-medium tabular-nums', left === 0 && !inRound ? 'text-rose-700' : 'text-indigo-900/80')}>
-          Dinləmə: {used} / {max}
+          {t('exam.listening.plays', { used, max })}
         </span>
       </div>
       <audio ref={element} src={src ?? undefined} preload="auto" autoPlay
@@ -92,10 +95,10 @@ export function LimitedListeningPlayer({ examId, audio, onPlayingChange }: {
         onTimeUpdate={e => setTime({ current: e.currentTarget.currentTime, duration: e.currentTarget.duration || 0 })}
         onLoadedMetadata={e => setTime({ current: 0, duration: e.currentTarget.duration || 0 })}
         onEnded={() => { setPlaying(false); setInRound(false) }}
-        onError={() => { if (src) setError('Səs yüklənmədi. İnternet bağlantısını yoxlayın.') }} />
+        onError={() => { if (src) setError(t('exam.listening.loadFailed')) }} />
       <div className="mt-2 flex items-center gap-3">
         {inRound ? (
-          <button type="button" onClick={toggle} aria-label={playing ? 'Fasilə' : 'Davam et'}
+          <button type="button" onClick={toggle} aria-label={playing ? t('exam.listening.pause') : t('dashboard.continue')}
             className="grid size-11 shrink-0 place-items-center rounded-full bg-indigo-600 text-white hover:bg-indigo-700">
             {playing ? <Pause className="size-5" aria-hidden /> : <Play className="size-5" aria-hidden />}
           </button>
@@ -103,11 +106,11 @@ export function LimitedListeningPlayer({ examId, audio, onPlayingChange }: {
           <button type="button" onClick={startRound} disabled={left === 0 || startPlay.isPending}
             className="inline-flex h-11 shrink-0 items-center gap-2 rounded-full bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700 disabled:bg-slate-300 disabled:text-slate-600">
             <Play className="size-4" aria-hidden />
-            {left === 0 ? 'Limit bitib' : used === 0 ? 'Dinlə' : `Yenidən dinlə (${left} qalıb)`}
+            {left === 0 ? t('usage.limitReached') : used === 0 ? t('exam.listening.listen') : t('exam.listening.again', { left })}
           </button>
         )}
         <div className="min-w-0 flex-1">
-          <div className="h-1.5 overflow-hidden rounded-full bg-indigo-100" role="progressbar" aria-label="Dinləmənin gedişi"
+          <div className="h-1.5 overflow-hidden rounded-full bg-indigo-100" role="progressbar" aria-label={t('exam.listening.progress')}
             aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(percent)}>
             <div className="h-full rounded-full bg-indigo-600" style={{ width: `${percent}%` }} />
           </div>
@@ -115,7 +118,7 @@ export function LimitedListeningPlayer({ examId, audio, onPlayingChange }: {
         </div>
       </div>
       <p className={cn('mt-1.5 text-xs', error ? 'text-rose-700' : 'text-indigo-900/70')} role={error ? 'alert' : undefined}>
-        {error ?? `Səs ${max} dəfə dinlənə bilər; hər dinləmə əvvəldən başlayır, geri çəkmək olmur. Fasilə vermək dinləmə sayına təsir etmir.`}
+        {error ?? t('exam.listening.rules', { max })}
       </p>
     </section>
   )

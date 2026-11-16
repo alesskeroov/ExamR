@@ -4,6 +4,7 @@ import { useDeleteCard, useHideCard, type CardDeck, type StudyCard } from './api
 import { CardEditor } from './CardEditor'
 import { FlipCard } from './FlipCard'
 import { GuideDialog } from './GuideDialog'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   chatId: string
@@ -19,6 +20,7 @@ interface Props {
 
 /** One card at reading size: tap or Space flips, ←/→ (or a swipe on phones) moves through the filtered cards. */
 export function CardViewer({ chatId, deck, cards, index, onIndex, onClose, topicTitle, required, onSource }: Props) {
+  const { t } = useTranslation()
   const [flipped, setFlipped] = useState(false)
   const [editing, setEditing] = useState(false)
   const [confirming, setConfirming] = useState(false)
@@ -60,16 +62,16 @@ export function CardViewer({ chatId, deck, cards, index, onIndex, onClose, topic
   const icon = 'grid size-10 shrink-0 place-items-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50'
   const actions = (
     <>
-      <button type="button" onClick={() => setEditing(true)} aria-label="Kartı redaktə et" title="Redaktə et" className={icon}>
+      <button type="button" onClick={() => setEditing(true)} aria-label={t('tutor.card.editTitle')} title={t('questions.edit')} className={icon}>
         <Pencil className="size-[18px]" />
       </button>
       {!card.own && (
-        <button type="button" disabled={hide.isPending} aria-label={card.hidden ? 'Kartı göstər' : 'Kartı gizlət'} title={card.hidden ? 'Göstər' : 'Gizlət'}
+        <button type="button" disabled={hide.isPending} aria-label={card.hidden ? t('tutor.card.show') : t('tutor.card.hide')} title={card.hidden ? t('tutor.card.showShort') : t('tutor.card.hideShort')}
           onClick={() => hide.mutate({ id: card.id, hidden: !card.hidden }, { onSuccess: saved => { if (saved.hidden) leave() } })} className={icon}>
           {card.hidden ? <Eye className="size-[18px]" /> : <EyeOff className="size-[18px]" />}
         </button>
       )}
-      <button type="button" onClick={() => setConfirming(true)} aria-label="Kartı sil" title="Sil" className={icon}>
+      <button type="button" onClick={() => setConfirming(true)} aria-label={t('tutor.card.delete')} title={t('common.delete')} className={icon}>
         <Trash2 className="size-[18px]" />
       </button>
     </>
@@ -85,31 +87,31 @@ export function CardViewer({ chatId, deck, cards, index, onIndex, onClose, topic
           </div>
         </div>
         {confirming ? (
-          <div role="alertdialog" aria-label="Kartı silmək"
+          <div role="alertdialog" aria-label={t('tutor.card.delete')}
             className="tutor-border flex shrink-0 flex-col gap-2 border-t px-4 pt-3 pb-[max(.75rem,env(safe-area-inset-bottom))] sm:flex-row sm:items-center sm:px-6">
             <p className="flex-1 text-sm text-slate-700">
-              {card.own ? 'Bu kart silinsin?' : 'Bu kart sizin kartlarınızdan silinsin?'} Geri qaytarmaq mümkün olmayacaq.
-              {remove.isError && <span className="block text-rose-700">Silinmədi. Yenidən yoxlayın.</span>}
+              {card.own ? t('tutor.card.deleteOwn') : t('tutor.card.deleteFromMine')} {t('tutor.card.irreversible')}
+              {remove.isError && <span className="block text-rose-700">{t('tutor.card.deleteFailed')}</span>}
             </p>
             <div className="flex gap-2">
-              <button type="button" onClick={() => setConfirming(false)} className="tutor-shared-action flex-1 sm:flex-none sm:px-5">Ləğv et</button>
+              <button type="button" onClick={() => setConfirming(false)} className="tutor-shared-action flex-1 sm:flex-none sm:px-5">{t('common.cancel')}</button>
               <button type="button" disabled={remove.isPending} onClick={() => remove.mutate(card.id, { onSuccess: leave })}
                 className="inline-flex h-11 flex-1 items-center justify-center rounded-xl bg-rose-600 px-5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60 sm:flex-none">
-                {remove.isPending ? 'Silinir…' : 'Sil'}
+                {remove.isPending ? t('tutor.card.deleting') : t('common.delete')}
               </button>
             </div>
           </div>
         ) : (
-        <nav aria-label="Kartlar arasında keçid"
+        <nav aria-label={t('tutor.card.navAria')}
           className="tutor-border flex shrink-0 items-center gap-2 border-t px-4 pt-3 pb-[max(.75rem,env(safe-area-inset-bottom))] sm:px-6">
           <button type="button" onClick={() => go(index - 1)} disabled={index === 0}
             className="tutor-shared-action flex-1 sm:flex-none sm:px-5">
-            <ChevronLeft className="size-4" aria-hidden />Əvvəlki
+            <ChevronLeft className="size-4" aria-hidden />{t('common.previous')}
           </button>
-          <span className="hidden flex-1 text-center text-xs text-slate-500 sm:block">← → keçid · Boşluq — çevir · telefonda sürüşdür</span>
+          <span className="hidden flex-1 text-center text-xs text-slate-500 sm:block">{t('tutor.card.keyboard')}</span>
           <button type="button" onClick={() => go(index + 1)} disabled={index === cards.length - 1}
             className="tutor-shared-action flex-1 sm:flex-none sm:px-5">
-            Növbəti<ChevronRight className="size-4" aria-hidden />
+            {t('common.next')}<ChevronRight className="size-4" aria-hidden />
           </button>
         </nav>
         )}

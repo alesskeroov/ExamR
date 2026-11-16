@@ -2,6 +2,7 @@ import { ImageOff, Plus } from 'lucide-react'
 import { useState } from 'react'
 import type { CardDeck } from './api'
 import { CardEditor } from './CardEditor'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   chatId: string
@@ -18,17 +19,18 @@ const slidesTopic = 'slides'
  * and the student turns what matters into own cards.
  */
 export function SlideGallery({ chatId, documentId, deck, count }: Props) {
+  const { t } = useTranslation()
   const [slide, setSlide] = useState<number | null>(null)
   const [broken, setBroken] = useState<Set<number>>(() => new Set())
   const numbers = Array.from({ length: count }, (_, i) => i + 1)
 
   return (
-    <section aria-label="Slaydlar" className="flex flex-col gap-4">
+    <section aria-label={t('tutor.slides.aria')} className="flex flex-col gap-4">
       {numbers.map(n => (
         <figure key={n} className="tutor-border overflow-hidden rounded-2xl border bg-white">
           {broken.has(n) ? (
             <div className="flex aspect-video flex-col items-center justify-center gap-2 bg-slate-50 text-sm text-slate-500">
-              <ImageOff className="size-6" aria-hidden />Bu slaydın şəkli göstərilə bilmir
+              <ImageOff className="size-6" aria-hidden />{t('tutor.slides.missing')}
             </div>
           ) : (
             <img src={`/api/learning/documents/${documentId}/slides/${n}`} alt={`Slayd ${n}`} loading="lazy" decoding="async"

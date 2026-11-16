@@ -3,18 +3,10 @@ import { useEffect, useRef, type KeyboardEvent, type MouseEvent } from 'react'
 import { cn } from '../../lib/utils'
 import type { CardKind, StudyCard } from './api'
 import { splitCardAnswer } from './card-answer'
+import { useTranslation } from 'react-i18next'
 
 // Shared with the card grid (kept here: this file is the card's look).
-const kindLabel: Record<CardKind, string> = { Question: 'Sual', Term: 'Anlayış', List: 'Siyahı', Test: 'Test', Table: 'Cədvəl', Custom: 'Mənim kartım', Cloze: 'Boşluq' }
-const prompt: Record<CardKind, string> = {
-  Question: 'Cavabı yadına sal',
-  Term: 'Bu anlayış nədir?',
-  List: 'Bəndləri sadala',
-  Test: 'Düzgün cavab hansıdır?',
-  Table: 'Bu sətir üzrə məlumatları xatırla',
-  Custom: 'Cavabı yadına sal',
-  Cloze: 'Boşluğa hansı termin yazılır?',
-}
+// Card kind names and prompts: tutor.kind.<kind> and tutor.prompt.<kind> in the locale files.
 const kindTone: Record<CardKind, string> = {
   Question: 'bg-indigo-50 text-indigo-700',
   Term: 'bg-emerald-50 text-emerald-700',
@@ -52,6 +44,7 @@ interface Props {
  * It fills the height its parent gives it, so every card has the same frame; long content scrolls inside the card.
  */
 export function FlipCard({ card, topic, flipped, onFlip, onSource, required, autoFocus = false }: Props) {
+  const { t } = useTranslation()
   const self = useRef<HTMLDivElement>(null)
   useEffect(() => { if (autoFocus) self.current?.focus({ preventScroll: true }) }, [autoFocus, card.id])
   const onKey = (event: KeyboardEvent) => {
@@ -63,7 +56,7 @@ export function FlipCard({ card, topic, flipped, onFlip, onSource, required, aut
 
   return (
     <div ref={self} role="button" tabIndex={0} aria-pressed={flipped} onClick={onFlip} onKeyDown={onKey} data-autofocus={autoFocus || undefined}
-      aria-label={flipped ? 'Kartı ön üzə çevir' : 'Kartı çevir və cavabı gör'}
+      aria-label={flipped ? t('tutor.flip.front') : t('tutor.flip.back')}
       className={cn('flip-card group block h-full w-full cursor-pointer text-left outline-none', flipped && 'is-flipped')}>
       <div className="flip-card-inner">
         {/* Front */}
@@ -73,12 +66,12 @@ export function FlipCard({ card, topic, flipped, onFlip, onSource, required, aut
           <div className="guide-scroll my-4 flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
             {/* my-auto centers short text; long text starts at the top and scrolls. */}
             <div className="my-auto py-2 text-center">
-              <p className="text-[11px] font-semibold tracking-[.12em] text-slate-400 uppercase">{prompt[card.kind]}</p>
+              <p className="text-[11px] font-semibold tracking-[.12em] text-slate-400 uppercase">{t(`tutor.prompt.${card.kind}`)}</p>
               <p className="mx-auto mt-3 max-w-xl text-xl leading-snug font-semibold whitespace-pre-line text-slate-900 sm:text-2xl">{card.front}</p>
             </div>
           </div>
           <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
-            <span className="inline-flex items-center gap-1.5"><RotateCw className="size-3.5" aria-hidden />Çevirmək üçün toxun</span>
+            <span className="inline-flex items-center gap-1.5"><RotateCw className="size-3.5" aria-hidden />{t('tutor.flip.tap')}</span>
             {required != null && <Dots streak={card.streak} required={required} mastered={card.mastered} />}
           </div>
         </div>
@@ -93,7 +86,7 @@ export function FlipCard({ card, topic, flipped, onFlip, onSource, required, aut
           </div>
           {onSource && !card.own && (
             <button type="button" onClick={source} className="mt-3 inline-flex min-h-9 shrink-0 items-center gap-1.5 self-start rounded-lg text-sm font-semibold text-indigo-700 hover:underline">
-              <FileText className="size-4" aria-hidden />Sənəddə göstər{card.page != null ? ` · səh. ${card.page}` : ''}
+              <FileText className="size-4" aria-hidden />{t('tutor.flip.showInDoc')}{card.page != null ? ` · ${t('tutor.flip.pageShort', { n: card.page })}` : ''}
             </button>
           )}
         </div>
@@ -120,26 +113,29 @@ function Header({ card, topic }: { card: StudyCard; topic: string }) {
 
 /** "Yoxlanmalı": the extraction is unsure of the card; "Düzəldilib": the student rewrote it. */
 export function ReviewBadge({ card }: { card: StudyCard }) {
-  if (card.edited) return <span className="text-[11px] font-medium text-slate-500">Düzəldilib</span>
+  const { t } = useTranslation()
+  if (card.edited) return <span className="text-[11px] font-medium text-slate-500">{t('tutor.flip.edited')}</span>
   if (!card.needsReview) return null
   return (
     <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800"
-      title="Bu kart avtomatik çıxarılıb və səhv ola bilər. Yoxlayın: redaktə edin, gizlədin və ya silin.">Yoxlanmalı</span>
+      title={t('tutor.flip.reviewTitle')}>{t('tutor.flip.review')}</span>
   )
 }
 
 /** "Sual 12", "Anlayış", "Siyahı", "Test 45". */
 export function KindBadge({ card }: { card: StudyCard }) {
+  const { t } = useTranslation()
   return (
     <span className={cn('shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold', kindTone[card.kind])}>
-      {card.isSection ? 'Bölmə' : kindLabel[card.kind]}{!card.isSection && (card.kind === 'Question' || card.kind === 'Test') ? ` ${card.source}` : ''}
+      {card.isSection ? t('tutor.kind.Section') : t(`tutor.kind.${card.kind}`)}{!card.isSection && (card.kind === 'Question' || card.kind === 'Test') ? ` ${card.source}` : ''}
     </span>
   )
 }
 
 /** The question side's prompt, for previews of a card. */
 export function KindPrompt({ card }: { card: StudyCard }) {
-  return <>{prompt[card.kind]}</>
+  const { t } = useTranslation()
+  return <>{t(`tutor.prompt.${card.kind}`)}</>
 }
 
 /** Thin colored line that marks the card kind. */
@@ -148,6 +144,7 @@ export function KindAccent({ card }: { card: StudyCard }) {
 }
 
 function Back({ card }: { card: StudyCard }) {
+  const { t } = useTranslation()
   // A card the student wrote or rewrote is plain text, whatever kind it was built as.
   if (card.edited || card.kind === 'Custom') {
     return <p className="text-[15px] leading-relaxed whitespace-pre-line text-slate-800 sm:text-base">{card.back}</p>
@@ -168,7 +165,7 @@ function Back({ card }: { card: StudyCard }) {
   if (card.kind === 'List') {
     return (
       <>
-        <p className="text-xs font-semibold text-amber-800">{card.items.length} bənd</p>
+        <p className="text-xs font-semibold text-amber-800">{t('tutor.flip.items', { n: card.items.length })}</p>
         <ol className="mt-2 space-y-2">
           {card.items.map((item, i) => (
             <li key={item} className="flex gap-3 text-[15px] leading-relaxed text-slate-800">
@@ -189,7 +186,7 @@ function Back({ card }: { card: StudyCard }) {
         {card.items.map(note => <p key={note} className="mt-3 text-[15px] leading-relaxed text-slate-700">{note}</p>)}
         {card.others.length > 0 && (
           <>
-            <p className="mt-4 text-xs font-semibold text-slate-500">Digər variantlar</p>
+            <p className="mt-4 text-xs font-semibold text-slate-500">{t('tutor.flip.otherOptions')}</p>
             <ul className="mt-1.5 space-y-1.5">
               {card.others.map(option => (
                 <li key={option} className="flex gap-2 text-sm leading-relaxed text-slate-500"><X className="mt-0.5 size-4 shrink-0 text-rose-400" aria-hidden />{option}</li>
@@ -206,7 +203,7 @@ function Back({ card }: { card: StudyCard }) {
         : <p className="text-[15px] leading-relaxed whitespace-pre-line text-slate-800 sm:text-base">{card.back}</p>}
       {card.kind === 'Question' && card.items.length > 0 && (
         <>
-          <p className="mt-4 text-xs font-semibold text-slate-500">Bu cavabdakı anlayışlar</p>
+          <p className="mt-4 text-xs font-semibold text-slate-500">{t('tutor.flip.terms')}</p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {card.items.map(term => <span key={term} className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">{term}</span>)}
           </div>
@@ -217,13 +214,14 @@ function Back({ card }: { card: StudyCard }) {
 }
 
 function QuestionAnswer({ text }: { text: string }) {
+  const { t } = useTranslation()
   const { preview, rest } = splitCardAnswer(text)
   return (
     <div className="text-[15px] leading-relaxed text-slate-800 sm:text-base">
       <p className="whitespace-pre-line">{preview}</p>
       {rest && (
         <details className="mt-4" onClick={event => event.stopPropagation()}>
-          <summary className="cursor-pointer text-sm font-semibold text-indigo-700">Tam cavabı göstər</summary>
+          <summary className="cursor-pointer text-sm font-semibold text-indigo-700">{t('questions.showFull')}</summary>
           <p className="mt-3 whitespace-pre-line">{rest}</p>
         </details>
       )}
@@ -232,8 +230,9 @@ function QuestionAnswer({ text }: { text: string }) {
 }
 
 function Dots({ streak, required, mastered }: { streak: number; required: number; mastered: boolean }) {
+  const { t } = useTranslation()
   return (
-    <span className="inline-flex items-center gap-1" title={mastered ? 'Mənimsənilib' : `Ardıcıl ${required} dəfə "Bilirdim" lazımdır`}>
+    <span className="inline-flex items-center gap-1" title={mastered ? t('tutor.topics.mastered') : t('tutor.flip.needStreak', { n: required })}>
       {Array.from({ length: required }, (_, i) => (
         <span key={i} className={cn('inline-block size-2 rounded-full', mastered || i < streak ? 'bg-emerald-500' : 'bg-slate-200')} />
       ))}

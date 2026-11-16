@@ -2,6 +2,7 @@ import { Plus } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { CardDeck } from './api'
 import { CardEditor } from './CardEditor'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   chatId: string
@@ -19,6 +20,7 @@ const minSelection = 3
  * The selection becomes the answer, so the card says exactly what the material says.
  */
 export function SelectionToCard({ chatId, deck, topicKey, className, children }: Props) {
+  const { t } = useTranslation()
   const box = useRef<HTMLDivElement>(null)
   const [picked, setPicked] = useState('')
   const [answer, setAnswer] = useState<string | null>(null)
@@ -45,7 +47,7 @@ export function SelectionToCard({ chatId, deck, topicKey, className, children }:
         <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex justify-center px-4">
           <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => { setAnswer(picked); setPicked('') }}
             className="btn-primary pointer-events-auto inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-semibold shadow-lg">
-            <Plus className="size-4" aria-hidden />Seçilmiş mətndən kart et
+            <Plus className="size-4" aria-hidden />{t('tutor.selectionToCard')}
           </button>
         </div>
       )}

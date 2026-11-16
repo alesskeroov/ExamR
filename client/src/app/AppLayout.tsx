@@ -9,25 +9,28 @@ import { Nameplate } from '../features/nameplates/Nameplate'
 import { useNameplate } from '../features/nameplates/api'
 import { ThemeToggle } from '../components/common/ThemeToggle'
 import { HelpMenu } from '../features/support/HelpMenu'
+import { useTranslation } from 'react-i18next'
+import { LanguageSwitcher } from '../components/common/LanguageSwitcher'
 
 const navItems: { to: string; label: string; icon: LucideIcon; group: string; end?: boolean; adminOnly?: boolean; badge?: string }[] = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, group: '', end: true },
-  { to: '/upload', label: 'Sənəd yüklə', icon: FileUp, group: 'Hazırlıq' },
-  { to: '/questions', label: 'Sual bankı', icon: Library, group: 'Hazırlıq' },
-  { to: '/tutor', label: 'Öyrənmə bələdçisi', icon: Layers, group: 'Hazırlıq', badge: tutorEnabled ? 'Demo' : 'Tezliklə' },
-  { to: '/exams/new', label: 'İmtahana başla', icon: ListChecks, group: 'İmtahan' },
-  { to: '/exams', label: 'Tarixçə', icon: History, group: 'İmtahan', end: true },
-  { to: '/dim/buraxilis', label: 'Buraxılış imtahanı', icon: School, group: 'DİM sınaqları' },
-  { to: '/battle', label: 'Battle', icon: Swords, group: 'Birlikdə', end: true },
-  { to: '/battle/rooms', label: 'Otaqlarım', icon: DoorOpen, group: 'Birlikdə' },
-  { to: '/friends', label: 'Dostlar', icon: Users, group: 'Birlikdə' },
-  { to: '/groups', label: 'Qruplarım', icon: GraduationCap, group: 'Birlikdə' },
-  { to: '/admin', label: 'Admin Panel', icon: ShieldCheck, group: 'İdarə', adminOnly: true },
+  { to: '/', label: 'dashboard', icon: LayoutDashboard, group: '', end: true },
+  { to: '/upload', label: 'upload', icon: FileUp, group: 'prep' },
+  { to: '/questions', label: 'questions', icon: Library, group: 'prep' },
+  { to: '/tutor', label: 'tutor', icon: Layers, group: 'prep', badge: tutorEnabled ? 'demo' : 'soon' },
+  { to: '/exams/new', label: 'newExam', icon: ListChecks, group: 'exam' },
+  { to: '/exams', label: 'history', icon: History, group: 'exam', end: true },
+  { to: '/dim/buraxilis', label: 'dimFinal', icon: School, group: 'dim' },
+  { to: '/battle', label: 'battle', icon: Swords, group: 'together', end: true },
+  { to: '/battle/rooms', label: 'rooms', icon: DoorOpen, group: 'together' },
+  { to: '/friends', label: 'friends', icon: Users, group: 'together' },
+  { to: '/groups', label: 'groups', icon: GraduationCap, group: 'together' },
+  { to: '/admin', label: 'admin', icon: ShieldCheck, group: 'manage', adminOnly: true },
 ]
 
 export function AppLayout() {
   const { data: user } = useCurrentUser()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const { t } = useTranslation()
   // Any navigation (menu item, profile link, avatar) closes the mobile drawer; no link has to remember to do it.
   const { pathname } = useLocation()
   useEffect(() => { setMobileOpen(false) }, [pathname])
@@ -53,6 +56,7 @@ export function AppLayout() {
       <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4 lg:hidden">
         <Brand />
         <div className="ml-auto flex items-center gap-2">
+          <LanguageSwitcher />
           <ThemeToggle />
           <HelpMenu />
           <NotificationBell />
@@ -60,7 +64,7 @@ export function AppLayout() {
             type="button"
             onClick={() => setMobileOpen((open) => !open)}
             className="rounded-lg p-2 text-slate-600 hover:bg-slate-100"
-            aria-label={mobileOpen ? 'Menyunu bağla' : 'Menyunu aç'}
+            aria-label={mobileOpen ? t('nav.closeMenu') : t('nav.openMenu')}
             aria-expanded={mobileOpen}
           >
             {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
@@ -81,20 +85,20 @@ export function AppLayout() {
       >
         <div className="flex h-14 shrink-0 items-center justify-between px-4 lg:h-16 lg:px-6">
           <Brand />
-          <button type="button" onClick={() => setMobileOpen(false)} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden" aria-label="Menyunu bağla"><X className="size-5" /></button>
+          <button type="button" onClick={() => setMobileOpen(false)} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden" aria-label={t('nav.closeMenu')}><X className="size-5" /></button>
         </div>
-        <nav aria-label="Əsas naviqasiya" className="app-navigation flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-3 pt-1">
+        <nav aria-label={t('nav.main')} className="app-navigation flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-3 pt-1">
           {[...new Set(navItems.map(item => item.group))].map(group => {
             const items = navItems.filter(item => item.group === group && (!item.adminOnly || user?.roles.includes('Admin')))
             if (!items.length) return null
-            return <div key={group || 'home'} className="app-nav-group" role="group" aria-label={group || 'Ümumi'}>
-              {group && <p className="ds-label" aria-hidden>{group}</p>}
+            return <div key={group || 'home'} className="app-nav-group" role="group" aria-label={t(`nav.groups.${group || 'general'}`)}>
+              {group && <p className="ds-label" aria-hidden>{t(`nav.groups.${group}`)}</p>}
               {items.map(({ to, label, icon: Icon, end, badge }) => (
                 <NavLink key={to} to={to} end={end} onClick={() => setMobileOpen(false)}
                   className="app-nav-link flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] font-medium transition-colors duration-150">
                   <Icon className="size-4 shrink-0" aria-hidden />
-                  <span className="truncate">{label}</span>
-                  {badge && <span className="ml-auto shrink-0 rounded-full bg-amber-100 px-1.5 py-px text-[10px] font-semibold tracking-wide text-amber-800 uppercase">{badge}</span>}
+                  <span className="truncate">{t(`nav.items.${label}`)}</span>
+                  {badge && <span className="ml-auto shrink-0 rounded-full bg-amber-100 px-1.5 py-px text-[10px] font-semibold tracking-wide text-amber-800 uppercase">{t(`nav.badge.${badge}`)}</span>}
                 </NavLink>
               ))}
             </div>
@@ -106,7 +110,7 @@ export function AppLayout() {
       <div className="min-w-0 flex-1">
         <header className="app-toolbar hidden h-[72px] items-center justify-between border-b border-slate-200 px-8 lg:flex">
           <Breadcrumb />
-          <div className="flex items-center gap-3"><ThemeToggle /><HelpMenu /><NotificationBell /></div>
+          <div className="flex items-center gap-3"><LanguageSwitcher /><ThemeToggle /><HelpMenu /><NotificationBell /></div>
         </header>
         <main className="app-content app-safe-bottom mx-auto max-w-[1200px] min-w-0 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
           <Outlet />
@@ -120,15 +124,16 @@ function UserMenu() {
   const { data: user } = useCurrentUser()
   const logout = useLogout()
   const nameplate = useNameplate()
+  const { t } = useTranslation()
   if (!user) return null
-  const nickname = user.nickname || user.displayName || 'İstifadəçi'
+  const nickname = user.nickname || user.displayName || t('common.user')
 
   return (
     <div className="app-sidebar-footer shrink-0 lg:mt-auto">
       <Nameplate compact effect={nameplate.isError ? null : nameplate.data?.selected ?? null} nickname={nickname} avatarUrl={user.avatarUrl}
         verified={user.emailConfirmed || user.googleLinked}
-        profileLink={<NavLink to="/profile" title={nickname} aria-label={`${nickname} — profili redaktə et`} className="nameplate-nickname">{nickname}</NavLink>}
-        action={<button type="button" onClick={() => logout.mutate()} disabled={logout.isPending} aria-label="Çıxış" title="Çıxış"><LogOut className="size-4" /></button>} />
+        profileLink={<NavLink to="/profile" title={nickname} aria-label={t('nav.editProfile', { name: nickname })} className="nameplate-nickname">{nickname}</NavLink>}
+        action={<button type="button" onClick={() => logout.mutate()} disabled={logout.isPending} aria-label={t('nav.logout')} title={t('nav.logout')}><LogOut className="size-4" /></button>} />
     </div>
   )
 }
@@ -136,8 +141,9 @@ function UserMenu() {
 /** Logo = home: opens the dashboard, or scrolls it back to the top when already there. */
 function Brand() {
   const { pathname } = useLocation()
+  const { t } = useTranslation()
   return (
-    <Link to="/" aria-label="ExamR — Dashboard" title="Dashboard"
+    <Link to="/" aria-label={`ExamR — ${t('nav.items.dashboard')}`} title={t('nav.items.dashboard')}
       onClick={event => {
         if (pathname !== '/') return
         event.preventDefault()
@@ -150,23 +156,25 @@ function Brand() {
   )
 }
 
-const extraPages: Record<string, string> = { '/notifications': 'Bildirişlər', '/profile': 'Profil' }
-const adminSections: Record<string, string> = { documents: 'Sənədlər', groups: 'Qruplar', admins: 'Adminlər', dim: 'DİM sınaqları', nameplates: 'Profil effektləri' }
+const extraPages: Record<string, string> = { '/notifications': 'notifications', '/profile': 'profile' }
+const adminSections = ['documents', 'groups', 'admins', 'dim', 'nameplates']
 
 function Breadcrumb() {
   const { pathname } = useLocation()
   const [params] = useSearchParams()
+  const { t } = useTranslation()
   // Exact sidebar match first, otherwise the longest sidebar prefix (e.g. /groups/:id → Qruplarım).
   const item = navItems.find(i => i.to === pathname)
     ?? navItems.filter(i => i.to !== '/' && pathname.startsWith(`${i.to}/`)).sort((a, b) => b.to.length - a.to.length)[0]
   const crumbs: { label: string; to?: string }[] = []
-  if (item) crumbs.push({ label: item.label, to: item.to })
-  else if (extraPages[pathname]) crumbs.push({ label: extraPages[pathname] })
-  if (pathname === '/admin') crumbs.push({ label: adminSections[params.get('section') ?? ''] ?? 'Sənədlər' })
-  else if (pathname === '/admin/groups') crumbs.push({ label: 'Qruplar' })
-  else if (/^\/groups\/[^/]+$/.test(pathname)) crumbs.push({ label: 'Qrup' })
-  else if (/^\/exams\/[^/]+\/result$/.test(pathname)) crumbs.push({ label: 'Nəticə' })
-  return <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-xs">
+  if (item) crumbs.push({ label: t(`nav.items.${item.label}`), to: item.to })
+  else if (extraPages[pathname]) crumbs.push({ label: t(`nav.extra.${extraPages[pathname]}`) })
+  const section = params.get('section') ?? ''
+  if (pathname === '/admin') crumbs.push({ label: t(`nav.admin.${adminSections.includes(section) ? section : 'documents'}`) })
+  else if (pathname === '/admin/groups') crumbs.push({ label: t('nav.admin.groups') })
+  else if (/^\/groups\/[^/]+$/.test(pathname)) crumbs.push({ label: t('nav.extra.group') })
+  else if (/^\/exams\/[^/]+\/result$/.test(pathname)) crumbs.push({ label: t('nav.extra.result') })
+  return <nav aria-label={t('nav.breadcrumb')} className="flex min-w-0 items-center gap-2 text-xs">
     <Link to="/" className="font-semibold text-slate-700 transition-colors hover:text-indigo-600">ExamR</Link>
     {crumbs.map((c, i) => <span key={c.label} className="flex min-w-0 items-center gap-2">
       <span className="text-slate-400" aria-hidden>/</span>

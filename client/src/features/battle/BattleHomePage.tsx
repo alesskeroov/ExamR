@@ -12,16 +12,18 @@ import { cn } from '../../lib/utils'
 import { useCompletedDocuments } from '../documents/api'
 import { useExamAvailability } from '../exams/api'
 import { MAX_BATTLE_QUESTIONS, useCreateBattle } from './api'
+import { useTranslation } from 'react-i18next'
 
 const inputClass =
   'h-10 w-full rounded-lg border border-slate-300 bg-white px-3 tabular-nums focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400'
 const SECONDS = [15, 20, 25, 30]
 
 export function BattleHomePage() {
+  const { t } = useTranslation()
   return (
     <>
-      <PageHeader title="Battle" description="Dostlarınızla real vaxtda yarışın: eyni suallar, eyni anda, ən sürətli düzgün cavab qalib gəlir." />
-      <Link to="/battle/rooms" className="mb-5 inline-block font-medium text-indigo-600 hover:text-indigo-700">Otaqlarım →</Link>
+      <PageHeader title="Battle" description={t('battle.home.description')} />
+      <Link to="/battle/rooms" className="mb-5 inline-block font-medium text-indigo-600 hover:text-indigo-700">{t('nav.items.rooms')} →</Link>
       <div className="mb-5"><RankSummary /></div>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <CreateRoomCard />
@@ -33,6 +35,7 @@ export function BattleHomePage() {
 }
 
 function CreateRoomCard() {
+  const { t } = useTranslation()
   const monthly = useUsageLimit('Battle')
   const navigate = useNavigate()
   const documents = useCompletedDocuments(true)
@@ -69,11 +72,11 @@ function CreateRoomCard() {
   }
 
   return (
-    <Card icon={<Swords className="size-5" />} title="Otaq yarat" subtitle="Siz host olacaqsınız: yarışı siz başladırsınız və idarə edirsiniz.">
+    <Card icon={<Swords className="size-5" />} title={t('battle.home.create')} subtitle={t('battle.home.createText')}>
       <UsageMeter kind="Battle" />
       <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
-        <Field label="Otağın adı">
-          {id => <input id={id} value={name} maxLength={100} onChange={e => setName(e.target.value)} placeholder="Məsələn, axşam sınağı" className={inputClass} />}
+        <Field label={t('battle.home.roomName')}>
+          {id => <input id={id} value={name} maxLength={100} onChange={e => setName(e.target.value)} placeholder={t('battle.home.roomNamePlaceholder')} className={inputClass} />}
         </Field>
         <Field label="PDF">
           {(id) => (
@@ -86,10 +89,10 @@ function CreateRoomCard() {
               }}
               className={inputClass}
             >
-              <option value="">{documents.isPending ? 'Yüklənir…' : 'PDF seçin'}</option>
+              <option value="">{documents.isPending ? t('common.loadingDots') : t('exam.setup.pickPdf')}</option>
               {documents.data?.items.map((d) => (
                 <option key={d.id} value={d.id}>
-                  {d.originalFileName} · {formatNumber(d.questionCount)} sual
+                  {d.originalFileName} · {t('common.questions', { count: d.questionCount })}
                 </option>
               ))}
             </select>
@@ -97,13 +100,13 @@ function CreateRoomCard() {
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Başlanğıc sual">
+          <Field label={t('exam.setup.fromQuestion')}>
             {(id) => (
               <input id={id} type="number" min={1} className={inputClass} disabled={!documentId || span.isPending}
                 value={from ?? ''} onChange={(e) => setRange({ from: e.target.value, to: String(to ?? '') })} aria-invalid={!!documentId && !rangeValid} />
             )}
           </Field>
-          <Field label="Son sual">
+          <Field label={t('exam.setup.toQuestion')}>
             {(id) => (
               <input id={id} type="number" min={1} className={inputClass} disabled={!documentId || span.isPending}
                 value={to ?? ''} onChange={(e) => setRange({ from: String(from ?? ''), to: e.target.value })} aria-invalid={!!documentId && !rangeValid} />
@@ -112,18 +115,18 @@ function CreateRoomCard() {
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Sual sayı">
+          <Field label={t('exam.setup.count')}>
             {(id) => (
               <input id={id} type="number" min={1} max={max || undefined} className={inputClass} disabled={!rangeValid}
                 value={count} onChange={(e) => setCount(e.target.value)} aria-invalid={rangeValid && !countValid} />
             )}
           </Field>
-          <Field label="Hər suala vaxt">
+          <Field label={t('battle.home.timePerQuestion')}>
             {(id) => (
               <select id={id} value={seconds} onChange={(e) => setSeconds(Number(e.target.value))} className={inputClass}>
                 {SECONDS.map((s) => (
                   <option key={s} value={s}>
-                    {s} saniyə
+                    {t('battle.home.seconds', { count: s })}
                   </option>
                 ))}
               </select>
@@ -133,14 +136,14 @@ function CreateRoomCard() {
 
         <p className={cn(documentId && (!rangeValid || !countValid) && !span.isPending ? 'text-rose-600' : 'text-slate-500')}>
           {!documentId
-            ? 'PDF seçin. Yarışda yalnız düzgün cavabı məlum olan suallar istifadə olunur.'
+            ? t('battle.home.pickPdfHint')
             : span.isPending
-              ? 'Yüklənir…'
+              ? t('common.loadingDots')
               : !rangeValid
-                ? `Aralıq PDF-dəki nömrələr daxilində olmalıdır (${span.data?.firstNumber}–${span.data?.lastNumber}).`
+                ? t('exam.setup.outOfRange', { first: span.data?.firstNumber, last: span.data?.lastNumber })
                 : !countValid
-                  ? `Sual sayı 1 ilə ${formatNumber(max)} arasında olmalıdır.`
-                  : `Aralıqda yarış üçün ${formatNumber(gradable)} sual var · 2–10 iştirakçı.`}
+                  ? t('battle.home.countRange', { max: formatNumber(max) })
+                  : t('battle.home.available', { count: gradable })}
         </p>
 
         {create.error && (
@@ -148,7 +151,7 @@ function CreateRoomCard() {
             {create.error.message}{' '}
             {existingCode && (
               <button type="button" onClick={() => navigate(`/battle/${existingCode}`)} className="font-semibold underline">
-                Otağınıza keçin
+                {t('battle.home.goToRoom')}
               </button>
             )}
           </p>
@@ -156,7 +159,7 @@ function CreateRoomCard() {
 
         <Button type="submit" disabled={monthly.blocked || !rangeValid || !countValid || availability.isFetching} loading={create.isPending}>
           <Users className="size-4" aria-hidden />
-          Otaq yarat
+          {t('battle.home.create')}
         </Button>
       </form>
     </Card>
@@ -164,13 +167,14 @@ function CreateRoomCard() {
 }
 
 function JoinRoomCard() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [code, setCode] = useState('')
   const normalized = code.trim().toUpperCase()
   const valid = /^[A-Z0-9]{6}$/.test(normalized)
 
   return (
-    <Card icon={<LogIn className="size-5" />} title="Otağa qoşul" subtitle="Hostun paylaşdığı 6 simvollu kodu daxil edin və ya linki açın.">
+    <Card icon={<LogIn className="size-5" />} title={t('battle.home.join')} subtitle={t('battle.home.joinText')}>
       <form
         onSubmit={(e) => {
           e.preventDefault()
@@ -178,7 +182,7 @@ function JoinRoomCard() {
         }}
         className="flex flex-col gap-4"
       >
-        <Field label="Otaq kodu">
+        <Field label={t('battle.home.code')}>
           {(id) => (
             <input
               id={id}
@@ -192,7 +196,7 @@ function JoinRoomCard() {
           )}
         </Field>
         <Button type="submit" disabled={!valid}>
-          Qoşul
+          {t('notifications.join')}
         </Button>
       </form>
     </Card>
