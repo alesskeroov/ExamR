@@ -1768,6 +1768,11 @@
       "textFailed": "Mətn yüklənə bilmədi."
     },
     "picker": {
+      "delete": "Sil",
+      "deleteLabel": "{{name}} sənədini sil",
+      "deleteTitle": "Sənəd silinsin?",
+      "deleteText": "“{{name}}” faylı, onunla bağlı söhbətlər, kartlar və materiallar birdəfəlik silinəcək. Bu əməliyyatı geri qaytarmaq olmur.",
+      "deleteFailed": "Sənəd silinmədi",
       "oldDoc": "Köhnə .doc formatı dəstəklənmir. Faylı Word-də .docx kimi saxlayıb yenidən yükləyin.",
       "oldPpt": "Köhnə .ppt formatı dəstəklənmir. Faylı PowerPoint-də .pptx kimi saxlayıb yenidən yükləyin.",
       "types": "Öyrənmə bələdçisi yalnız PDF, Word (.docx) və PowerPoint (.pptx) faylları qəbul edir.",

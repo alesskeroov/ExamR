@@ -257,7 +257,9 @@ public static class DocumentEndpoints
             return NotFound();
         }
 
-        if (document.Status == DocumentStatus.Processing)
+        // A running study-guide index job still writes to the learning rows that cascade with the document.
+        if (document.Status == DocumentStatus.Processing
+            || await db.Set<Learning.LearningDocument>().AnyAsync(l => l.DocumentId == id && l.Status == Learning.LearningStatus.Processing, ct))
         {
             return TypedResults.Problem("Sənəd hazırda emal olunur, sonra yenidən cəhd edin.", statusCode: StatusCodes.Status409Conflict);
         }

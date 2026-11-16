@@ -1,10 +1,11 @@
 import { UsageMeter } from '../../components/common/UsageMeter'
 import { useUsageLimit } from '../usage/api'
-import { CheckCircle2, FileText, Loader2, Search, TriangleAlert, Upload } from 'lucide-react'
+import { CheckCircle2, FileText, Loader2, Search, Trash2, TriangleAlert, Upload } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
 import { Alert } from '../../components/common/Alert'
 import { cn } from '../../lib/utils'
-import { useIndexDocument, useTutorDocuments, type TutorDocument } from './api'
+import { useDeleteTutorDocument, useIndexDocument, useTutorDocuments, type TutorDocument } from './api'
+import { useConfirm } from '../../lib/use-confirm'
 import { useTranslation } from 'react-i18next'
 
 interface Props {
@@ -25,6 +26,8 @@ export function TutorDocumentPicker({ onStart, starting, startError, resumable =
   const { data, isLoading, isError, refetch } = useTutorDocuments()
   const monthly = useUsageLimit('Upload')
   const index = useIndexDocument()
+  const deletion = useDeleteTutorDocument()
+  const confirm = useConfirm()
   const [term, setTerm] = useState('')
   const [progress, setProgress] = useState<number | null>(null)
   const [typeError, setTypeError] = useState<string | null>(null)
@@ -46,6 +49,14 @@ export function TutorDocumentPicker({ onStart, starting, startError, resumable =
     if (error) return
     setProgress(0)
     index.mutate({ file, onProgress: setProgress }, { onSettled: () => setProgress(null) })
+  }
+
+  const remove = async (doc: TutorDocument) => {
+    const ok = await confirm({
+      title: t('tutor.picker.deleteTitle'), confirmLabel: t('tutor.picker.delete'), danger: true,
+      description: t('tutor.picker.deleteText', { name: doc.fileName }),
+    })
+    if (ok) deletion.mutate(doc.documentId)
   }
 
   return (
@@ -73,6 +84,7 @@ export function TutorDocumentPicker({ onStart, starting, startError, resumable =
 
       {typeError && <div className="mt-4"><Alert title={t('tutor.picker.unsupported')}>{typeError}</Alert></div>}
       {index.isError && <div className="mt-4"><Alert title={t('tutor.picker.indexFailed')}>{index.error.message}</Alert></div>}
+      {deletion.isError && <div className="mt-4"><Alert title={t('tutor.picker.deleteFailed')}>{deletion.error.message}</Alert></div>}
       {startError && <div className="mt-4"><Alert title={t('tutor.picker.startFailed')}>{startError}</Alert></div>}
 
       <div className="mt-6">
@@ -88,7 +100,8 @@ export function TutorDocumentPicker({ onStart, starting, startError, resumable =
           <ul className="space-y-2">
             {documents.map(doc => (
               <DocumentRow key={doc.documentId} doc={doc} resumable={resumable.includes(doc.documentId)} busy={starting || (index.isPending && index.variables && 'documentId' in index.variables && index.variables.documentId === doc.documentId) === true}
-                onStart={() => onStart(doc.documentId)} onIndex={() => index.mutate({ documentId: doc.documentId })} />
+                deleting={deletion.isPending && deletion.variables === doc.documentId}
+                onStart={() => onStart(doc.documentId)} onIndex={() => index.mutate({ documentId: doc.documentId })} onDelete={() => void remove(doc)} />
             ))}
           </ul>
         )}
@@ -97,7 +110,9 @@ export function TutorDocumentPicker({ onStart, starting, startError, resumable =
   )
 }
 
-function DocumentRow({ doc, resumable, busy, onStart, onIndex }: { doc: TutorDocument; resumable: boolean; busy: boolean; onStart: () => void; onIndex: () => void }) {
+function DocumentRow({ doc, resumable, busy, deleting, onStart, onIndex, onDelete }: {
+  doc: TutorDocument; resumable: boolean; busy: boolean; deleting: boolean; onStart: () => void; onIndex: () => void; onDelete: () => void
+}) {
   const { t } = useTranslation()
   const ready = doc.status === 'Completed'
   const working = doc.status === 'Pending' || doc.status === 'Processing'
@@ -124,6 +139,14 @@ function DocumentRow({ doc, resumable, busy, onStart, onIndex }: { doc: TutorDoc
         <button type="button" onClick={onIndex} disabled={busy}
           className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-70">
           {busy && <Loader2 className="size-4 animate-spin" aria-hidden />}{doc.status === 'Failed' ? t('common.retry') : t('tutor.picker.prepare')}
+        </button>
+      )}
+      {doc.isOwner && (
+        // Shared documents belong to someone else: only the uploader can delete the file.
+        <button type="button" onClick={onDelete} disabled={deleting || busy || doc.status === 'Processing'}
+          aria-label={t('tutor.picker.deleteLabel', { name: doc.fileName })} title={t('tutor.picker.delete')}
+          className="grid size-9 shrink-0 place-items-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-slate-400">
+          {deleting ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Trash2 className="size-4" aria-hidden />}
         </button>
       )}
     </li>

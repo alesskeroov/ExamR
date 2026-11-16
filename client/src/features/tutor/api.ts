@@ -16,7 +16,7 @@ export type TutorMode = 'Free' | 'StepByStep'
 export type IndexStatus = 'Pending' | 'Processing' | 'Completed' | 'Failed'
 
 export interface TutorDocument {
-  documentId: string; fileName: string; format: string; status: IndexStatus | null; pageCount: number | null; chunkCount: number; uploadedAt: string
+  documentId: string; fileName: string; format: string; status: IndexStatus | null; pageCount: number | null; chunkCount: number; uploadedAt: string; isOwner: boolean
 }
 export interface IndexedDocument {
   documentId: string; fileName: string; format: string; status: IndexStatus; pageCount: number | null; chunkCount: number; error: string | null
@@ -92,6 +92,21 @@ export function useDeleteChat() {
       client.removeQueries({ queryKey: queryKeys.tutor.chat(id) })
       return client.invalidateQueries({ queryKey: queryKeys.tutor.chats })
     },
+  })
+}
+
+/** Deletes an own uploaded document; its index, chats, cards and materials go with it on the server. */
+export function useDeleteTutorDocument() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (documentId: string) => api.delete(`/documents/${documentId}`),
+    onSuccess: () => Promise.all([
+      client.invalidateQueries({ queryKey: queryKeys.tutor.documents }),
+      client.invalidateQueries({ queryKey: queryKeys.tutor.chats }),
+      client.invalidateQueries({ queryKey: queryKeys.tutor.reviewToday }),
+      client.invalidateQueries({ queryKey: queryKeys.documents.mine }),
+      client.invalidateQueries({ queryKey: queryKeys.usage.mine }),
+    ]),
   })
 }
 

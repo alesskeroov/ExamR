@@ -1785,6 +1785,11 @@
       "textFailed": "The text couldn't be loaded."
     },
     "picker": {
+      "delete": "Delete",
+      "deleteLabel": "Delete {{name}}",
+      "deleteTitle": "Delete this document?",
+      "deleteText": "“{{name}}” and its chats, cards and materials will be deleted permanently. This cannot be undone.",
+      "deleteFailed": "The document was not deleted",
       "oldDoc": "The old .doc format isn't supported. Save the file as .docx in Word and upload it again.",
       "oldPpt": "The old .ppt format isn't supported. Save the file as .pptx in PowerPoint and upload it again.",
       "types": "The study guide only accepts PDF, Word (.docx) and PowerPoint (.pptx) files.",

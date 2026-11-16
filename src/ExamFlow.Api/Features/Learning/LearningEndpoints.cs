@@ -133,22 +133,23 @@ public static class LearningEndpoints
         }
     }
 
-    public sealed record LearningDocumentListItem(Guid DocumentId, string FileName, string Format, string? Status, int? PageCount, int ChunkCount, DateTimeOffset UploadedAt);
+    public sealed record LearningDocumentListItem(Guid DocumentId, string FileName, string Format, string? Status, int? PageCount, int ChunkCount, DateTimeOffset UploadedAt, bool IsOwner);
 
     /// <summary>Readable PDF and Word documents with their index state (null status = not indexed yet), for the tutor's document picker.</summary>
     private static async Task<IResult> List(ClaimsPrincipal user, AppDbContext db, CancellationToken ct)
     {
-        var items = await GuideDocuments(db, user.GetUserId())
+        var userId = user.GetUserId();
+        var items = await GuideDocuments(db, userId)
             .Where(d => d.StoredFileName.EndsWith(".pdf") || d.StoredFileName.EndsWith(".docx") || d.StoredFileName.EndsWith(".pptx"))
             .OrderByDescending(d => d.CreatedAt).Take(200)
             .Select(d => new
             {
-                d.Id, d.OriginalFileName, d.StoredFileName, d.CreatedAt,
+                d.Id, d.OriginalFileName, d.StoredFileName, d.CreatedAt, IsOwner = d.UploadedByUserId == userId,
                 Learning = db.Set<LearningDocument>().Where(l => l.DocumentId == d.Id).Select(l => new { l.Status, l.PageCount, l.ChunkCount }).FirstOrDefault(),
             })
             .ToListAsync(ct);
         return TypedResults.Ok(items.Select(d => new LearningDocumentListItem(d.Id, d.OriginalFileName, Path.GetExtension(d.StoredFileName).TrimStart('.').ToLowerInvariant(),
-            d.Learning?.Status.ToString(), d.Learning?.PageCount, d.Learning?.ChunkCount ?? 0, d.CreatedAt)));
+            d.Learning?.Status.ToString(), d.Learning?.PageCount, d.Learning?.ChunkCount ?? 0, d.CreatedAt, d.IsOwner)));
     }
 
     private static async Task<IResult> Process(Guid documentId, ClaimsPrincipal user, AppDbContext db, LearningQueue queue, TimeProvider clock, CancellationToken ct) =>
