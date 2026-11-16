@@ -153,8 +153,8 @@
 /* Shared layout keeps the supplied decoration behind the live profile controls. */
 .nameplate { position:relative; isolation:isolate; overflow:hidden; width:100%; min-width:0; border-radius:12px; color:#fff; container-type:inline-size; }
 .nameplate-content { position:relative; display:flex; align-items:center; gap:8px; min-height:72px; padding:12px 6px 12px 10px; }
-.nameplate-avatar { display:grid; place-items:center; width:34px; height:34px; flex-shrink:0; border-radius:50%; background:#29343c; color:#e5e7eb; font-weight:700; box-shadow:0 0 0 2px #ffffff14; }
-.nameplate-avatar img { width:100%; height:100%; border-radius:inherit; object-fit:cover; }
+.nameplate-avatar { display:grid; place-items:center; width:34px; height:34px; position:relative; overflow:hidden; flex-shrink:0; border-radius:50%; background:#29343c; color:#e5e7eb; font-weight:700; box-shadow:0 0 0 2px #ffffff14; }
+.nameplate-avatar img { position:absolute; inset:0; width:100%; height:100%; max-width:none; object-fit:cover; }
 .nameplate-identity { display:flex; flex:1; min-width:0; align-items:center; justify-content:flex-start; gap:4px; text-align:left; }
 .nameplate .nameplate-nickname { display:block; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; font-weight:700; color:#fff; text-shadow:0 1px 3px #000,0 0 8px #000; }
 .nameplate-identity > svg { flex-shrink:0; }
