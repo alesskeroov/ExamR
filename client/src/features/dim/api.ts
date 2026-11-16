@@ -131,6 +131,26 @@ export function useDimReport(examId: string) {
   })
 }
 
+/** Exam positions from … from + count − 1 (0-based) belong to one subject. */
+export interface DimSubjectRun { subject: string; name: string; from: number; count: number }
+
+/** Subjects of a running DİM attempt in exam order; null when the exam is not a DİM attempt. */
+export function useDimSections(examId: string) {
+  return useQuery({
+    queryKey: queryKeys.dim.sections(examId),
+    queryFn: async () => {
+      try {
+        return await api.get<DimSubjectRun[]>(`/dim/attempts/${examId}/sections`)
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) return null
+        throw error
+      }
+    },
+    staleTime: Infinity,
+    retry: false,
+  })
+}
+
 // ---- Admin ----
 
 export type VerificationStatus = 'Unverified' | 'AutoDetected' | 'Verified'

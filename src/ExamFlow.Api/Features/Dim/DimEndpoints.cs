@@ -32,6 +32,7 @@ public static class DimEndpoints
         group.MapGet("/tests", Tests);
         group.MapPost("/tests/{id:guid}/start", Start);
         group.MapGet("/attempts/{examId:guid}/report", Report);
+        group.MapGet("/attempts/{examId:guid}/sections", Sections);
     }
 
     private static IResult Catalog()
@@ -207,6 +208,37 @@ public static class DimEndpoints
             exam.CorrectCount ?? 0, exam.IncorrectCount ?? 0, exam.UnansweredCount ?? 0, exam.UngradedCount ?? 0, exam.ScorePercent,
             DimScoring.Score(test.Track, test.GroupCode, graded), graded.Any(g => g.IsOpen) ? WithOpenNotice : ClosedOnlyNotice,
             test.AttemptLimit, used, test.IsPublished && IsOpen(test, clock.GetUtcNow())));
+    }
+
+    /// <summary>
+    /// Which exam positions belong to which subject, so the exam screen can split a full test into its subjects.
+    /// Only subject names and positions: nothing that would reveal answers.
+    /// </summary>
+    private static async Task<IResult> Sections(Guid examId, ClaimsPrincipal user, AppDbContext db, CancellationToken ct)
+    {
+        var userId = user.GetUserId();
+        var items = await db.DimAttempts.AsNoTracking()
+            .Where(a => a.ExamId == examId && a.UserId == userId)
+            .Select(a => a.Items)
+            .FirstOrDefaultAsync(ct);
+        return items is null
+            ? Problem(StatusCodes.Status404NotFound, "Sınaq tapılmadı.")
+            : TypedResults.Ok(SubjectRuns(items));
+    }
+
+    /// <summary>Consecutive positions of the same subject, in exam order.</summary>
+    public static List<DimSubjectRunDto> SubjectRuns(IEnumerable<DimAttemptItem> items)
+    {
+        var runs = new List<DimSubjectRunDto>();
+        foreach (var item in items.OrderBy(i => i.Position))
+        {
+            if (runs.Count > 0 && runs[^1].Subject == item.Subject && runs[^1].From + runs[^1].Count == item.Position)
+                runs[^1] = runs[^1] with { Count = runs[^1].Count + 1 };
+            else
+                runs.Add(new DimSubjectRunDto(item.Subject, DimCatalog.SubjectName(item.Subject), item.Position, 1));
+        }
+
+        return runs;
     }
 
     private static IResult Problem(int status, string detail, Dictionary<string, object?>? extensions = null) =>

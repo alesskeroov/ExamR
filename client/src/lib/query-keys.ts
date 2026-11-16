@@ -122,6 +122,7 @@ export const queryKeys = {
     catalog: ['dim', 'catalog'] as const,
     tests: (track: string) => ['dim', 'tests', track] as const,
     report: (examId: string) => ['dim', 'report', examId] as const,
+    sections: (examId: string) => ['dim', 'sections', examId] as const,
     admin: ['dim', 'admin'] as const,
     adminTests: ['dim', 'admin', 'tests'] as const,
     bankStats: ['dim', 'admin', 'bank-stats'] as const,

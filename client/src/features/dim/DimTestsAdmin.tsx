@@ -1,4 +1,4 @@
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { Layers, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Alert } from '../../components/common/Alert'
 import { Button } from '../../components/common/Button'
@@ -36,9 +36,14 @@ export function DimTestsAdmin() {
 
   return (
     <div className="flex flex-col gap-5">
-      {creating === 'document' ? <CreateFromDocument onDone={() => setCreating(null)} onFull={() => setCreating('full')} />
+      {creating === 'document' ? <CreateFromDocument onDone={() => setCreating(null)} />
         : creating === 'full' ? <CreateFullTest onDone={() => setCreating(null)} />
-        : <div><Button onClick={() => setCreating('document')}><Plus className="size-4" aria-hidden />{t('dim.admin.newTest')}</Button></div>}
+        : (
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => setCreating('document')}><Plus className="size-4" aria-hidden />{t('dim.admin.newTest')}</Button>
+            <Button variant="secondary" onClick={() => setCreating('full')}><Layers className="size-4" aria-hidden />{t('dim.admin.fullFromBank')}</Button>
+          </div>
+        )}
       {tests.isPending ? <div className="h-40 animate-pulse rounded-xl bg-slate-200/60" aria-label={t('common.loading')} />
         : tests.isError ? <Alert title={t('dim.page.loadFailed')}>{tests.error.message}</Alert>
         : tests.data.length === 0 ? <EmptyState title={t('dim.page.empty')} description={t('dim.admin.emptyText')} />
@@ -75,7 +80,7 @@ function SettingsFields({ value, onChange, count }: {
 }
 
 /** Main flow: pick a document already added to the bank; every attempt draws random questions from it. */
-function CreateFromDocument({ onDone, onFull }: { onDone: () => void; onFull: () => void }) {
+function CreateFromDocument({ onDone }: { onDone: () => void }) {
   const { t } = useTranslation()
   const documents = useDimSourceDocuments()
   const catalog = useDimCatalog()
@@ -129,50 +134,93 @@ function CreateFromDocument({ onDone, onFull }: { onDone: () => void; onFull: ()
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Button loading={create.isPending} disabled={!picked || !settingsValid(settings) || !(Number(count) >= 1 && Number(count) <= (picked?.count ?? 0))} onClick={submit}>{t('dim.set.create')}</Button>
         <Button variant="ghost" onClick={onDone}>{t('common.cancel')}</Button>
-        <button type="button" onClick={onFull} className="ml-auto text-sm font-medium text-indigo-700 hover:underline">{t('dim.admin.fullFromBank')}</button>
       </div>
       <p className="mt-2 text-xs text-slate-500">{t('dim.admin.draftHint')}</p>
     </section>
   )
 }
 
-/** Secondary flow: an official-shape test (several subjects) drawn from the whole bank. */
+/** A full Buraxılış test: every subject of the track in one exam, each from the whole bank or from one document. */
 function CreateFullTest({ onDone }: { onDone: () => void }) {
   const { t } = useTranslation()
   const catalog = useDimCatalog()
   const stats = useDimBankStats()
+  const documents = useDimSourceDocuments()
   const create = useCreateDimTest()
   const track: DimTrack = 'Buraxilis'
-  const [settings, setSettings] = useState<SettingsForm>({ title: '', duration: '180', limit: '' })
+  const [settings, setSettings] = useState<SettingsForm>({ title: t('dim.admin.fullTitle'), duration: '180', limit: '' })
+  // Per subject: source document id ('' = whole bank) and the question count; a missing count means the default.
+  const [picks, setPicks] = useState<Record<string, { source: string; count?: string }>>({})
 
-  if (!catalog.data) return <div className="h-40 animate-pulse rounded-xl bg-slate-200/60" aria-label={t('common.loading')} />
-  const sections = sectionSubjects(catalog.data, track, 'Full', '', '')
-  const inBank = (code: string) => stats.data?.find(s => s.track === track && s.subject === code)?.count ?? 0
-  const short = sections.filter(s => s.closed > inBank(s.code))
+  if (!catalog.data || stats.isPending || documents.isPending)
+    return <div className="h-40 animate-pulse rounded-xl bg-slate-200/60" aria-label={t('common.loading')} />
+  const specs = sectionSubjects(catalog.data, track, 'Full', '', '')
+  const sourcesOf = (code: string) => (documents.data ?? []).flatMap(d => d.bank
+    .filter(b => b.track === track && b.subject === code).map(b => ({ id: d.id, name: d.originalFileName, count: b.count })))
+  const rows = specs.map(spec => {
+    const pick = picks[spec.code] ?? { source: '' }
+    const available = pick.source
+      ? sourcesOf(spec.code).find(s => s.id === pick.source)?.count ?? 0
+      : stats.data?.find(s => s.track === track && s.subject === spec.code)?.count ?? 0
+    // The official number of auto-gradable tasks (closed + coded); written tasks are not part of online tests.
+    const official = spec.closed + spec.coded
+    const count = pick.count ?? String(Math.min(official, available))
+    const valid = Number.isInteger(Number(count)) && Number(count) >= 1 && Number(count) <= available
+    return { spec, pick, available, official, count, valid }
+  })
+  const set = (code: string, patch: { source?: string; count?: string }) => {
+    create.reset()
+    setPicks(p => {
+      const current = p[code] ?? { source: '' }
+      // A new source resets the count to its default for that source.
+      return { ...p, [code]: patch.source !== undefined ? { source: patch.source } : { ...current, ...patch } }
+    })
+  }
 
   const submit = () => create.mutate({
     track, kind: 'Full', groupCode: null,
     title: settings.title.trim(), durationMinutes: Number(settings.duration), attemptLimit: settings.limit ? Number(settings.limit) : null,
     availableFrom: null, availableTo: null, isPublished: false,
-    sections: sections.map(s => ({ subject: s.code, randomCount: s.closed, drawPerAttempt: true })),
+    sections: rows.map(r => ({ subject: r.spec.code, randomCount: Number(r.count), drawPerAttempt: true, sourceDocumentId: r.pick.source || null })),
   }, { onSuccess: onDone })
 
   return (
     <section className="rounded-xl border border-indigo-200 bg-white p-4 sm:p-5">
       <h2 className="font-semibold">{t('dim.admin.fullTitle')}</h2>
       <p className="mt-1 text-sm text-slate-600">{t('dim.admin.fullText')}</p>
-      {sections.length > 0 && (
-        <p className={cn('mt-3 text-sm', short.length > 0 ? 'text-rose-700' : 'text-slate-600')}>
-          {sections.map(s => `${s.name} ${s.closed} (${t('dim.admin.inBank', { n: inBank(s.code) })})`).join(' · ')}
-          {short.length > 0 && ` — ${t('dim.admin.notEnough', { names: short.map(s => s.name).join(', ') })}`}
-        </p>
-      )}
+      <ul className="mt-4 flex flex-col gap-3">
+        {rows.map(({ spec, pick, available, official, count, valid }) => (
+          <li key={spec.code} className="rounded-lg border border-slate-200 p-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <h3 className="text-sm font-semibold text-slate-900">{spec.name}</h3>
+              <span className={cn('text-xs', available < official ? 'text-amber-700' : 'text-slate-500')}>
+                {t('dim.admin.officialCount', { n: official })} · {t('dim.admin.inBank', { n: available })}
+              </span>
+            </div>
+            <div className="mt-2 grid gap-3 sm:grid-cols-[1fr_8rem]">
+              <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium text-slate-700">{t('dim.admin.source')}
+                <select className={inputClass} value={pick.source} onChange={e => set(spec.code, { source: e.target.value })}>
+                  <option value="">{t('dim.admin.wholeBank')}</option>
+                  {sourcesOf(spec.code).map(s => <option key={s.id} value={s.id}>{s.name} ({t('common.questions', { count: s.count })})</option>)}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1.5 text-sm font-medium text-slate-700">{t('dim.admin.count')}
+                <input className={cn(inputClass, !valid && 'border-rose-400')} type="number" min={1} max={available} value={count}
+                  aria-invalid={!valid} onChange={e => set(spec.code, { count: e.target.value })} />
+              </label>
+            </div>
+            {available === 0 && <p className="mt-2 text-xs text-rose-700">{t('dim.admin.notEnough', { names: spec.name })}</p>}
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 text-sm text-slate-600">{t('common.questions', { count: rows.reduce((n, r) => n + (Number(r.count) || 0), 0) })}</p>
       <div className="mt-4"><SettingsFields value={settings} onChange={setSettings} /></div>
       {create.isError && <div className="mt-3"><Alert title={t('dim.admin.createFailed')}>{create.error.message}</Alert></div>}
       <div className="mt-4 flex gap-2">
-        <Button loading={create.isPending} disabled={sections.length === 0 || !settingsValid(settings)} onClick={submit}>{t('dim.set.create')}</Button>
+        <Button loading={create.isPending} disabled={rows.length === 0 || rows.some(r => !r.valid) || !settingsValid(settings)} onClick={submit}>{t('dim.set.create')}</Button>
         <Button variant="ghost" onClick={onDone}>{t('common.cancel')}</Button>
       </div>
+      <p className="mt-2 text-xs text-slate-500">{t('dim.admin.draftHint')}</p>
     </section>
   )
 }
