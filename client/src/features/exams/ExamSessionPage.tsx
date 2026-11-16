@@ -14,6 +14,7 @@ import { examThemes, useExamTheme, useExamThemeBase, type ExamTheme } from '../.
 import { cn } from '../../lib/utils'
 import { bodyVisuals, optionVisuals, visibleText, visualUrls } from '../../lib/visuals'
 import { NotificationBell } from '../friends/NotificationBell'
+import { useDimSections, type DimSubjectRun } from '../dim/api'
 import {
   answerMutationKey,
   examAudioUrl,
@@ -97,6 +98,11 @@ function ExamRunner({ session }: { session: ExamSession }) {
   const history = useExamHistory(1)
   const summary = history.data?.items.find(e => e.id === session.id)
   const title = summary ? sourceName(summary.source) : null
+  // A full DİM test (several subjects) is split into its subjects in the header and the question map.
+  const dimSections = useDimSections(session.id).data
+  const subjects = dimSections && dimSections.length > 1 ? dimSections : null
+  const subject = subjects?.find(s => index >= s.from && index < s.from + s.count) ?? null
+  const subtitle = [subject?.name, title ?? t('profile.activity.exam')].filter(Boolean).join(' · ')
 
   const answered = session.questions.filter(isAnswered).length
 
@@ -221,7 +227,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
             <img src="/favicon.svg" alt="" className="size-7" />
           </Link>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-xs leading-5 text-slate-500" title={title ?? undefined}>{title ?? t('profile.activity.exam')}</p>
+            <p className="truncate text-xs leading-5 text-slate-500" title={subtitle}>{subtitle}</p>
             <p className="truncate text-[15px] leading-5 font-semibold whitespace-nowrap text-slate-900 tabular-nums">
               {t('exam.session.question', { n: index + 1 })}<span className="font-normal text-slate-500"> / {total}</span>
               <span className="hidden text-sm font-normal text-slate-500 sm:inline"> · {t('exam.session.answeredCount', { count: answered })}</span>
@@ -316,7 +322,7 @@ function ExamRunner({ session }: { session: ExamSession }) {
           </div>
         </div>
 
-        <QuestionNavigator examId={session.id} questions={session.questions} current={index} immediate={immediate} isShown={isShown} flagged={flagged}
+        <QuestionNavigator examId={session.id} questions={session.questions} subjects={subjects} current={index} immediate={immediate} isShown={isShown} flagged={flagged}
           onSelect={goTo} open={mapOpen} onClose={() => setMapOpen(false)} />
       </main>
 
@@ -592,6 +598,8 @@ function SaveStatus({ error }: { error: string | null }) {
 
 interface QuestionNavigatorProps {
   questions: ExamSessionQuestion[]
+  /** Subjects of a full DİM test; null = one plain grid. */
+  subjects: DimSubjectRun[] | null
   current: number
   immediate: boolean
   isShown: (question: ExamSessionQuestion) => boolean
@@ -603,9 +611,13 @@ interface QuestionNavigatorProps {
 }
 
 /** Sidebar from laptop width; on smaller screens a bottom sheet opened from the action bar. */
-function QuestionNavigator({ questions, current, immediate, isShown, flagged, onSelect, open, onClose, examId }: QuestionNavigatorProps) {
+function QuestionNavigator({ questions, subjects, current, immediate, isShown, flagged, onSelect, open, onClose, examId }: QuestionNavigatorProps) {
   const { t } = useTranslation()
   const answeredCount = questions.filter(isAnswered).length
+  const gridClass = 'exam-question-map grid grid-cols-[repeat(auto-fill,minmax(44px,1fr))] gap-1.5 min-[900px]:grid-cols-[repeat(auto-fill,minmax(40px,1fr))]'
+  const groups = subjects
+    ? subjects.map(s => ({ key: `${s.subject}-${s.from}`, subject: s, from: s.from, items: questions.slice(s.from, s.from + s.count) }))
+    : [{ key: 'all', subject: null, from: 0, items: questions }]
   return (
     <>
       <div aria-hidden onClick={onClose} className="exam-sheet-backdrop" data-open={open} />
@@ -620,8 +632,20 @@ function QuestionNavigator({ questions, current, immediate, isShown, flagged, on
             <X className="size-5" aria-hidden />
           </button>
         </div>
-        <ol className="exam-question-map grid grid-cols-[repeat(auto-fill,minmax(44px,1fr))] gap-1.5 min-[900px]:grid-cols-[repeat(auto-fill,minmax(40px,1fr))]">
-          {questions.map((q, i) => {
+        <div className="flex flex-col gap-3">
+        {groups.map(group => (
+        <section key={group.key} aria-labelledby={group.subject ? `exam-map-${group.key}` : undefined}>
+        {group.subject && (
+          <h3 id={`exam-map-${group.key}`} className="mb-1.5 flex items-baseline gap-2 text-xs font-semibold text-slate-700">
+            {group.subject.name}
+            <span className="ml-auto shrink-0 font-normal whitespace-nowrap text-slate-500 tabular-nums">
+              {group.subject.from + 1}–{group.subject.from + group.subject.count} · {t('exam.session.answeredCount', { count: group.items.filter(isAnswered).length })}
+            </span>
+          </h3>
+        )}
+        <ol className={gridClass} start={group.from + 1}>
+          {group.items.map((q, offset) => {
+            const i = group.from + offset
             const reveal = immediate && isShown(q) ? q.reveal : null
             const isFlagged = flagged.has(q.examQuestionId)
             const state = !isAnswered(q)
@@ -654,6 +678,9 @@ function QuestionNavigator({ questions, current, immediate, isShown, flagged, on
             )
           })}
         </ol>
+        </section>
+        ))}
+        </div>
         <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-slate-500">
           <Legend className="border-slate-300 bg-white" label={t('exam.session.legendBlank')} />
           <Legend className="border-sky-600 bg-sky-600" label={t('exam.session.legendAnswered')} />

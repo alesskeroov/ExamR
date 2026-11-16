@@ -268,3 +268,6 @@ public sealed record DimReportDto(
     Guid ExamId, Guid TestId, string Title, DimTrack Track, DimTestKind Kind, string? GroupCode, string? GroupName,
     int Correct, int Incorrect, int Unanswered, int Ungraded, decimal? ScorePercent, DimScore Score, string Notice,
     int? AttemptLimit, int AttemptsUsed, bool CanStart);
+
+/// <summary>Exam positions From … From + Count − 1 (0-based) belong to Subject.</summary>
+public sealed record DimSubjectRunDto(string Subject, string Name, int From, int Count);
