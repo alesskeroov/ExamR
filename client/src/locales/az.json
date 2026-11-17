@@ -1901,14 +1901,21 @@
     },
     "network": "Bağlantı alınmadı. Mətniniz bu pəncərədə saxlanılıb, yenidən cəhd edin.",
     "title": "Təklif və iradlar",
-    "accepted": "Müraciətiniz qəbul edildi",
-    "thanks": "Fikrinizi bölüşdüyünüz üçün təşəkkür edirik. Müraciətiniz ExamR komandasına çatdırılacaq.",
-    "lead": "Problem gördünüz və ya fikriniz var? Burada yazıb göndərin — müraciətiniz birbaşa ExamR komandasına çatdırılacaq.",
+    "accepted": "Təşəkkürlər!",
+    "thanks": "Müraciətiniz ExamR komandasına çatdı. Fikriniz platformanı daha yaxşı etməyə kömək edir.",
+    "lead": "Problem gördünüz və ya fikriniz var? Bizə yazın.",
     "kindAria": "Müraciətin növü",
-    "description": "Qısa təsvir",
+    "label": {
+      "problem": "Nə baş verdi?",
+      "idea": "Fikriniz nədir?"
+    },
+    "autoInfo": "Səhifə ünvanı avtomatik əlavə olunacaq.",
+    "shortcut": "ilə göndər",
+    "writeAnother": "Yenisini yaz",
+    "autoClose": "Bu pəncərə {{count}} saniyəyə avtomatik bağlanacaq",
     "failed": "Göndərmək mümkün olmadı",
     "sending": "Göndərilir...",
-    "emailLead": "Və ya birbaşa email yazın:"
+    "emailLead": "Və ya email yazın:"
   },
   "tutor": {
     "myCards": "Mənim kartlarım",

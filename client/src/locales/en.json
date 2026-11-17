@@ -1931,14 +1931,22 @@
     },
     "network": "Connection failed. Your text is kept in this window — please try again.",
     "title": "Feedback",
-    "accepted": "Your message has been received",
-    "thanks": "Thank you for sharing your thoughts. Your message will reach the ExamR team.",
-    "lead": "Found a problem or have an idea? Write it here — your message goes straight to the ExamR team.",
+    "accepted": "Thank you!",
+    "thanks": "Your message has reached the ExamR team. Your feedback helps make the platform better.",
+    "lead": "Found a problem or have an idea? Write to us.",
     "kindAria": "Message type",
-    "description": "Short description",
+    "label": {
+      "problem": "What happened?",
+      "idea": "What's your idea?"
+    },
+    "autoInfo": "The page address will be attached automatically.",
+    "shortcut": "to send",
+    "writeAnother": "Write another",
+    "autoClose_one": "This window will close automatically in {{count}} second",
+    "autoClose_other": "This window will close automatically in {{count}} seconds",
     "failed": "Couldn't send",
     "sending": "Sending...",
-    "emailLead": "Or write an email directly:"
+    "emailLead": "Or send an email:"
   },
   "tutor": {
     "myCards": "My cards",
