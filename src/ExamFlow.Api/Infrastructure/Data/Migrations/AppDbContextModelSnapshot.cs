@@ -404,6 +404,7 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                         {
                             Id = 1,
                             Enabled = false,
+                            InstagramUsername = "examr_az",
                             UpdatedAt = new DateTimeOffset(new DateTime(2026, 11, 16, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
                         });
                 });

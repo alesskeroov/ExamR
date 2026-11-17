@@ -175,10 +175,12 @@ function PendingPayment({ billing, request }: { billing: Billing; request: Payme
       <li><p className="font-medium">{t('billing.step3')}</p>
         <div className="mt-2 flex flex-wrap gap-2">
           {request.whatsAppUrl && <a href={request.whatsAppUrl} target="_blank" rel="noopener noreferrer" className="btn-primary inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-medium"><MessageCircle className="size-4" aria-hidden />{t('billing.sendWhatsApp')}<ExternalLink className="size-3.5" aria-hidden /></a>}
-          {billing.instagramUrl && <a href={billing.instagramUrl} target="_blank" rel="noopener noreferrer" className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"><AtSign className="size-4" aria-hidden />{t('billing.writeInstagram')}<ExternalLink className="size-3.5" aria-hidden /></a>}
+          {billing.instagramUrl && <a href={billing.instagramUrl} target="_blank" rel="noopener noreferrer" onClick={() => void navigator.clipboard?.writeText(request.message).catch(() => undefined)} className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"><AtSign className="size-4" aria-hidden />{t('billing.writeInstagram')}<ExternalLink className="size-3.5" aria-hidden /></a>}
           <CopyButton text={request.message} label={t('billing.copyMessage')} />
         </div>
-        {billing.instagramUrl && <p className="mt-2 text-xs text-slate-500">{t('billing.instagramHint')}</p>}
+        <p className="mt-3 text-xs font-medium text-slate-500">{t('billing.messageLabel')}</p>
+        <p className="mt-1 whitespace-pre-line rounded-lg bg-white px-3 py-2 text-slate-800 ring-1 ring-slate-200">{request.message}</p>
+        {billing.instagramUrl && <p className="mt-2 text-xs text-slate-500">{t('billing.instagramHint', { account: billing.instagramUrl.split('/').pop() })}</p>}
       </li>
     </ol>
     <p className="mt-4 text-sm text-slate-600">{t('billing.pendingWait')}</p>

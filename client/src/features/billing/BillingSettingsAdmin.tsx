@@ -39,7 +39,7 @@ function SettingsForm({ initial }: { initial: BillingSettings }) {
         <span className="mt-1 block text-xs font-normal text-slate-500">{t('billingAdmin.whatsAppHint')}</span>
       </label>
       <label className="block text-sm font-medium">{t('billingAdmin.instagram')}
-        <input maxLength={31} value={form.instagramUsername} placeholder="examr.az" onChange={e => set({ instagramUsername: e.target.value })} className="mt-1 h-11 w-full rounded-xl border border-slate-300 px-3" />
+        <input maxLength={31} value={form.instagramUsername} placeholder="examr_az" onChange={e => set({ instagramUsername: e.target.value })} className="mt-1 h-11 w-full rounded-xl border border-slate-300 px-3" />
       </label>
       <label className="block text-sm font-medium">{t('billingAdmin.instructions')}
         <textarea rows={5} maxLength={1000} value={form.paymentInstructions} placeholder={t('billingAdmin.instructionsPlaceholder')} onChange={e => set({ paymentInstructions: e.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" />

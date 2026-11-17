@@ -86,6 +86,6 @@ public sealed class BillingSettingsConfiguration : IEntityTypeConfiguration<Bill
         b.Property(x => x.InstagramUsername).HasMaxLength(30);
         b.Property(x => x.PaymentInstructions).HasMaxLength(1000);
         b.ToTable("BillingSettings", t => t.HasCheckConstraint("CK_BillingSettings_Single", "\"Id\" = 1"));
-        b.HasData(new BillingSettings { Id = 1, Enabled = false, UpdatedAt = new(2026, 11, 16, 0, 0, 0, TimeSpan.Zero) });
+        b.HasData(new BillingSettings { Id = 1, Enabled = false, InstagramUsername = "examr_az", UpdatedAt = new(2026, 11, 16, 0, 0, 0, TimeSpan.Zero) });
     }
 }
