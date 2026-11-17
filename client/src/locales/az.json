@@ -86,13 +86,15 @@
       "Upload": "sənəd",
       "Exam": "imtahan",
       "Battle": "battle",
-      "AiRequest": "AI sorğusu"
+      "AiRequest": "AI sorğusu",
+      "DimTest": "DİM sınağı"
     },
     "strip": {
       "Upload": "Sənəd",
       "Exam": "İmtahan",
       "Battle": "Battle",
-      "AiRequest": "AI sorğusu"
+      "AiRequest": "AI sorğusu",
+      "DimTest": "DİM sınağı"
     },
     "loading": "Limit yüklənir",
     "loadFailed": "Limit yüklənmədi",
@@ -108,7 +110,12 @@
     "monthTitle": "Bu ayın limitləri",
     "resetsAt": "{{day}} {{month}}, 00:00-da yenilənir",
     "limitAria": "{{kind}} limiti",
-    "limitReached": "Limit bitib"
+    "limitReached": "Limit bitib",
+    "notIncludedTitle": "Paketinizə daxil deyil",
+    "notIncluded": "{{kind}} paketinizdə yoxdur. Paketlərdən birini seçərək istifadə edə bilərsiniz.",
+    "upgrade": "Paketi yüksəlt →",
+    "plansLink": "Paketlər",
+    "notInPlan": "Paketdə yoxdur"
   },
   "status": {
     "403": {
@@ -193,7 +200,8 @@
       "rooms": "Otaqlarım",
       "friends": "Dostlar",
       "groups": "Qruplarım",
-      "admin": "Admin Panel"
+      "admin": "Admin Panel",
+      "plans": "Paketlər"
     },
     "badge": {
       "demo": "Demo",
@@ -210,7 +218,8 @@
       "groups": "Qruplar",
       "admins": "Adminlər",
       "dim": "DİM sınaqları",
-      "nameplates": "Profil effektləri"
+      "nameplates": "Profil effektləri",
+      "usage": "Paketlər və limitlər"
     }
   },
   "landing": {
@@ -1326,7 +1335,7 @@
     "sectionsAria": "Admin bölmələri",
     "sections": {
       "nameplates": "Profil effektləri",
-      "usage": "Limitlər",
+      "usage": "Paketlər və limitlər",
       "documents": "Sənədlər",
       "dim": "DİM sınaqları",
       "groups": "Qruplar",
@@ -1394,6 +1403,227 @@
     "adminUnlimitedText": "Bu dəyərlər yalnız Admin rolu götürüldükdən sonra tətbiq ediləcək.",
     "saveFailed": "Limit saxlanmadı",
     "reset": "Defaulta qaytar"
+  },
+  "billing": {
+    "title": "Paketlər",
+    "description": "Ehtiyacınıza uyğun paketi seçin. Limitlər hər ayın 1-də yenilənir.",
+    "loadFailed": "Paketlər yüklənmədi",
+    "closedTitle": "Satış müvəqqəti dayandırılıb",
+    "closedText": "Hazırda yeni paket almaq mümkün deyil. Cari paketiniz işləməyə davam edir.",
+    "currentLabel": "Cari paket",
+    "until": "{{date}} tarixinədək",
+    "nextPlan": "{{date}} tarixindən: {{name}}",
+    "featured": "Ən populyar",
+    "currentBadge": "Cari paket",
+    "free": "Pulsuz",
+    "days": "{{count}} gün",
+    "limit": {
+      "monthlyUploads": "PDF yükləmə",
+      "monthlyExams": "İmtahan",
+      "monthlyBattles": "Battle yaratma",
+      "monthlyDimTests": "DİM sınağı"
+    },
+    "choose": "Seç",
+    "checkoutTitle": "«{{name}}» paketi",
+    "periodLabel": "Müddət",
+    "change": {
+      "new": "Paket ödəniş təsdiqlənən kimi başlayacaq.",
+      "extend": "Cari paketinizin müddəti uzadılacaq.",
+      "upgrade": "Yeni paket dərhal başlayacaq. «{{current}}» paketinin qalan günlərinin dəyəri bonus gün kimi əlavə olunacaq.",
+      "downgrade": "Yeni paket «{{current}}» paketi bitəndən sonra başlayacaq."
+    },
+    "total": "Cəmi",
+    "requestFailed": "Sorğu yaradılmadı",
+    "getCode": "Ödəniş kodunu al",
+    "getCodeHint": "Kod ödənişinizi hesabınıza bağlamaq üçündür. Ödəniş saytda alınmır.",
+    "copied": "Kopyalandı",
+    "cancelTitle": "Sorğu ləğv edilsin?",
+    "cancelText": "Əgər artıq ödəniş etmisinizsə, ləğv etməyin: admin ödənişi yoxlayıb paketi aktiv edəcək.",
+    "cancelRequest": "Sorğunu ləğv et",
+    "pendingTitle": "Ödənişiniz gözlənilir",
+    "pendingSummary": "«{{name}}» · {{period}} · {{amount}}",
+    "step1": "1. Ödəniş kodunuz",
+    "copyCode": "Kodu kopyala",
+    "step2": "2. {{amount}} köçürün",
+    "noInstructions": "Köçürmə məlumatını WhatsApp və ya Instagram-da soruşun.",
+    "step3": "3. Kodu və qəbzi bizə göndərin",
+    "sendWhatsApp": "WhatsApp ilə göndər",
+    "writeInstagram": "Instagram-da yaz",
+    "copyMessage": "Mesajı kopyala",
+    "instagramHint": "«Instagram-da yaz» düyməsi mesajı avtomatik kopyalayır: @{{account}} söhbətində yapışdırıb göndərin, qəbzi də əlavə edin.",
+    "messageLabel": "Göndəriləcək mesaj",
+    "pendingWait": "Ödəniş yoxlanılan kimi paketiniz avtomatik aktiv olacaq.",
+    "cancelFailed": "Sorğu ləğv edilmədi",
+    "historyTitle": "Ödəniş tarixçəsi",
+    "status": {
+      "Pending": "Gözləyir",
+      "Approved": "Təsdiqlənib",
+      "Rejected": "Rədd edilib",
+      "Cancelled": "Ləğv edilib"
+    },
+    "monthCount": "{{count}} ay",
+    "perMonth": "/ay",
+    "monthlyLimits": "Aylıq limitlər",
+    "extend": "Uzat",
+    "feature": {
+      "monthlyUploads": {
+        "count": "{{count}} PDF yükləmə",
+        "unlimited": "Limitsiz PDF yükləmə",
+        "none": "PDF yükləmə yoxdur"
+      },
+      "monthlyExams": {
+        "count": "{{count}} imtahan",
+        "unlimited": "Limitsiz imtahan",
+        "none": "İmtahan yoxdur"
+      },
+      "monthlyBattles": {
+        "count": "{{count}} battle yaratma",
+        "unlimited": "Limitsiz battle yaratma",
+        "none": "Battle yaratmaq yoxdur"
+      },
+      "monthlyDimTests": {
+        "count": "{{count}} DİM sınağı",
+        "unlimited": "Limitsiz DİM sınağı",
+        "none": "DİM sınağı yoxdur"
+      }
+    }
+  },
+  "billingAdmin": {
+    "tabsAria": "Paketlər bölməsi",
+    "tabs": {
+      "users": "İstifadəçilər",
+      "requests": "Ödəniş sorğuları",
+      "plans": "Paketlər",
+      "settings": "Ayarlar"
+    },
+    "pendingCount": "{{count}} gözləyən sorğu",
+    "search": "Axtarış",
+    "searchPlaceholder": "Nickname və ya email",
+    "planFilter": "Paket",
+    "allPlans": "Bütün paketlər",
+    "statusFilter": "Status",
+    "status": {
+      "all": "Hamısı",
+      "active": "Ödənişli paket aktiv",
+      "expiring": "7 gündən az qalıb",
+      "expired": "Paketi bitib",
+      "free": "Free",
+      "pending": "Ödəniş gözləyir",
+      "custom": "Fərdi limitli"
+    },
+    "bulkAria": "Seçilmiş istifadəçilər üçün əməliyyatlar",
+    "selected": "{{count}} istifadəçi seçilib",
+    "action": {
+      "AssignPlan": "Paket təyin et",
+      "Extend": "Müddəti uzat",
+      "CancelPlan": "Paketi dayandır",
+      "SetLimits": "Fərdi limit qoy",
+      "ClearLimits": "Fərdi limiti sil",
+      "SetUnlimited": "Limitsiz et"
+    },
+    "clearSelection": "Seçimi təmizlə",
+    "loadFailed": "Məlumat yüklənmədi",
+    "noUsers": "İstifadəçi tapılmadı",
+    "selectPage": "Səhifədəki hamısını seç",
+    "selectUser": "{{name}} seç",
+    "plan": "Paket",
+    "flags": "Qeydlər",
+    "pendingFlag": "Ödəniş gözləyir",
+    "unlimitedFlag": "Limitsiz",
+    "customFlag": "Fərdi limit",
+    "resultTitle": "Nəticə",
+    "resultText": "{{updated}} istifadəçi yeniləndi, {{skipped}} istifadəçi buraxıldı.",
+    "forUsers": "{{count}} istifadəçi: {{names}}",
+    "choosePlan": "Paket seçin",
+    "periods": "Müddət (paketin neçə qatı)",
+    "extraDays": "Əlavə gün",
+    "assignSummary": "{{count}} istifadəçiyə «{{name}}» {{days}} günlük təyin olunacaq.",
+    "assignNoteTitle": "Mövcud paket əvəz olunur",
+    "assignNote": "Paket bu gündən başlayır, istifadəçinin indiki və planlaşdırılmış paketləri dayandırılır. Ödəniş qeydə alınmır.",
+    "extendDays": "Neçə gün əlavə edilsin",
+    "limitsHint": "Boş sahə paketin limitini götürür. 0 həmin əməliyyatı bağlayır. Fərdi limit paketdən üstündür.",
+    "fromPlan": "paketdən",
+    "confirm": {
+      "CancelPlan": "{{count}} istifadəçinin paketi dərhal dayandırılacaq və onlar Free paketə keçəcək.",
+      "ClearLimits": "{{count}} istifadəçinin fərdi limitləri silinəcək, paket limitləri tətbiq olunacaq.",
+      "SetUnlimited": "{{count}} istifadəçi bütün limitlərdən azad olacaq."
+    },
+    "note": "Qeyd (istəyə bağlı)",
+    "bulkFailed": "Əməliyyat icra olunmadı",
+    "apply": "{{count}} istifadəçiyə tətbiq et",
+    "thisMonth": "Bu ay",
+    "customUnlimited": "Fərdi: limitsiz",
+    "customActive": "Fərdi limit paketdən üstündür",
+    "periodsHistory": "Paket tarixçəsi",
+    "paymentsHistory": "Ödəniş sorğuları",
+    "noHistory": "Hələ yoxdur",
+    "cancelled": "dayandırılıb",
+    "source": {
+      "Payment": "Ödəniş",
+      "Manual": "Admin verdi"
+    },
+    "requestFilterAria": "Sorğu statusu",
+    "requestSearchPlaceholder": "Kod, nickname və ya email",
+    "noPending": "Gözləyən ödəniş yoxdur",
+    "noRequests": "Sorğu tapılmadı",
+    "code": "Kod",
+    "amount": "Məbləğ",
+    "created": "Tarix",
+    "state": "Vəziyyət",
+    "channel": {
+      "WhatsApp": "WhatsApp",
+      "Instagram": "Instagram",
+      "Other": "Digər"
+    },
+    "approve": "Təsdiqlə",
+    "reject": "Rədd et",
+    "approveTitle": "{{code}} ödənişini təsdiqlə",
+    "approveWho": "{{name}} · «{{plan}}» · {{amount}}",
+    "bonusDays": "Bonus gün",
+    "previewFailed": "Önizləmə yüklənmədi",
+    "kind": {
+      "New": "Yeni paket: «{{plan}}» bu gündən",
+      "Extend": "Uzatma: «{{plan}}» davam edir",
+      "Upgrade": "Yüksəltmə: «{{current}}» → «{{plan}}», dərhal",
+      "Downgrade": "Aşağı salma: «{{plan}}» cari paket bitəndən sonra"
+    },
+    "previewPeriod": "{{from}} – {{to}}",
+    "previewBonus": "+{{count}} bonus gün",
+    "approveFailed": "Təsdiqlənmədi",
+    "approveConfirm": "Təsdiqlə və paketi aç",
+    "rejectTitle": "{{code}} sorğusunu rədd et",
+    "rejectReason": "Səbəb",
+    "rejectPlaceholder": "Məsələn: ödəniş tapılmadı",
+    "rejectHint": "İstifadəçi bu qeydi öz Paketlər səhifəsində görəcək.",
+    "rejectFailed": "Rədd edilmədi",
+    "plansHint": "Dəyişikliklər dərhal bütün istifadəçilərə tətbiq olunur. Limit 0 = paketdə yoxdur, limitsiz = məhdudiyyət yoxdur.",
+    "newPlan": "Yeni paket",
+    "saveWarnTitle": "Limitlər dəyişsin?",
+    "saveWarn": "«{{name}}» paketindəki {{count}} istifadəçinin limiti dərhal dəyişəcək.",
+    "activeUsers": "{{count}} istifadəçi",
+    "planName": "Ad",
+    "sortOrder": "Sıra",
+    "planDescription": "Qısa təsvir",
+    "price": "Qiymət (AZN)",
+    "duration": "Müddət (gün)",
+    "monthlyLimits": "Aylıq limitlər",
+    "zeroHint": "0 yazılan əməliyyat bu paketdə bağlı olur.",
+    "onSale": "Satışda",
+    "featured": "«Ən populyar» nişanı",
+    "freeHint": "Free paket ödənişli paketi olmayan hər kəsə aiddir: qiyməti 0-dır və gizlədilə bilməz.",
+    "saveFailed": "Yadda saxlanmadı",
+    "saved": "Yadda saxlandı",
+    "salesOpen": "Satış açıqdır",
+    "salesOpenHint": "Söndürülsə, istifadəçilər yeni paket ala bilməz. Mövcud paketlər davam edir.",
+    "whatsApp": "WhatsApp nömrəsi",
+    "whatsAppHint": "994 ilə başlayan, yalnız rəqəmlər.",
+    "instagram": "Instagram hesabı",
+    "instructions": "Köçürmə təlimatı",
+    "instructionsPlaceholder": "Məsələn: 4169 **** **** 1234 (Birbank) kartına köçürün.",
+    "instructionsHint": "Yalnız daxil olmuş istifadəçilərə, kod alındıqdan sonra göstərilir.",
+    "previewTitle": "İstifadəçi belə görəcək",
+    "previewText": "Ödəniş addımlarının 2-ci hissəsi",
+    "selectHint": "Toplu əməliyyat üçün istifadəçiləri seçin"
   },
   "dim": {
     "track": {

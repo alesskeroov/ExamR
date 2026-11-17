@@ -20,6 +20,7 @@ import { QuestionBankPage } from '../features/questions/QuestionBankPage'
 import { FriendsPage } from '../features/friends/FriendsPage'
 import { NotificationsPage } from '../features/friends/NotificationsPage'
 import { ProfilePage } from '../features/auth/ProfilePage'
+import { PlansPage } from '../features/billing/PlansPage'
 import { AppLayout } from './AppLayout'
 import { NotFoundPage } from './NotFoundPage'
 import { RequireAuth } from './RequireAuth'
@@ -57,6 +58,7 @@ export const router = createBrowserRouter([
       { path: 'admin/groups', element: <GroupsAdminPage /> },
       { path: 'notifications', element: <NotificationsPage /> },
       { path: 'profile', element: <ProfilePage /> },
+      { path: 'plans', element: <PlansPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
   },

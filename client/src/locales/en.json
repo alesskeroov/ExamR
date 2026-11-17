@@ -87,13 +87,15 @@
       "Upload": "document",
       "Exam": "exam",
       "Battle": "battle",
-      "AiRequest": "AI request"
+      "AiRequest": "AI request",
+      "DimTest": "DİM test"
     },
     "strip": {
       "Upload": "Documents",
       "Exam": "Exams",
       "Battle": "Battles",
-      "AiRequest": "AI requests"
+      "AiRequest": "AI requests",
+      "DimTest": "DİM tests"
     },
     "loading": "Loading limit",
     "loadFailed": "Couldn't load the limit",
@@ -109,7 +111,12 @@
     "monthTitle": "This month's limits",
     "resetsAt": "Resets {{day}} {{month}}, 00:00",
     "limitAria": "{{kind}} limit",
-    "limitReached": "Limit reached"
+    "limitReached": "Limit reached",
+    "notIncludedTitle": "Not in your package",
+    "notIncluded": "{{kind}} is not included in your package. Choose a package to use it.",
+    "upgrade": "Upgrade package →",
+    "plansLink": "Packages",
+    "notInPlan": "Not included"
   },
   "status": {
     "403": {
@@ -194,7 +201,8 @@
       "rooms": "My rooms",
       "friends": "Friends",
       "groups": "My groups",
-      "admin": "Admin panel"
+      "admin": "Admin panel",
+      "plans": "Packages"
     },
     "badge": {
       "demo": "Demo",
@@ -211,7 +219,8 @@
       "groups": "Groups",
       "admins": "Admins",
       "dim": "DİM mock exams",
-      "nameplates": "Profile effects"
+      "nameplates": "Profile effects",
+      "usage": "Packages and limits"
     }
   },
   "landing": {
@@ -1341,7 +1350,7 @@
     "sectionsAria": "Admin sections",
     "sections": {
       "nameplates": "Profile effects",
-      "usage": "Limits",
+      "usage": "Packages and limits",
       "documents": "Documents",
       "dim": "DİM mock exams",
       "groups": "Groups",
@@ -1409,6 +1418,242 @@
     "adminUnlimitedText": "These values only apply once the admin role is removed.",
     "saveFailed": "The limit wasn't saved",
     "reset": "Reset to default"
+  },
+  "billing": {
+    "title": "Packages",
+    "description": "Choose the package that fits you. Limits reset on the 1st of every month.",
+    "loadFailed": "Packages could not be loaded",
+    "closedTitle": "Sales are paused",
+    "closedText": "New packages cannot be bought right now. Your current package keeps working.",
+    "currentLabel": "Current package",
+    "until": "until {{date}}",
+    "nextPlan": "From {{date}}: {{name}}",
+    "featured": "Most popular",
+    "currentBadge": "Current",
+    "free": "Free",
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days",
+    "limit": {
+      "monthlyUploads": "PDF uploads",
+      "monthlyExams": "Exams",
+      "monthlyBattles": "Battles created",
+      "monthlyDimTests": "DİM tests"
+    },
+    "choose": "Choose",
+    "checkoutTitle": "«{{name}}» package",
+    "periodLabel": "Duration",
+    "change": {
+      "new": "The package starts as soon as the payment is confirmed.",
+      "extend": "Your current package will be extended.",
+      "upgrade": "The new package starts right away. The unused value of «{{current}}» is added as bonus days.",
+      "downgrade": "The new package starts when «{{current}}» ends."
+    },
+    "total": "Total",
+    "requestFailed": "The request could not be created",
+    "getCode": "Get payment code",
+    "getCodeHint": "The code links your payment to your account. No payment is taken on the site.",
+    "copied": "Copied",
+    "cancelTitle": "Cancel the request?",
+    "cancelText": "If you have already paid, do not cancel: the admin will check the payment and activate the package.",
+    "cancelRequest": "Cancel request",
+    "pendingTitle": "Waiting for your payment",
+    "pendingSummary": "«{{name}}» · {{period}} · {{amount}}",
+    "step1": "1. Your payment code",
+    "copyCode": "Copy code",
+    "step2": "2. Transfer {{amount}}",
+    "noInstructions": "Ask for the transfer details on WhatsApp or Instagram.",
+    "step3": "3. Send us the code and the receipt",
+    "sendWhatsApp": "Send on WhatsApp",
+    "writeInstagram": "Message on Instagram",
+    "copyMessage": "Copy message",
+    "instagramHint": "“Message on Instagram” copies the message for you: paste it in the @{{account}} chat, send it and attach the receipt.",
+    "messageLabel": "Message to send",
+    "pendingWait": "Your package is activated as soon as the payment is checked.",
+    "cancelFailed": "The request could not be cancelled",
+    "historyTitle": "Payment history",
+    "status": {
+      "Pending": "Pending",
+      "Approved": "Approved",
+      "Rejected": "Rejected",
+      "Cancelled": "Cancelled"
+    },
+    "monthCount_one": "{{count}} month",
+    "monthCount_other": "{{count}} months",
+    "perMonth": "/mo",
+    "monthlyLimits": "Monthly limits",
+    "extend": "Extend",
+    "feature": {
+      "monthlyUploads": {
+        "count_one": "{{count}} PDF upload",
+        "count_other": "{{count}} PDF uploads",
+        "unlimited": "Unlimited PDF uploads",
+        "none": "No PDF uploads"
+      },
+      "monthlyExams": {
+        "count_one": "{{count}} exam",
+        "count_other": "{{count}} exams",
+        "unlimited": "Unlimited exams",
+        "none": "No exams"
+      },
+      "monthlyBattles": {
+        "count_one": "{{count}} battle",
+        "count_other": "{{count}} battles",
+        "unlimited": "Unlimited battles",
+        "none": "No battle hosting"
+      },
+      "monthlyDimTests": {
+        "count_one": "{{count}} DİM test",
+        "count_other": "{{count}} DİM tests",
+        "unlimited": "Unlimited DİM tests",
+        "none": "No DİM tests"
+      }
+    }
+  },
+  "billingAdmin": {
+    "tabsAria": "Packages section",
+    "tabs": {
+      "users": "Users",
+      "requests": "Payment requests",
+      "plans": "Packages",
+      "settings": "Settings"
+    },
+    "pendingCount_one": "{{count}} pending request",
+    "pendingCount_other": "{{count}} pending requests",
+    "search": "Search",
+    "searchPlaceholder": "Nickname or email",
+    "planFilter": "Package",
+    "allPlans": "All packages",
+    "statusFilter": "Status",
+    "status": {
+      "all": "All",
+      "active": "Paid package active",
+      "expiring": "Ends within 7 days",
+      "expired": "Package ended",
+      "free": "Free",
+      "pending": "Payment pending",
+      "custom": "Custom limits"
+    },
+    "bulkAria": "Actions for selected users",
+    "selected_one": "{{count}} user selected",
+    "selected_other": "{{count}} users selected",
+    "action": {
+      "AssignPlan": "Assign package",
+      "Extend": "Extend",
+      "CancelPlan": "Stop package",
+      "SetLimits": "Set custom limits",
+      "ClearLimits": "Remove custom limits",
+      "SetUnlimited": "Make unlimited"
+    },
+    "clearSelection": "Clear selection",
+    "loadFailed": "Could not load data",
+    "noUsers": "No users found",
+    "selectPage": "Select all on this page",
+    "selectUser": "Select {{name}}",
+    "plan": "Package",
+    "flags": "Flags",
+    "pendingFlag": "Payment pending",
+    "unlimitedFlag": "Unlimited",
+    "customFlag": "Custom limit",
+    "resultTitle": "Result",
+    "resultText": "{{updated}} updated, {{skipped}} skipped.",
+    "forUsers_one": "{{count}} user: {{names}}",
+    "forUsers_other": "{{count}} users: {{names}}",
+    "choosePlan": "Choose a package",
+    "periods": "Length (× package)",
+    "extraDays": "Extra days",
+    "assignSummary": "«{{name}}» for {{days}} days will be assigned to {{count}} users.",
+    "assignNoteTitle": "Replaces the current package",
+    "assignNote": "The package starts today; current and scheduled packages are stopped. No payment is recorded.",
+    "extendDays": "Days to add",
+    "limitsHint": "An empty field uses the package limit. 0 blocks the action. Custom limits override the package.",
+    "fromPlan": "from package",
+    "confirm": {
+      "CancelPlan_one": "The package of {{count}} user will stop now and they move to Free.",
+      "CancelPlan_other": "The packages of {{count}} users will stop now and they move to Free.",
+      "ClearLimits_one": "Custom limits of {{count}} user will be removed; package limits apply.",
+      "ClearLimits_other": "Custom limits of {{count}} users will be removed; package limits apply.",
+      "SetUnlimited_one": "{{count}} user will have no limits.",
+      "SetUnlimited_other": "{{count}} users will have no limits."
+    },
+    "note": "Note (optional)",
+    "bulkFailed": "The action failed",
+    "apply_one": "Apply to {{count}} user",
+    "apply_other": "Apply to {{count}} users",
+    "thisMonth": "This month",
+    "customUnlimited": "Custom: unlimited",
+    "customActive": "Custom limits override the package",
+    "periodsHistory": "Package history",
+    "paymentsHistory": "Payment requests",
+    "noHistory": "None yet",
+    "cancelled": "stopped",
+    "source": {
+      "Payment": "Payment",
+      "Manual": "Given by admin"
+    },
+    "requestFilterAria": "Request status",
+    "requestSearchPlaceholder": "Code, nickname or email",
+    "noPending": "No pending payments",
+    "noRequests": "No requests found",
+    "code": "Code",
+    "amount": "Amount",
+    "created": "Date",
+    "state": "State",
+    "channel": {
+      "WhatsApp": "WhatsApp",
+      "Instagram": "Instagram",
+      "Other": "Other"
+    },
+    "approve": "Approve",
+    "reject": "Reject",
+    "approveTitle": "Approve payment {{code}}",
+    "approveWho": "{{name}} · «{{plan}}» · {{amount}}",
+    "bonusDays": "Bonus days",
+    "previewFailed": "Preview failed",
+    "kind": {
+      "New": "New package: «{{plan}}» from today",
+      "Extend": "Extension: «{{plan}}» continues",
+      "Upgrade": "Upgrade: «{{current}}» → «{{plan}}», now",
+      "Downgrade": "Downgrade: «{{plan}}» after the current package"
+    },
+    "previewPeriod": "{{from}} – {{to}}",
+    "previewBonus_one": "+{{count}} bonus day",
+    "previewBonus_other": "+{{count}} bonus days",
+    "approveFailed": "Approval failed",
+    "approveConfirm": "Approve and activate",
+    "rejectTitle": "Reject request {{code}}",
+    "rejectReason": "Reason",
+    "rejectPlaceholder": "E.g. payment not found",
+    "rejectHint": "The user sees this note on their Packages page.",
+    "rejectFailed": "Rejection failed",
+    "plansHint": "Changes apply to everyone right away. Limit 0 = not included, unlimited = no cap.",
+    "newPlan": "New package",
+    "saveWarnTitle": "Change limits?",
+    "saveWarn": "Limits of {{count}} users on «{{name}}» change right away.",
+    "activeUsers_one": "{{count}} user",
+    "activeUsers_other": "{{count}} users",
+    "planName": "Name",
+    "sortOrder": "Order",
+    "planDescription": "Short description",
+    "price": "Price (AZN)",
+    "duration": "Duration (days)",
+    "monthlyLimits": "Monthly limits",
+    "zeroHint": "An action set to 0 is not included in this package.",
+    "onSale": "On sale",
+    "featured": "«Most popular» badge",
+    "freeHint": "Free applies to everyone without a paid package: it costs 0 and cannot be hidden.",
+    "saveFailed": "Could not save",
+    "saved": "Saved",
+    "salesOpen": "Sales are open",
+    "salesOpenHint": "When off, users cannot buy packages. Existing packages continue.",
+    "whatsApp": "WhatsApp number",
+    "whatsAppHint": "Digits only, starting with 994.",
+    "instagram": "Instagram account",
+    "instructions": "Transfer instructions",
+    "instructionsPlaceholder": "E.g. transfer to card 4169 **** **** 1234 (Birbank).",
+    "instructionsHint": "Shown only to signed-in users after they get a code.",
+    "previewTitle": "What users will see",
+    "previewText": "Step 2 of the payment instructions",
+    "selectHint": "Select users for a bulk action"
   },
   "dim": {
     "track": {

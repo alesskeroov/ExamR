@@ -1,3 +1,4 @@
+using ExamFlow.Api.Features.Usage;
 using System.Security.Claims;
 using ExamFlow.Api.Common;
 using ExamFlow.Api.Features.Exams;
@@ -79,7 +80,7 @@ public static class DimEndpoints
 
     private static async Task<IResult> Start(
         Guid id, DimStartRequest? request, ClaimsPrincipal user, AppDbContext db, TimeProvider clock, IOptions<ExamOptions> options,
-        CancellationToken ct)
+        UsageLimiter usage, CancellationToken ct)
     {
         var userId = user.GetUserId();
         var now = clock.GetUtcNow();
@@ -94,6 +95,9 @@ public static class DimEndpoints
 
         if (test.AttemptLimit is { } limit && await db.DimAttempts.CountAsync(a => a.TestId == id && a.UserId == userId, ct) >= limit)
             return Problem(StatusCodes.Status409Conflict, "Bu sınaq üçün cəhd limitiniz bitib.");
+        // Monthly package limit: checked early for a fast answer, consumed below in the same transaction as the attempt.
+        var monthly = await usage.CheckAsync(userId, user.IsAdmin(), UsageKind.DimTest, ct);
+        if (!monthly.Allowed) return monthly.Problem();
 
         // Random sections draw fresh questions for this attempt; all are put in PDF order below.
         var picked = new List<(string Subject, Guid QuestionId)>();
@@ -147,27 +151,36 @@ public static class DimEndpoints
             Questions = picked.Select((p, i) => WithAudio(ExamEndpoints.Freeze(questions[p.QuestionId], i, visuals[p.QuestionId], passages.GetValueOrDefault(p.QuestionId)),
                 questions[p.QuestionId], audios)).ToList(),
         };
-        db.Exams.Add(exam);
-        db.DimAttempts.Add(new DimAttempt
+        exam.Id = Guid.NewGuid();
+        var attempt = new DimAttempt
         {
             Exam = exam,
             TestId = test.Id,
             UserId = userId,
             StartedAt = now,
             Items = picked.Select((p, i) => new DimAttemptItem { Position = i, Subject = p.Subject, Topic = topics[p.QuestionId] }).ToList(),
+        };
+
+        return await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
+            db.ChangeTracker.Clear();
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            if (await usage.TryConsumeAsync(user, UsageKind.DimTest, exam.Id, ct) is { } denied) return denied;
+            db.Exams.Add(exam);
+            db.DimAttempts.Add(attempt);
+            try
+            {
+                await db.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
+            }
+            catch (DbUpdateException)
+            {
+                // UX_Exams_UserActive: another request started an exam at the same moment.
+                return Problem(StatusCodes.Status409Conflict, "Davam edən imtahanınız var.");
+            }
+
+            return (IResult)TypedResults.Created($"/api/exams/{exam.Id}", new DimStartedDto(exam.Id));
         });
-
-        try
-        {
-            await db.SaveChangesAsync(ct);
-        }
-        catch (DbUpdateException)
-        {
-            // UX_Exams_UserActive: another request started an exam at the same moment.
-            return Problem(StatusCodes.Status409Conflict, "Davam edən imtahanınız var.");
-        }
-
-        return TypedResults.Created($"/api/exams/{exam.Id}", new DimStartedDto(exam.Id));
     }
 
     /// <summary>Freezes the listening recording that covers the question's number in its document, if any.</summary>

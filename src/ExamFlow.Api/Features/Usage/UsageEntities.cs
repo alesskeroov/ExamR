@@ -1,6 +1,6 @@
 namespace ExamFlow.Api.Features.Usage;
 
-public enum UsageKind { Upload, Exam, Battle, AiRequest }
+public enum UsageKind { Upload, Exam, Battle, AiRequest, DimTest }
 
 public sealed class UsageEvent
 {
@@ -18,6 +18,7 @@ public sealed class UserUsageLimit
     public int? MonthlyExams { get; set; }
     public int? MonthlyBattles { get; set; }
     public int? MonthlyAiRequests { get; set; }
+    public int? MonthlyDimTests { get; set; }
     public bool Unlimited { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public Guid? UpdatedByUserId { get; set; }

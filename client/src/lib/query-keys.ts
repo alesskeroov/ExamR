@@ -6,8 +6,17 @@ export const queryKeys = {
   usage: {
     all: ['usage'] as const,
     mine: ['usage', 'mine'] as const,
-    adminUsers: (q: string, page: number) => ['usage', 'admin', q, page] as const,
-    adminUser: (id: string) => ['usage', 'admin', id] as const,
+  },
+  billing: {
+    all: ['billing'] as const,
+    mine: ['billing', 'mine'] as const,
+    history: ['billing', 'history'] as const,
+    adminUsers: (q: string, planId: string, status: string, page: number) => ['billing', 'admin', 'users', q, planId, status, page] as const,
+    adminUser: (id: string) => ['billing', 'admin', 'user', id] as const,
+    adminRequests: (status: string, q: string, page: number) => ['billing', 'admin', 'requests', status, q, page] as const,
+    preview: (id: string, periods: number, bonus: number | null) => ['billing', 'admin', 'preview', id, periods, bonus] as const,
+    plans: ['billing', 'admin', 'plans'] as const,
+    settings: ['billing', 'admin', 'settings'] as const,
   },
   admins: {
     all: ['admins'] as const,
