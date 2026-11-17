@@ -79,7 +79,7 @@ public static class BillingAdminEndpoints
         var usage = await limiter.SummariesAsync(ids, admins, ct);
         var plans = await billing.CurrentAsync(ids, ct);
         var custom = await db.UserUsageLimits.AsNoTracking().Where(l => ids.Contains(l.UserId))
-            .ToDictionaryAsync(l => l.UserId, l => new CustomLimitsDto(l.MonthlyUploads, l.MonthlyExams, l.MonthlyBattles, l.MonthlyDimTests, l.Unlimited), ct);
+            .ToDictionaryAsync(l => l.UserId, l => new CustomLimitsDto(l.MonthlyUploads, l.MonthlyExams, l.MonthlyBattles, l.MonthlyDimTests, l.MonthlyGuides, l.Unlimited), ct);
         var pending = await db.PaymentRequests.AsNoTracking().Where(r => ids.Contains(r.UserId) && r.Status == PaymentStatus.Pending)
             .Select(r => r.UserId).ToListAsync(ct);
         return ids.Where(people.ContainsKey).Select(id => new AdminBillingUserDto(id, people[id].Nickname, people[id].Email, admins.Contains(id),
@@ -175,6 +175,7 @@ public static class BillingAdminEndpoints
             row.MonthlyExams = request.MonthlyExams;
             row.MonthlyBattles = request.MonthlyBattles;
             row.MonthlyDimTests = request.MonthlyDimTests;
+            row.MonthlyGuides = request.MonthlyGuides;
             row.Unlimited = false;
         }
         row.UpdatedAt = now;
@@ -303,6 +304,7 @@ public static class BillingAdminEndpoints
         plan.MonthlyExams = request.MonthlyExams;
         plan.MonthlyBattles = request.MonthlyBattles;
         plan.MonthlyDimTests = request.MonthlyDimTests;
+        plan.MonthlyGuides = request.MonthlyGuides;
         // Free is what everyone without a package has: always free, always available.
         plan.Price = plan.IsFree ? 0 : decimal.Round(request.Price, 2);
         plan.DurationDays = request.DurationDays;

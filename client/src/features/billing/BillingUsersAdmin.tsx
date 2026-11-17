@@ -10,7 +10,7 @@ import { useAdminBillingUser, useAdminBillingUsers, useAdminPlans, useBulkBillin
 import { endsWithin, formatDateTime, formatDay, formatMoney, limitKeys, limitValue, periodLabel } from './format'
 
 const PAGE_SIZE = 25
-const usageKinds = ['Upload', 'Exam', 'Battle', 'DimTest'] as const
+const usageKinds = ['Upload', 'Exam', 'Battle', 'DimTest', 'Guide'] as const
 const statuses: UserStatusFilter[] = ['', 'active', 'expiring', 'expired', 'free', 'pending', 'custom']
 const actions: BulkAction[] = ['AssignPlan', 'Extend', 'CancelPlan', 'SetLimits', 'ClearLimits', 'SetUnlimited']
 
@@ -132,7 +132,7 @@ function BulkDialog({ action, users, onClose, onDone }: { action: BulkAction; us
   const plans = useAdminPlans()
   const bulk = useBulkBilling()
   const paid = plans.data?.filter(p => !p.plan.isFree) ?? []
-  const [form, setForm] = useState<BulkForm>({ planId: '', periods: 1, days: '', note: '', limits: { monthlyUploads: '', monthlyExams: '', monthlyBattles: '', monthlyDimTests: '' } })
+  const [form, setForm] = useState<BulkForm>({ planId: '', periods: 1, days: '', note: '', limits: { monthlyUploads: '', monthlyExams: '', monthlyBattles: '', monthlyDimTests: '', monthlyGuides: '' } })
   const [result, setResult] = useState<BulkResult | null>(null)
   const plan = paid.find(p => p.plan.id === form.planId)?.plan
   const names = users.slice(0, 5).map(u => u.nickname).join(', ') + (users.length > 5 ? ` +${users.length - 5}` : '')

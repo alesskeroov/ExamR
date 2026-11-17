@@ -5,7 +5,7 @@ namespace ExamFlow.Api.Features.Billing;
 
 public sealed record PlanDto(
     Guid Id, string Name, string? Description, decimal Price, int DurationDays, bool IsFree, bool IsActive, bool IsFeatured, int SortOrder,
-    int? MonthlyUploads, int? MonthlyExams, int? MonthlyBattles, int? MonthlyDimTests);
+    int? MonthlyUploads, int? MonthlyExams, int? MonthlyBattles, int? MonthlyDimTests, int? MonthlyGuides);
 
 public sealed record NextPlanDto(Guid PlanId, string Name, DateTimeOffset StartsAt, DateTimeOffset EndsAt);
 /// <summary>The user's package now. <c>EndsAt</c> is the end of the whole paid chain of this package; null for Free.</summary>
@@ -34,7 +34,7 @@ public sealed class CreatePaymentRequest
 
 // ---- Admin ----
 
-public sealed record CustomLimitsDto(int? MonthlyUploads, int? MonthlyExams, int? MonthlyBattles, int? MonthlyDimTests, bool Unlimited);
+public sealed record CustomLimitsDto(int? MonthlyUploads, int? MonthlyExams, int? MonthlyBattles, int? MonthlyDimTests, int? MonthlyGuides, bool Unlimited);
 
 public sealed record AdminBillingUserDto(
     Guid Id, string Nickname, string? Email, bool IsAdmin, CurrentPlanDto Plan, UsageDto Usage, CustomLimitsDto? Custom, bool HasPending);
@@ -74,6 +74,7 @@ public sealed class BulkRequest
     [Range(0, 100000)] public int? MonthlyExams { get; init; }
     [Range(0, 100000)] public int? MonthlyBattles { get; init; }
     [Range(0, 100000)] public int? MonthlyDimTests { get; init; }
+    [Range(0, 100000)] public int? MonthlyGuides { get; init; }
     [MaxLength(500)] public string? Note { get; init; }
 }
 
@@ -93,6 +94,7 @@ public sealed class UpsertPlanRequest
     [Range(0, 100000)] public int? MonthlyExams { get; init; }
     [Range(0, 100000)] public int? MonthlyBattles { get; init; }
     [Range(0, 100000)] public int? MonthlyDimTests { get; init; }
+    [Range(0, 100000)] public int? MonthlyGuides { get; init; }
 }
 
 public sealed record BillingSettingsDto(bool Enabled, string? WhatsAppNumber, string? InstagramUsername, string? PaymentInstructions, DateTimeOffset UpdatedAt);

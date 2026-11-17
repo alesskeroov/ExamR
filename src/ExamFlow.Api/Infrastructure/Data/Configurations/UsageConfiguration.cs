@@ -25,7 +25,7 @@ public sealed class UserUsageLimitConfiguration : IEntityTypeConfiguration<UserU
         b.HasOne<AppUser>().WithOne().HasForeignKey<UserUsageLimit>(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         b.ToTable("UserUsageLimits", t =>
         {
-            foreach (var column in new[] { "MonthlyUploads", "MonthlyExams", "MonthlyBattles", "MonthlyAiRequests", "MonthlyDimTests" })
+            foreach (var column in new[] { "MonthlyUploads", "MonthlyExams", "MonthlyBattles", "MonthlyAiRequests", "MonthlyDimTests", "MonthlyGuides" })
                 t.HasCheckConstraint($"CK_UserUsageLimits_{column}", $"\"{column}\" IS NULL OR \"{column}\" BETWEEN 0 AND 100000");
         });
     }

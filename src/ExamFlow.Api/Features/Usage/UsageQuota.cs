@@ -1,10 +1,10 @@
 namespace ExamFlow.Api.Features.Usage;
 
 /// <summary>Monthly limits of the user's package. <c>null</c> = unlimited.</summary>
-public sealed record PlanQuota(int? Uploads, int? Exams, int? Battles, int? DimTests, int? AiRequests)
+public sealed record PlanQuota(int? Uploads, int? Exams, int? Battles, int? DimTests, int? Guides, int? AiRequests)
 {
     // Used only when no Free package row exists (e.g. before the billing migration is applied).
-    public static PlanQuota From(UsageOptions o) => new(o.MonthlyUploads, o.MonthlyExams, o.MonthlyBattles, o.MonthlyDimTests, o.MonthlyAiRequests);
+    public static PlanQuota From(UsageOptions o) => new(o.MonthlyUploads, o.MonthlyExams, o.MonthlyBattles, o.MonthlyDimTests, o.MonthlyGuides, o.MonthlyAiRequests);
 }
 
 public static class UsageQuota
@@ -28,6 +28,7 @@ public static class UsageQuota
             UsageKind.Exam => custom?.MonthlyExams ?? plan.Exams,
             UsageKind.Battle => custom?.MonthlyBattles ?? plan.Battles,
             UsageKind.DimTest => custom?.MonthlyDimTests ?? plan.DimTests,
+            UsageKind.Guide => custom?.MonthlyGuides ?? plan.Guides,
             UsageKind.AiRequest => custom?.MonthlyAiRequests ?? plan.AiRequests,
             _ => throw new ArgumentOutOfRangeException(nameof(kind)),
         };
@@ -39,14 +40,14 @@ public static class UsageQuota
             var feature = kind switch
             {
                 UsageKind.Upload => "Sənəd yükləmək", UsageKind.Exam => "İmtahan vermək", UsageKind.Battle => "Battle yaratmaq",
-                UsageKind.DimTest => "DİM sınaqları", _ => "AI sorğuları",
+                UsageKind.DimTest => "DİM sınaqları", UsageKind.Guide => "Öyrənmə bələdçisi", _ => "AI sorğuları",
             };
             return $"{feature} paketinizə daxil deyil. Paketlər səhifəsindən uyğun paket seçə bilərsiniz.";
         }
         var label = kind switch
         {
             UsageKind.Upload => "sənəd yükləmə", UsageKind.Exam => "imtahan", UsageKind.Battle => "battle yaratma",
-            UsageKind.DimTest => "DİM sınağı", _ => "AI sorğu",
+            UsageKind.DimTest => "DİM sınağı", UsageKind.Guide => "öyrənmə bələdçisi", _ => "AI sorğu",
         };
         var local = resetsAt.ToOffset(BakuOffset);
         return $"Bu ay üçün {label} limitiniz ({limit}) bitib. Limit {local.Day} {Months[local.Month - 1]}, 00:00-da yenilənir.";

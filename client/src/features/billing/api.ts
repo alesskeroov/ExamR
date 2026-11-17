@@ -10,7 +10,7 @@ export type PlanChangeKind = 'New' | 'Extend' | 'Upgrade' | 'Downgrade'
 export type BulkAction = 'AssignPlan' | 'Extend' | 'CancelPlan' | 'SetLimits' | 'ClearLimits' | 'SetUnlimited'
 export type UserStatusFilter = '' | 'active' | 'expiring' | 'expired' | 'free' | 'pending' | 'custom'
 
-export interface PlanLimits { monthlyUploads: number | null; monthlyExams: number | null; monthlyBattles: number | null; monthlyDimTests: number | null }
+export interface PlanLimits { monthlyUploads: number | null; monthlyExams: number | null; monthlyBattles: number | null; monthlyDimTests: number | null; monthlyGuides: number | null }
 export interface Plan extends PlanLimits {
   id: string; name: string; description: string | null; price: number; durationDays: number
   isFree: boolean; isActive: boolean; isFeatured: boolean; sortOrder: number
@@ -50,6 +50,10 @@ export type PlanInput = Omit<Plan, 'id' | 'isFree'>
 
 export function useBilling() {
   return useQuery({ queryKey: queryKeys.billing.mine, queryFn: () => api.get<Billing>('/billing') })
+}
+/** Packages for signed-out visitors (landing page); empty while sales are switched off. */
+export function usePublicPlans() {
+  return useQuery({ queryKey: queryKeys.billing.public, queryFn: () => api.get<Plan[]>('/billing/plans'), staleTime: 10 * 60_000 })
 }
 export function useBillingHistory() {
   return useQuery({ queryKey: queryKeys.billing.history, queryFn: () => api.get<BillingHistory>('/billing/history') })

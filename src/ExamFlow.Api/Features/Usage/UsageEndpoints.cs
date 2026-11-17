@@ -70,6 +70,7 @@ public static class UsageEndpoints
             row.MonthlyBattles = request.MonthlyBattles;
             row.MonthlyAiRequests = request.MonthlyAiRequests;
             row.MonthlyDimTests = request.MonthlyDimTests;
+            row.MonthlyGuides = request.MonthlyGuides;
             row.Unlimited = request.Unlimited;
             row.UpdatedAt = clock.GetUtcNow();
             row.UpdatedByUserId = user.GetUserId();

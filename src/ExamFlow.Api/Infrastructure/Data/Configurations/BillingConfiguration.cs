@@ -19,25 +19,25 @@ public sealed class PlanConfiguration : IEntityTypeConfiguration<Plan>
         b.HasIndex(x => x.IsFree).IsUnique().HasFilter("\"IsFree\"");
         b.ToTable("Plans", t =>
         {
-            foreach (var column in new[] { "MonthlyUploads", "MonthlyExams", "MonthlyBattles", "MonthlyDimTests" })
+            foreach (var column in new[] { "MonthlyUploads", "MonthlyExams", "MonthlyBattles", "MonthlyDimTests", "MonthlyGuides" })
                 t.HasCheckConstraint($"CK_Plans_{column}", $"\"{column}\" IS NULL OR \"{column}\" BETWEEN 0 AND 100000");
             t.HasCheckConstraint("CK_Plans_Price", "\"Price\" >= 0");
             t.HasCheckConstraint("CK_Plans_DurationDays", "\"DurationDays\" BETWEEN 1 AND 365");
         });
         b.HasData(
-            Seed(FreeId, "Free", "Saytı sınamaq üçün", 0, 30, 0, 1, 3, 0, 0, isFree: true),
-            Seed(Guid.Parse("6a1f0c3e-0000-4000-8000-000000000002"), "İmtahan həftəsi", "İmtahandan əvvəlki 7 gün üçün", 3, 7, 1, 3, 30, 5, 5),
-            Seed(Guid.Parse("6a1f0c3e-0000-4000-8000-000000000003"), "Standart", "Müntəzəm hazırlıq üçün", 5, 30, 2, 10, 60, 10, 10),
-            Seed(Guid.Parse("6a1f0c3e-0000-4000-8000-000000000004"), "Pro", "Ən çox seçilən paket", 7, 30, 3, 25, 150, 30, 30, featured: true),
-            Seed(Guid.Parse("6a1f0c3e-0000-4000-8000-000000000005"), "Premium", "Limitsiz istifadə", 10, 30, 4, null, null, null, null));
+            Seed(FreeId, "Free", "Saytı sınamaq üçün", 0, 30, 0, 1, 3, 0, 0, 0, isFree: true),
+            Seed(Guid.Parse("6a1f0c3e-0000-4000-8000-000000000002"), "İmtahan həftəsi", "İmtahandan əvvəlki 7 gün üçün", 3, 7, 1, 3, 30, 5, 5, 3),
+            Seed(Guid.Parse("6a1f0c3e-0000-4000-8000-000000000003"), "Standart", "Müntəzəm hazırlıq üçün", 5, 30, 2, 10, 60, 10, 10, 0),
+            Seed(Guid.Parse("6a1f0c3e-0000-4000-8000-000000000004"), "Pro", "Ən çox seçilən paket", 7, 30, 3, 25, 150, 30, 30, 10, featured: true),
+            Seed(Guid.Parse("6a1f0c3e-0000-4000-8000-000000000005"), "Premium", "Limitsiz istifadə", 10, 30, 4, null, null, null, null, null));
     }
 
     private static Plan Seed(Guid id, string name, string description, decimal price, int days, int order,
-        int? uploads, int? exams, int? battles, int? dim, bool isFree = false, bool featured = false) => new()
+        int? uploads, int? exams, int? battles, int? dim, int? guides, bool isFree = false, bool featured = false) => new()
     {
         Id = id, Name = name, Description = description, Price = price, DurationDays = days, SortOrder = order, IsFree = isFree,
         IsActive = true, IsFeatured = featured, MonthlyUploads = uploads, MonthlyExams = exams, MonthlyBattles = battles,
-        MonthlyDimTests = dim, UpdatedAt = Seeded,
+        MonthlyDimTests = dim, MonthlyGuides = guides, UpdatedAt = Seeded,
     };
 }
 

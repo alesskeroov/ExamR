@@ -1,3 +1,4 @@
+import type { TFunction } from 'i18next'
 import i18n from '../../lib/i18n'
 import type { Plan, PlanLimits } from './api'
 
@@ -33,10 +34,17 @@ export function periodLabel(plan: Pick<Plan, 'durationDays'>, periods: number) {
 export const priceSuffix = (plan: Pick<Plan, 'durationDays'>) =>
   plan.durationDays === 30 ? i18n.t('billing.perMonth') : `/${periodLabel(plan, 1)}`
 
-export const limitKeys = ['monthlyUploads', 'monthlyExams', 'monthlyBattles', 'monthlyDimTests'] as const satisfies readonly (keyof PlanLimits)[]
+export const limitKeys = ['monthlyUploads', 'monthlyExams', 'monthlyBattles', 'monthlyDimTests', 'monthlyGuides'] as const satisfies readonly (keyof PlanLimits)[]
 
 /** Limit as shown to people: ∞ for unlimited, a dash for "not included". */
 export const limitValue = (value: number | null) => value === null ? '∞' : value === 0 ? '—' : String(value)
 
 /** Periods offered at checkout: monthly packages can be bought for several months, short ones once. */
 export const periodChoices = (plan: Pick<Plan, 'durationDays'>) => plan.durationDays >= 30 ? [1, 3, 6, 12] : [1]
+
+/** "10 imtahan", "Limitsiz imtahan", "İmtahan yoxdur" for one package limit. */
+export function featureText(t: TFunction, key: (typeof limitKeys)[number], value: number | null) {
+  if (value === null) return t(`billing.feature.${key}.unlimited`)
+  if (value === 0) return t(`billing.feature.${key}.none`)
+  return t(`billing.feature.${key}.count`, { count: value })
+}

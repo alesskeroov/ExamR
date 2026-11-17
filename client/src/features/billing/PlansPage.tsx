@@ -1,14 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, Copy, AtSign, Crown, ExternalLink, MessageCircle, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { TFunction } from 'i18next'
 import { Alert } from '../../components/common/Alert'
 import { Button } from '../../components/common/Button'
 import { PageHeader } from '../../components/common/PageHeader'
 import { useConfirm } from '../../lib/use-confirm'
 import { cn } from '../../lib/utils'
 import { useBilling, useBillingHistory, useCancelPaymentRequest, useCreatePaymentRequest, type Billing, type PaymentRequest, type Plan } from './api'
-import { formatDateTime, formatDay, formatMoney, limitKeys, periodChoices, periodLabel, priceSuffix } from './format'
+import { featureText, formatDateTime, formatDay, formatMoney, limitKeys, periodChoices, periodLabel, priceSuffix } from './format'
 
 export function PlansPage() {
   const { t } = useTranslation()
@@ -92,12 +91,6 @@ function FeatureList({ plan, className }: { plan: Plan; className?: string }) {
       <span className={plan[key] === 0 ? 'text-slate-400' : 'text-slate-700'}>{featureText(t, key, plan[key])}</span>
     </li>)}
   </ul>
-}
-
-function featureText(t: TFunction, key: (typeof limitKeys)[number], value: number | null) {
-  if (value === null) return t(`billing.feature.${key}.unlimited`)
-  if (value === 0) return t(`billing.feature.${key}.none`)
-  return t(`billing.feature.${key}.count`, { count: value })
 }
 
 /** Free is what everyone has without a package: a compact baseline under the paid cards. */

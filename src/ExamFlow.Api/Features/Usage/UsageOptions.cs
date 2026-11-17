@@ -10,4 +10,6 @@ public sealed class UsageOptions
     [Range(0, 100000)] public int MonthlyBattles { get; set; } = 3;
     [Range(0, 100000)] public int MonthlyAiRequests { get; set; } = 100;
     [Range(0, 100000)] public int MonthlyDimTests { get; set; } = 0;
+    /// <summary>New study guides (Öyrənmə bələdçisi) per month; 0 = not included.</summary>
+    [Range(0, 100000)] public int MonthlyGuides { get; set; } = 0;
 }

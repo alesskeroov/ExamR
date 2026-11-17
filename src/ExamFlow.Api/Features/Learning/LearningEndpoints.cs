@@ -64,6 +64,7 @@ public static class LearningEndpoints
     private static async Task<IResult> Upload(IFormFile? file, ClaimsPrincipal user, AppDbContext db, IFileStorage storage, LearningQueue queue,
         IOptions<LearningOptions> options, TimeProvider clock, UsageLimiter usage, CancellationToken ct)
     {
+        if (await GuideNotIncluded(user, usage, ct) is { } notIncluded) return notIncluded;
         var limit = Math.Min(options.Value.MaxFileSizeBytes, LearningOptionsLimit);
         if (file is null || file.Length == 0) return Invalid("PDF, Word (.docx) və ya PowerPoint (.pptx) faylı seçilməyib.");
         if (file.Length > limit) return TypedResults.Problem($"Fayl {limit / 1024 / 1024} MB-dan böyük ola bilməz.", statusCode: StatusCodes.Status413PayloadTooLarge);
@@ -152,8 +153,15 @@ public static class LearningEndpoints
             d.Learning?.Status.ToString(), d.Learning?.PageCount, d.Learning?.ChunkCount ?? 0, d.CreatedAt, d.IsOwner)));
     }
 
-    private static async Task<IResult> Process(Guid documentId, ClaimsPrincipal user, AppDbContext db, LearningQueue queue, TimeProvider clock, CancellationToken ct) =>
-        await StartOrReuse(documentId, user.GetUserId(), db, queue, clock, ct);
+    private static async Task<IResult> Process(Guid documentId, ClaimsPrincipal user, AppDbContext db, LearningQueue queue, UsageLimiter usage, TimeProvider clock, CancellationToken ct) =>
+        await GuideNotIncluded(user, usage, ct) ?? await StartOrReuse(documentId, user.GetUserId(), db, queue, clock, ct);
+
+    /// <summary>Packages without the study guide (limit 0) cannot prepare documents for it; the upload quota is not spent.</summary>
+    private static async Task<IResult?> GuideNotIncluded(ClaimsPrincipal user, UsageLimiter usage, CancellationToken ct)
+    {
+        var check = await usage.CheckAsync(user.GetUserId(), user.IsAdmin(), UsageKind.Guide, ct);
+        return check.Limit == 0 ? check.Problem() : null;
+    }
 
     /// <summary>Indexes a readable document once: completed and running indexes are returned as they are; only a failed one is retried.</summary>
     private static async Task<IResult> StartOrReuse(Guid documentId, Guid userId, AppDbContext db, LearningQueue queue, TimeProvider clock, CancellationToken ct)

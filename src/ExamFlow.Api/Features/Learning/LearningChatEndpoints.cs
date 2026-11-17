@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using ExamFlow.Api.Common;
 using ExamFlow.Api.Features.Documents;
+using ExamFlow.Api.Features.Usage;
 using ExamFlow.Api.Infrastructure.Data;
 using ExamFlow.Api.Infrastructure.Security;
 using Microsoft.AspNetCore.Http.Features;
@@ -58,7 +59,7 @@ public static class LearningChatEndpoints
         user.IsInRole(Roles.Admin) ? TypedResults.Ok(await budget.StatusAsync(user.GetUserId(), ct)) : (IResult)TypedResults.Ok(new { enabled = options.Value.Enabled });
 
     private static async Task<IResult> Create(CreateChatRequest request, ClaimsPrincipal user, AppDbContext db,
-        CardDeckService decks, TimeProvider clock, CancellationToken ct)
+        CardDeckService decks, UsageLimiter usage, TimeProvider clock, CancellationToken ct)
     {
         // No AI check: a session is also the home of the AI-free "Kartlar"; AI tools check LearningAi:Enabled themselves.
         var userId = user.GetUserId();
@@ -71,11 +72,26 @@ public static class LearningChatEndpoints
         if (await decks.GetAsync(learning.Id, ct) is { Deck: null } rejected)
             return TypedResults.Problem(rejected.Error, statusCode: StatusCodes.Status422UnprocessableEntity);
 
-        var now = clock.GetUtcNow();
-        var session = new LearningChatSession { Id = Guid.NewGuid(), UserId = userId, LearningDocumentId = learning.Id, Title = Shorten(learning.OriginalFileName, 120), CreatedAt = now, UpdatedAt = now };
-        db.Add(session);
-        await db.SaveChangesAsync(ct);
-        return TypedResults.Created($"/api/learning/chats/{session.Id}", await Sessions(db, userId, session.Id).FirstAsync(ct));
+        // A guide counts once per document per month: reopening the same document's guide is free.
+        var sessionId = Guid.NewGuid();
+        var denied = await db.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+        {
+            db.ChangeTracker.Clear();
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            await usage.LockAsync(userId, UsageKind.Guide, ct);
+            var check = await usage.CheckAsync(userId, user.IsAdmin(), UsageKind.Guide, ct);
+            if (check.Limit == 0) return check.Problem();
+            var monthStart = UsageQuota.MonthStart(clock.GetUtcNow());
+            var counted = await db.UsageEvents.AnyAsync(e => e.UserId == userId && e.Kind == UsageKind.Guide && e.ResourceId == learning.Id && e.OccurredAt >= monthStart, ct);
+            if (!counted && await usage.TryConsumeAsync(user, UsageKind.Guide, learning.Id, ct) is { } limited) return limited;
+            var now = clock.GetUtcNow();
+            db.Add(new LearningChatSession { Id = sessionId, UserId = userId, LearningDocumentId = learning.Id, Title = Shorten(learning.OriginalFileName, 120), CreatedAt = now, UpdatedAt = now });
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+            return null;
+        });
+        if (denied is not null) return denied;
+        return TypedResults.Created($"/api/learning/chats/{sessionId}", await Sessions(db, userId, sessionId).FirstAsync(ct));
     }
 
     private static async Task<IResult> List(ClaimsPrincipal user, AppDbContext db, CancellationToken ct, Guid? documentId = null, int? page = null, int? pageSize = null)

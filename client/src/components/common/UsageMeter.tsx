@@ -39,7 +39,7 @@ function UpgradeLink() {
 export function UsageStrip({ className }: { className?: string }) {
   const usage = useUsage()
   const { t } = useTranslation()
-  const kinds: UsageKind[] = ['Upload', 'Exam', 'Battle', 'DimTest']
+  const kinds: UsageKind[] = ['Upload', 'Exam', 'Battle', 'DimTest', 'Guide']
   if (usage.isPending) return <div role="status" aria-label={t('usage.limitsLoading')} className={`h-12 animate-pulse rounded-lg bg-sunken ${className ?? ''}`} />
   if (usage.error || !usage.data) return null
   const date = new Date(new Date(usage.data.resetsAt).getTime() + 4 * 3600000)
@@ -48,7 +48,7 @@ export function UsageStrip({ className }: { className?: string }) {
       <h2 id="usage-strip-title" className="text-[15px] font-bold">{t('usage.monthTitle')}</h2>
       <p className="text-[13px] text-muted">{t('usage.resetsAt', { day: date.getUTCDate(), month: monthName(date.getUTCMonth()) })} · <Link to="/plans" className="font-medium text-accent hover:underline">{t('usage.plansLink')}</Link></p>
     </div>
-    <ul className="mt-4 grid gap-x-10 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">{kinds.map(kind => {
+    <ul className="mt-4 grid gap-x-10 gap-y-5 sm:grid-cols-3 lg:grid-cols-5">{kinds.map(kind => {
       const item = usage.data.items.find(x => x.kind === kind)
       if (!item) return null
       const ratio = item.limit === null ? 0 : item.limit === 0 ? 1 : Math.min(1, item.used / item.limit)

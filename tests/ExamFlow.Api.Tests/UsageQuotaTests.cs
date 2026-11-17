@@ -15,8 +15,8 @@ public class UsageQuotaTests
     public void Reset_crosses_year_boundary() => Assert.Equal(DateTimeOffset.Parse("2026-12-31T20:00:00Z"), UsageQuota.NextReset(DateTimeOffset.Parse("2026-12-15T00:00:00Z")));
 
     private static readonly PlanQuota Defaults = PlanQuota.From(new UsageOptions());
-    private static readonly PlanQuota Pro = new(25, 150, 30, 30, 100);
-    private static readonly PlanQuota Unlimited = new(null, null, null, null, 100);
+    private static readonly PlanQuota Pro = new(25, 150, 30, 30, 10, 100);
+    private static readonly PlanQuota Unlimited = new(null, null, null, null, null, 100);
 
     [Theory]
     [InlineData(UsageKind.Upload, 3)]
@@ -24,6 +24,7 @@ public class UsageQuotaTests
     [InlineData(UsageKind.Battle, 3)]
     [InlineData(UsageKind.AiRequest, 100)]
     [InlineData(UsageKind.DimTest, 0)]
+    [InlineData(UsageKind.Guide, 0)]
     public void Defaults_and_exemptions(UsageKind kind, int expected)
     {
         Assert.Equal(expected, UsageQuota.EffectiveLimit(kind, null, Defaults, false));
@@ -60,6 +61,15 @@ public class UsageQuotaTests
         var message = UsageQuota.LimitMessage(UsageKind.DimTest, 0, DateTimeOffset.Parse("2026-11-30T20:00:00Z"));
         Assert.Contains("DİM sınaqları paketinizə daxil deyil", message);
         Assert.DoesNotContain("(0)", message);
+    }
+
+    [Fact]
+    public void Guide_limit_follows_package_and_custom_limit()
+    {
+        Assert.Equal(10, UsageQuota.EffectiveLimit(UsageKind.Guide, null, Pro, false));
+        Assert.Null(UsageQuota.EffectiveLimit(UsageKind.Guide, null, Unlimited, false));
+        Assert.Equal(1, UsageQuota.EffectiveLimit(UsageKind.Guide, new() { MonthlyGuides = 1 }, Pro, false));
+        Assert.Contains("Öyrənmə bələdçisi paketinizə daxil deyil", UsageQuota.LimitMessage(UsageKind.Guide, 0, DateTimeOffset.Parse("2026-11-30T20:00:00Z")));
     }
 
     [Fact]

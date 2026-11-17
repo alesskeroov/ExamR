@@ -506,6 +506,9 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.Property<int?>("MonthlyExams")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("MonthlyGuides")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("MonthlyUploads")
                         .HasColumnType("integer");
 
@@ -543,6 +546,8 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
 
                             t.HasCheckConstraint("CK_Plans_MonthlyExams", "\"MonthlyExams\" IS NULL OR \"MonthlyExams\" BETWEEN 0 AND 100000");
 
+                            t.HasCheckConstraint("CK_Plans_MonthlyGuides", "\"MonthlyGuides\" IS NULL OR \"MonthlyGuides\" BETWEEN 0 AND 100000");
+
                             t.HasCheckConstraint("CK_Plans_MonthlyUploads", "\"MonthlyUploads\" IS NULL OR \"MonthlyUploads\" BETWEEN 0 AND 100000");
 
                             t.HasCheckConstraint("CK_Plans_Price", "\"Price\" >= 0");
@@ -560,6 +565,7 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                             MonthlyBattles = 0,
                             MonthlyDimTests = 0,
                             MonthlyExams = 3,
+                            MonthlyGuides = 0,
                             MonthlyUploads = 1,
                             Name = "Free",
                             Price = 0m,
@@ -577,6 +583,7 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                             MonthlyBattles = 5,
                             MonthlyDimTests = 5,
                             MonthlyExams = 30,
+                            MonthlyGuides = 3,
                             MonthlyUploads = 3,
                             Name = "İmtahan həftəsi",
                             Price = 3m,
@@ -594,6 +601,7 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                             MonthlyBattles = 10,
                             MonthlyDimTests = 10,
                             MonthlyExams = 60,
+                            MonthlyGuides = 0,
                             MonthlyUploads = 10,
                             Name = "Standart",
                             Price = 5m,
@@ -611,6 +619,7 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                             MonthlyBattles = 30,
                             MonthlyDimTests = 30,
                             MonthlyExams = 150,
+                            MonthlyGuides = 10,
                             MonthlyUploads = 25,
                             Name = "Pro",
                             Price = 7m,
@@ -2482,6 +2491,9 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                     b.Property<int?>("MonthlyExams")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("MonthlyGuides")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("MonthlyUploads")
                         .HasColumnType("integer");
 
@@ -2505,6 +2517,8 @@ namespace ExamFlow.Api.Infrastructure.Data.Migrations
                             t.HasCheckConstraint("CK_UserUsageLimits_MonthlyDimTests", "\"MonthlyDimTests\" IS NULL OR \"MonthlyDimTests\" BETWEEN 0 AND 100000");
 
                             t.HasCheckConstraint("CK_UserUsageLimits_MonthlyExams", "\"MonthlyExams\" IS NULL OR \"MonthlyExams\" BETWEEN 0 AND 100000");
+
+                            t.HasCheckConstraint("CK_UserUsageLimits_MonthlyGuides", "\"MonthlyGuides\" IS NULL OR \"MonthlyGuides\" BETWEEN 0 AND 100000");
 
                             t.HasCheckConstraint("CK_UserUsageLimits_MonthlyUploads", "\"MonthlyUploads\" IS NULL OR \"MonthlyUploads\" BETWEEN 0 AND 100000");
                         });

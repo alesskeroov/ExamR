@@ -3,12 +3,13 @@ import { ArrowUpRight, Check, Menu, Moon, Plus, Sun, X } from 'lucide-react'
 import { Link, useLocation } from 'react-router'
 import { SUPPORT_EMAIL, supportMailto } from '../../lib/support'
 import { useTheme } from '../../lib/use-theme'
+import { LandingPlans } from './LandingPlans'
 import { ProductPreview } from './ProductPreview'
 import './landing.css'
 import { useTranslation } from 'react-i18next'
 import { LanguageRadios, LanguageSwitcher } from '../../components/common/LanguageSwitcher'
 
-const nav = [['#imkanlar', 'modes'], ['#nece-isleyir', 'steps'], ['#haqqimizda', 'why'], ['#suallar', 'faq']] as const
+const nav = [['#imkanlar', 'modes'], ['#nece-isleyir', 'steps'], ['#haqqimizda', 'why'], ['#paketler', 'plans'], ['#suallar', 'faq']] as const
 const YEAR = new Date().getFullYear()
 const auth = (mode: 'login' | 'register') => `/?auth=${mode}`
 const subjects = ['programming', 'networks', 'databases', 'security', 'os'] as const
@@ -190,6 +191,16 @@ export function LandingPage() {
               <p>{t('landing.about.p1')}</p>
               <p>{t('landing.about.p2')}</p>
             </div>
+          </div>
+        </section>
+
+        <section id="paketler" className="lp-section" aria-labelledby="plans-title">
+          <div className="lp-wrap">
+            <div className="lp-section-head" data-reveal>
+              <h2 id="plans-title" className="lp-h2">{t('landing.plans.title')}</h2>
+              <p className="lp-muted text-[16px] leading-7">{t('landing.plans.lead')}</p>
+            </div>
+            <LandingPlans register={auth('register')} />
           </div>
         </section>
 

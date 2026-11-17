@@ -20,5 +20,6 @@ public sealed class UpdateUsageRequest
     [Range(0, 100000)] public int? MonthlyBattles { get; init; }
     [Range(0, 100000)] public int? MonthlyAiRequests { get; init; }
     [Range(0, 100000)] public int? MonthlyDimTests { get; init; }
+    [Range(0, 100000)] public int? MonthlyGuides { get; init; }
     public bool Unlimited { get; init; }
 }

@@ -28,12 +28,14 @@ public static class BillingEndpoints
         group.MapGet("/history", History);
         group.MapPost("/requests", Create).RequireRateLimiting(RequestRateLimit).Validate<CreatePaymentRequest>();
         group.MapDelete("/requests/{id:guid}", Cancel);
+        // Deliberately public: the landing page shows the packages to signed-out visitors.
+        api.MapGet("/billing/plans", PublicPlans);
         api.MapBillingAdminEndpoints();
     }
 
     internal static readonly Expression<Func<Plan, PlanDto>> ToPlanDto = p => new PlanDto(
         p.Id, p.Name, p.Description, p.Price, p.DurationDays, p.IsFree, p.IsActive, p.IsFeatured, p.SortOrder,
-        p.MonthlyUploads, p.MonthlyExams, p.MonthlyBattles, p.MonthlyDimTests);
+        p.MonthlyUploads, p.MonthlyExams, p.MonthlyBattles, p.MonthlyDimTests, p.MonthlyGuides);
 
     internal static PaymentRequestDto ToPaymentDto(PaymentRequest r, Plan plan, BillingSettings settings)
     {
@@ -70,6 +72,16 @@ public static class BillingEndpoints
         return TypedResults.Ok(new BillingDto(settings.Enabled, current, plans, BillingRules.WhatsAppLink(settings.WhatsAppNumber, null),
             BillingRules.InstagramLink(settings.InstagramUsername), settings.PaymentInstructions,
             pending is null ? null : ToPaymentDto(pending, pending.Plan, settings)));
+    }
+
+    /// <summary>Packages on sale (paid first by sort order, plus Free); empty while sales are switched off.</summary>
+    private static async Task<IResult> PublicPlans(AppDbContext db, CancellationToken ct)
+    {
+        var settings = await SettingsAsync(db, ct);
+        if (!settings.Enabled) return TypedResults.Ok(Array.Empty<PlanDto>());
+        var plans = await db.Plans.AsNoTracking().Where(p => p.IsActive || p.IsFree).OrderBy(p => p.SortOrder).ThenBy(p => p.Price)
+            .Select(ToPlanDto).ToListAsync(ct);
+        return TypedResults.Ok(plans);
     }
 
     private static async Task<IResult> History(ClaimsPrincipal user, AppDbContext db, CancellationToken ct) =>

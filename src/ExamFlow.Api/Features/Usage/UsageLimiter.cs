@@ -30,10 +30,10 @@ public sealed class UsageLimiter(AppDbContext db, IOptions<UsageOptions> options
         var active = await db.Subscriptions.AsNoTracking()
             .Where(s => userIds.Contains(s.UserId) && s.CancelledAt == null && s.StartsAt <= now && s.EndsAt > now)
             .OrderBy(s => s.StartsAt)
-            .Select(s => new { s.UserId, Quota = new PlanQuota(s.Plan.MonthlyUploads, s.Plan.MonthlyExams, s.Plan.MonthlyBattles, s.Plan.MonthlyDimTests, null) })
+            .Select(s => new { s.UserId, Quota = new PlanQuota(s.Plan.MonthlyUploads, s.Plan.MonthlyExams, s.Plan.MonthlyBattles, s.Plan.MonthlyDimTests, s.Plan.MonthlyGuides, null) })
             .ToListAsync(ct);
         var free = await db.Plans.AsNoTracking().Where(p => p.IsFree)
-            .Select(p => new PlanQuota(p.MonthlyUploads, p.MonthlyExams, p.MonthlyBattles, p.MonthlyDimTests, null)).FirstOrDefaultAsync(ct);
+            .Select(p => new PlanQuota(p.MonthlyUploads, p.MonthlyExams, p.MonthlyBattles, p.MonthlyDimTests, p.MonthlyGuides, null)).FirstOrDefaultAsync(ct);
         var fallback = free is null ? PlanQuota.From(options.Value) : free with { AiRequests = ai };
         var result = userIds.Distinct().ToDictionary(id => id, _ => fallback);
         foreach (var row in active) result[row.UserId] = row.Quota with { AiRequests = ai };

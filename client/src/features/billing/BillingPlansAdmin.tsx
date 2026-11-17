@@ -49,7 +49,7 @@ function PlanEditor({ plan, activeUsers, nextOrder, onDone }: { plan: Plan | nul
     const input: PlanInput = {
       name: draft.name.trim(), description: draft.description?.trim() || null, price: isFree ? 0 : Number(draft.price), durationDays: Number(draft.durationDays),
       isActive: isFree || draft.isActive, isFeatured: draft.isFeatured, sortOrder: Number(draft.sortOrder) || 0,
-      monthlyUploads: null, monthlyExams: null, monthlyBattles: null, monthlyDimTests: null,
+      monthlyUploads: null, monthlyExams: null, monthlyBattles: null, monthlyDimTests: null, monthlyGuides: null,
     }
     for (const key of limitKeys) input[key] = draft.limits[key].unlimited ? null : Number(draft.limits[key].value) || 0
     save.mutate({ id: plan?.id ?? null, plan: input }, { onSuccess: () => { setSaved(true); onDone?.() } })

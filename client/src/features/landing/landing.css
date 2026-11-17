@@ -228,6 +228,25 @@
 .lp-faq details p { padding: 0 0 20px; max-width: 62ch; color: var(--lp-muted); line-height: 1.65; }
 @media (min-width: 1024px) { .lp-faq-wrap { display: grid; grid-template-columns: 1fr 1.6fr; gap: 72px; } }
 
+/* Packages */
+.lp-plans { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.lp-plan { position: relative; height: 100%; display: flex; flex-direction: column; padding: 24px; overflow: hidden; }
+.lp-plan[data-featured] { border-color: var(--lp-accent); box-shadow: 0 0 0 1px var(--lp-accent), var(--lp-shadow); }
+.lp-plan-badge { position: absolute; top: 0; right: 0; padding: 4px 10px; border-bottom-left-radius: 10px; font-size: 11.5px; font-weight: 600; background: var(--lp-accent); color: var(--lp-accent-ink); }
+.lp-plan-name { font-size: 19px; font-weight: 700; letter-spacing: -.02em; padding-right: 72px; }
+.lp-plan-price { margin-top: 16px; display: flex; align-items: baseline; gap: 4px; white-space: nowrap; }
+.lp-plan-price b { font-size: 30px; font-weight: 700; letter-spacing: -.03em; }
+.lp-plan-price span { font-size: 14px; font-weight: 500; }
+.lp-plan-limits-label { margin-top: 18px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--lp-faint); }
+.lp-plan-features { margin-top: 10px; flex: 1; display: grid; align-content: start; gap: 9px; font-size: 14px; }
+.lp-plan-features li { display: flex; align-items: flex-start; gap: 8px; }
+.lp-plan-features li svg { margin-top: 2px; color: var(--lp-accent); }
+.lp-plan-features li[data-off] { color: var(--lp-faint); }
+.lp-plan-features li[data-off] svg { color: var(--lp-faint); }
+.lp-plan-cta { margin-top: 22px; width: 100%; }
+.lp-plan-skeleton { height: 320px; background: var(--lp-sunken); animation: lp-pulse 1.4s ease-in-out infinite; }
+@keyframes lp-pulse { 50% { opacity: .55; } }
+
 /* Closing band + footer */
 /* Closing call to action: a quiet surface card that follows the theme instead of an inverted slab. */
 .lp-close-section { padding-bottom: 96px; }

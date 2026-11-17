@@ -20,6 +20,7 @@ public sealed class Plan
     public int? MonthlyExams { get; set; }
     public int? MonthlyBattles { get; set; }
     public int? MonthlyDimTests { get; set; }
+    public int? MonthlyGuides { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public Guid? UpdatedByUserId { get; set; }
 }

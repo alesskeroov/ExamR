@@ -87,14 +87,16 @@
       "Exam": "imtahan",
       "Battle": "battle",
       "AiRequest": "AI sorğusu",
-      "DimTest": "DİM sınağı"
+      "DimTest": "DİM sınağı",
+      "Guide": "Öyrənmə bələdçisi"
     },
     "strip": {
       "Upload": "Sənəd",
       "Exam": "İmtahan",
       "Battle": "Battle",
       "AiRequest": "AI sorğusu",
-      "DimTest": "DİM sınağı"
+      "DimTest": "DİM sınağı",
+      "Guide": "Öyrənmə bələdçisi"
     },
     "loading": "Limit yüklənir",
     "loadFailed": "Limit yüklənmədi",
@@ -229,13 +231,15 @@
       "modes": "Rejimlər",
       "steps": "Addımlar",
       "why": "Niyə ExamR",
-      "faq": "Suallar"
+      "faq": "Suallar",
+      "plans": "Paketlər"
     },
     "navHint": {
       "modes": "İmtahan, öyrənmə, Battle və statistika",
       "steps": "Fayldan ilk nəticəyə qədər",
       "why": "Layihə niyə yaradılıb",
-      "faq": "Tez-tez verilən suallar"
+      "faq": "Tez-tez verilən suallar",
+      "plans": "Qiymətlər və aylıq limitlər"
     },
     "login": "Daxil ol",
     "register": "Qeydiyyat",
@@ -414,6 +418,14 @@
           ]
         }
       ]
+    },
+    "plans": {
+      "title": "Paketlər",
+      "lead": "Pulsuz başlayın, daha çox imtahan və yükləmə lazım olanda paket seçin. Limitlər hər ay yenilənir.",
+      "choose": "Paketi seç",
+      "startFree": "Pulsuz başla",
+      "note": "Paketi qeydiyyatdan sonra «Paketlər» səhifəsindən alırsınız: ödəniş WhatsApp və ya Instagram vasitəsilə təsdiqlənir.",
+      "unavailable": "Paket məlumatı hazırda göstərilmir. Pulsuz hesabla başlaya bilərsiniz —"
     }
   },
   "auth": {
@@ -1421,7 +1433,8 @@
       "monthlyUploads": "PDF yükləmə",
       "monthlyExams": "İmtahan",
       "monthlyBattles": "Battle yaratma",
-      "monthlyDimTests": "DİM sınağı"
+      "monthlyDimTests": "DİM sınağı",
+      "monthlyGuides": "Öyrənmə bələdçisi"
     },
     "choose": "Seç",
     "checkoutTitle": "«{{name}}» paketi",
@@ -1485,6 +1498,11 @@
         "count": "{{count}} DİM sınağı",
         "unlimited": "Limitsiz DİM sınağı",
         "none": "DİM sınağı yoxdur"
+      },
+      "monthlyGuides": {
+        "count": "{{count}} öyrənmə bələdçisi",
+        "unlimited": "Limitsiz öyrənmə bələdçisi",
+        "none": "Öyrənmə bələdçisi yoxdur"
       }
     }
   },
@@ -2160,6 +2178,11 @@
       "createCourse": "Fənn yarat: mühazirələri və sual bankını birləşdir, imtahana hazırlıq planı al.",
       "noDocs": "Hələ sənəd yoxdur.",
       "removeAria": "\"{{name}}\" siyahıdan çıxar"
+    },
+    "locked": {
+      "title": "Öyrənmə bələdçisi paketinizə daxil deyil",
+      "text": "Öyrənmə bələdçisi (kartlar, mövzular, kurslar) İmtahan həftəsi, Pro və Premium paketlərində var. Paket seçərək ondan istifadə edə bilərsiniz.",
+      "cta": "Paketlərə bax"
     }
   },
   "courses": {

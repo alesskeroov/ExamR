@@ -88,14 +88,16 @@
       "Exam": "exam",
       "Battle": "battle",
       "AiRequest": "AI request",
-      "DimTest": "DİM test"
+      "DimTest": "DİM test",
+      "Guide": "Study guide"
     },
     "strip": {
       "Upload": "Documents",
       "Exam": "Exams",
       "Battle": "Battles",
       "AiRequest": "AI requests",
-      "DimTest": "DİM tests"
+      "DimTest": "DİM tests",
+      "Guide": "Study guide"
     },
     "loading": "Loading limit",
     "loadFailed": "Couldn't load the limit",
@@ -230,13 +232,15 @@
       "modes": "Modes",
       "steps": "Steps",
       "why": "Why ExamR",
-      "faq": "FAQ"
+      "faq": "FAQ",
+      "plans": "Packages"
     },
     "navHint": {
       "modes": "Exams, learning, Battle and statistics",
       "steps": "From file to first result",
       "why": "Why the project exists",
-      "faq": "Frequently asked questions"
+      "faq": "Frequently asked questions",
+      "plans": "Prices and monthly limits"
     },
     "login": "Sign in",
     "register": "Sign up",
@@ -416,6 +420,14 @@
           ]
         }
       ]
+    },
+    "plans": {
+      "title": "Packages",
+      "lead": "Start for free and pick a package when you need more exams and uploads. Limits reset every month.",
+      "choose": "Choose package",
+      "startFree": "Start for free",
+      "note": "You buy a package on the “Packages” page after signing up; payment is confirmed via WhatsApp or Instagram.",
+      "unavailable": "Package details are not available right now. You can start with a free account —"
     }
   },
   "auth": {
@@ -1437,7 +1449,8 @@
       "monthlyUploads": "PDF uploads",
       "monthlyExams": "Exams",
       "monthlyBattles": "Battles created",
-      "monthlyDimTests": "DİM tests"
+      "monthlyDimTests": "DİM tests",
+      "monthlyGuides": "Study guide"
     },
     "choose": "Choose",
     "checkoutTitle": "«{{name}}» package",
@@ -1506,6 +1519,12 @@
         "count_other": "{{count}} DİM tests",
         "unlimited": "Unlimited DİM tests",
         "none": "No DİM tests"
+      },
+      "monthlyGuides": {
+        "count_one": "{{count}} study guide",
+        "count_other": "{{count}} study guides",
+        "unlimited": "Unlimited study guides",
+        "none": "No study guide"
       }
     }
   },
@@ -2194,6 +2213,11 @@
       "createCourse": "Create a subject: combine lectures and a question bank and get an exam study plan.",
       "noDocs": "No documents yet.",
       "removeAria": "Remove \"{{name}}\" from the list"
+    },
+    "locked": {
+      "title": "The study guide is not in your package",
+      "text": "The study guide (cards, topics, courses) comes with the Exam week, Pro and Premium packages. Choose a package to use it.",
+      "cta": "See packages"
     }
   },
   "courses": {

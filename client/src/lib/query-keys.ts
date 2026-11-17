@@ -11,6 +11,7 @@ export const queryKeys = {
     all: ['billing'] as const,
     mine: ['billing', 'mine'] as const,
     history: ['billing', 'history'] as const,
+    public: ['billing', 'public'] as const,
     adminUsers: (q: string, planId: string, status: string, page: number) => ['billing', 'admin', 'users', q, planId, status, page] as const,
     adminUser: (id: string) => ['billing', 'admin', 'user', id] as const,
     adminRequests: (status: string, q: string, page: number) => ['billing', 'admin', 'requests', status, q, page] as const,

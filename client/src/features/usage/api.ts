@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../lib/api-client'
 import { queryKeys } from '../../lib/query-keys'
 
-export type UsageKind = 'Upload' | 'Exam' | 'Battle' | 'AiRequest' | 'DimTest'
+export type UsageKind = 'Upload' | 'Exam' | 'Battle' | 'AiRequest' | 'DimTest' | 'Guide'
 export interface UsageItem { kind: UsageKind; used: number; limit: number | null }
 export interface Usage { resetsAt: string; unlimited: boolean; items: UsageItem[] }
 
