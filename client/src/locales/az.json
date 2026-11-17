@@ -1915,7 +1915,15 @@
     "autoClose": "Bu pəncərə {{count}} saniyəyə avtomatik bağlanacaq",
     "failed": "Göndərmək mümkün olmadı",
     "sending": "Göndərilir...",
-    "emailLead": "Və ya email yazın:"
+    "emailLead": "Və ya email yazın:",
+    "widgetTitle": "Rəyiniz bizə önəmlidir",
+    "open": "Rəy bildir",
+    "kindProblem": "Problem",
+    "kindIdea": "Təklif",
+    "placeholderProblem": "Nə baş verdi? Qısaca yazın...",
+    "placeholderIdea": "Fikrinizi qısaca yazın...",
+    "pageInfo": "Səhifə məlumatı avtomatik əlavə olunur",
+    "emailLink": "Email ilə yaz"
   },
   "tutor": {
     "myCards": "Mənim kartlarım",

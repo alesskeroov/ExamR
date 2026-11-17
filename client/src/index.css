@@ -164,8 +164,8 @@ body { background: var(--app-background); overflow-wrap: anywhere; }
 @media (prefers-reduced-motion: reduce) { ::view-transition-old(root), ::view-transition-new(root) { animation: none; } }
 
 /* Notched phones (viewport-fit=cover): keep the last card and the drawer footer clear of the home indicator. */
-.app-safe-bottom { padding-bottom: calc(1.5rem + env(safe-area-inset-bottom)); }
-@media (min-width: 1024px) { .app-safe-bottom { padding-bottom: 2rem; } }
+.app-safe-bottom { padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
+@media (min-width: 1024px) { .app-safe-bottom { padding-bottom: 6rem; } }
 .app-sidebar-footer { padding: 6px 6px max(6px, env(safe-area-inset-bottom)); }
 
 /* ---- "Desk" system: ledger rows instead of cards, mono labels and numerals, colour only where it means something. ---- */

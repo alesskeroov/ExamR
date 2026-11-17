@@ -1946,7 +1946,15 @@
     "autoClose_other": "This window will close automatically in {{count}} seconds",
     "failed": "Couldn't send",
     "sending": "Sending...",
-    "emailLead": "Or send an email:"
+    "emailLead": "Or send an email:",
+    "widgetTitle": "Your feedback matters",
+    "open": "Send feedback",
+    "kindProblem": "Problem",
+    "kindIdea": "Idea",
+    "placeholderProblem": "What happened? Keep it short...",
+    "placeholderIdea": "Share your idea in a few words...",
+    "pageInfo": "Page details are attached automatically",
+    "emailLink": "Write an email"
   },
   "tutor": {
     "myCards": "My cards",

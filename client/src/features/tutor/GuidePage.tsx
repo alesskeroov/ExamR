@@ -8,7 +8,7 @@ import { CourseDialog } from '../courses/CourseDialog'
 import { CoursePanel } from '../courses/CoursePanel'
 import { cn } from '../../lib/utils'
 import { useChat, useChats, useCreateChat, useDeck, useDeleteChat, useReviewToday, useTutorDocuments, type ChatSession, type ChatSource, type DueDocument, type LearnScope, type ReviewToday, type SearchHit, type StudyCard } from './api'
-import { FeedbackDialog } from './FeedbackDialog'
+import { openFeedback } from '../support/feedback-events'
 import { GuideCardList } from './GuideCardList'
 import { GuideLearn } from './GuideLearn'
 import { GuideSearch } from './GuideSearch'
@@ -65,7 +65,6 @@ export function GuidePage() {
   const [sidebarOpen, setSidebarOpen] = useState(() => readStored(sidebarKey) !== 'closed')
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [preview, setPreview] = useState<{ open: boolean; source: ChatSource | null }>({ open: false, source: null })
-  const [feedback, setFeedback] = useState(false)
   const workspace = useRef<HTMLDivElement>(null)
 
   const session = chat.data?.session
@@ -189,7 +188,7 @@ export function GuidePage() {
           ) : (
             <p className="flex-1 truncate px-1 text-sm font-semibold">{chatId ? '' : courseId ? t('tutor.guide.coursePlan') : t('nav.items.tutor')}</p>
           )}
-          <button type="button" onClick={() => setFeedback(true)} aria-label={t('feedback.title')}
+          <button type="button" onClick={() => openFeedback({ documentName: session?.documentName })} aria-label={t('feedback.title')}
             className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100">
             <MessageSquareText className="size-[18px]" aria-hidden /><span className="hidden md:inline">{t('feedback.title')}</span>
           </button>
@@ -205,7 +204,7 @@ export function GuidePage() {
           <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 font-semibold">{t('nav.badge.demo')}</span>
           <span className="min-w-0">
             {t('tutor.guide.demoNote')}{' '}
-            <button type="button" onClick={() => setFeedback(true)} className="font-semibold underline underline-offset-2">{t('tutor.guide.writeUs')}</button>
+            <button type="button" onClick={() => openFeedback({ documentName: session?.documentName })} className="font-semibold underline underline-offset-2">{t('tutor.guide.writeUs')}</button>
           </span>
         </p>
 
@@ -248,7 +247,6 @@ export function GuidePage() {
             onClose={() => setPreview(p => ({ ...p, open: false }))} />
         </aside>
       )}
-      {feedback && <FeedbackDialog documentName={session?.documentName} onClose={() => setFeedback(false)} />}
       {newCourse && <CourseDialog onClose={() => setNewCourse(false)} onSaved={created => { setParams({ course: created.id }); setDrawerOpen(false) }} />}
     </div>
   )

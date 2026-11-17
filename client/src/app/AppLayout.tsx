@@ -8,7 +8,7 @@ import { cn } from '../lib/utils'
 import { Nameplate } from '../features/nameplates/Nameplate'
 import { useNameplate } from '../features/nameplates/api'
 import { ThemeToggle } from '../components/common/ThemeToggle'
-import { HelpMenu } from '../features/support/HelpMenu'
+import { FeedbackWidget } from '../features/support/FeedbackWidget'
 import { useTranslation } from 'react-i18next'
 import { LanguageSwitcher } from '../components/common/LanguageSwitcher'
 
@@ -56,10 +56,9 @@ export function AppLayout() {
       {/* Mobile top bar */}
       <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4 lg:hidden">
         <Brand />
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex min-w-0 items-center gap-1.5 min-[380px]:gap-2">
           <LanguageSwitcher />
           <ThemeToggle />
-          <HelpMenu />
           <NotificationBell />
           <button
             type="button"
@@ -111,12 +110,13 @@ export function AppLayout() {
       <div className="min-w-0 flex-1">
         <header className="app-toolbar hidden h-[72px] items-center justify-between border-b border-slate-200 px-8 lg:flex">
           <Breadcrumb />
-          <div className="flex items-center gap-3"><LanguageSwitcher /><ThemeToggle /><HelpMenu /><NotificationBell /></div>
+          <div className="flex items-center gap-3"><LanguageSwitcher /><ThemeToggle /><NotificationBell /></div>
         </header>
         <main className="app-content app-safe-bottom mx-auto max-w-[1200px] min-w-0 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
           <Outlet />
         </main>
       </div>
+      <FeedbackWidget />
     </div>
   )
 }
@@ -150,8 +150,8 @@ function Brand() {
         event.preventDefault()
         window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
       }}
-      className="flex items-center gap-2.5 rounded-lg text-[17px] font-bold tracking-[-0.03em] transition-opacity duration-150 hover:opacity-80">
-      <span className="app-brand-mark grid size-[30px] place-items-center rounded-lg" aria-hidden><svg viewBox="0 0 16 16" className="size-4"><path d="M4 4h8M4 8h5.5M4 12h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></span>
+      className="flex shrink-0 items-center gap-2.5 rounded-lg text-[17px] font-bold tracking-[-0.03em] whitespace-nowrap [overflow-wrap:normal] transition-opacity duration-150 hover:opacity-80">
+      <span className="app-brand-mark grid size-[30px] shrink-0 place-items-center rounded-lg" aria-hidden><svg viewBox="0 0 16 16" className="size-4"><path d="M4 4h8M4 8h5.5M4 12h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></span>
       ExamR
     </Link>
   )
