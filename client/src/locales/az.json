@@ -2044,7 +2044,21 @@
       "oldPpt": "Köhnə .ppt formatı dəstəklənmir. Faylı PowerPoint-də .pptx kimi saxlayıb yenidən yükləyin.",
       "types": "Öyrənmə bələdçisi yalnız PDF, Word (.docx) və PowerPoint (.pptx) faylları qəbul edir.",
       "title": "Hansı sənəd üzərində işləyək?",
-      "text": "Sənəddəki aydın sual–cavab əlaqələrindən kartlar hazırlanır. Digər mətnlər konspekt kimi oxunur.",
+      "text": "Bələdçi sənədini yaddaş kartlarına çevirir və onları vaxtında təkrarlamağa kömək edir.",
+      "steps": {
+        "upload": {
+          "title": "Sənədi yüklə",
+          "text": "PDF, Word və ya PowerPoint faylı."
+        },
+        "cards": {
+          "title": "Kartlar hazırlanır",
+          "text": "Sənəddəki suallar, anlayışlar və testlər kart olur, qalan mətn konspekt kimi oxunur."
+        },
+        "review": {
+          "title": "Hər gün təkrarla",
+          "text": "Cavabı yadına sal, kartı çevir, özünü qiymətləndir. Bilmədiyin kart tez qayıdır, bildiyin kart günlər sonra."
+        }
+      },
       "search": "Sənəd axtar",
       "searchPlaceholder": "Sənəd axtar…",
       "uploading": "Yüklənir {{n}}%",

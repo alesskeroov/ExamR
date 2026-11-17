@@ -1,6 +1,6 @@
 import { UsageMeter } from '../../components/common/UsageMeter'
 import { useUsageLimit } from '../usage/api'
-import { CheckCircle2, FileText, Loader2, Search, Trash2, TriangleAlert, Upload } from 'lucide-react'
+import { CheckCircle2, FileText, Layers, Loader2, RotateCcw, Search, Trash2, TriangleAlert, Upload } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
 import { Alert } from '../../components/common/Alert'
 import { cn } from '../../lib/utils'
@@ -18,6 +18,13 @@ interface Props {
 }
 
 // PDF, Word (.docx) and PowerPoint (.pptx); the server checks the type and the content again.
+// How the guide works, shown once above the upload so a first-time user knows what to expect.
+const steps = [
+  { key: 'upload', icon: Upload },
+  { key: 'cards', icon: Layers },
+  { key: 'review', icon: RotateCcw },
+] as const
+
 const accept = '.pdf,.docx,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation'
 
 /** Start of a new chat: pick (or upload) the one document this conversation will be about. */
@@ -63,6 +70,20 @@ export function TutorDocumentPicker({ onStart, starting, startError, resumable =
     <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:py-12">
       <h1 className="text-2xl font-bold tracking-tight sm:text-[28px]">{t('tutor.picker.title')}</h1>
       <p className="mt-2 text-slate-600">{t('tutor.picker.text')}</p>
+      {/* Container query: the guide's side panels can leave this column narrow even on a wide screen. */}
+      <div className="@container mt-4">
+        <ol className="grid gap-2 @lg:grid-cols-3">
+          {steps.map(({ key, icon: Icon }, i) => (
+            <li key={key} className="tutor-border flex gap-3 rounded-xl border bg-white p-3 @lg:flex-col @lg:gap-2">
+              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-indigo-50 text-indigo-700" aria-hidden><Icon className="size-4" /></span>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">{i + 1}. {t(`tutor.picker.steps.${key}.title`)}</p>
+                <p className="mt-0.5 text-xs text-slate-600">{t(`tutor.picker.steps.${key}.text`)}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </div>
 
       <UsageMeter kind="Upload" />
       <div className="mt-6 flex flex-col gap-2 sm:flex-row">

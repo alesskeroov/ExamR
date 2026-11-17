@@ -2078,7 +2078,21 @@
       "oldPpt": "The old .ppt format isn't supported. Save the file as .pptx in PowerPoint and upload it again.",
       "types": "The study guide only accepts PDF, Word (.docx) and PowerPoint (.pptx) files.",
       "title": "Which document shall we work on?",
-      "text": "Cards are made from clear question–answer pairs in the document. Other text is read as notes.",
+      "text": "The guide turns your document into flashcards and helps you review them at the right time.",
+      "steps": {
+        "upload": {
+          "title": "Upload a document",
+          "text": "A PDF, Word or PowerPoint file."
+        },
+        "cards": {
+          "title": "Cards are made",
+          "text": "Questions, terms and tests in the document become cards; the rest reads as notes."
+        },
+        "review": {
+          "title": "Review every day",
+          "text": "Recall the answer, flip the card, rate yourself. Cards you missed come back soon, ones you knew come back days later."
+        }
+      },
       "search": "Search documents",
       "searchPlaceholder": "Search documents…",
       "uploading": "Uploading {{n}}%",
