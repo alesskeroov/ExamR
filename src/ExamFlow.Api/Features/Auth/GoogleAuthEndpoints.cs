@@ -44,7 +44,7 @@ public static class GoogleAuthEndpoints
         return TypedResults.Challenge(properties, [Scheme]);
     }
 
-    private static async Task<IResult> Complete(HttpContext context, UserManager<AppUser> users, TokenService tokens, EmailQueue emails, IConfiguration configuration)
+    private static async Task<IResult> Complete(HttpContext context, UserManager<AppUser> users, EmailQueue emails, IConfiguration configuration)
     {
         var external = await context.AuthenticateAsync(IdentityConstants.ExternalScheme);
         await context.SignOutAsync(IdentityConstants.ExternalScheme);
@@ -93,7 +93,7 @@ public static class GoogleAuthEndpoints
 
         if (owner.IsDeleted || await users.IsLockedOutAsync(owner)) return Fail("locked");
         var remember = external.Properties?.Items.TryGetValue(Remember, out var r) == true && r == "1";
-        AuthCookie.Append(context.Response, tokens.Create(owner, await users.GetRolesAsync(owner), remember), remember);
+        await UserSessions.SignInAsync(context, owner, await users.GetRolesAsync(owner), remember);
         return TypedResults.Redirect("/");
     }
 }

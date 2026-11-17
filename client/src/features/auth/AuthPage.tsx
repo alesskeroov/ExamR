@@ -160,6 +160,8 @@ function SignInForm({ mode, onModeChange }: { mode: 'login' | 'register'; onMode
       </div>
 
       {new URLSearchParams(window.location.search).get('account') === 'password-changed' && <p role="status" className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{t('auth.passwordChanged')}</p>}
+      {new URLSearchParams(window.location.search).get('account') === 'session-limit' && <p role="status" className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{t('auth.sessionLimit')}</p>}
+      {new URLSearchParams(window.location.search).get('account') === 'session-ended' && <p role="status" className="mb-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">{t('auth.sessionEnded')}</p>}
       {new URLSearchParams(window.location.search).get('account') === 'deleted' && <p role="status" className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{t('auth.accountDeleted')}</p>}
       <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
         {mode === 'register' && (

@@ -3,6 +3,7 @@ using System.Net;
 using System.Security.Claims;
 using System.Text;
 using ExamFlow.Api.Common;
+using ExamFlow.Api.Infrastructure.Data;
 using ExamFlow.Api.Infrastructure.Email;
 using ExamFlow.Api.Infrastructure.Security;
 using Microsoft.AspNetCore.Identity;
@@ -50,7 +51,7 @@ public static class AuthEndpoints
     }
 
     private static async Task<IResult> ConfirmEmail(ConfirmEmailRequest request, UserManager<AppUser> users, EmailQueue email, IConfiguration configuration,
-        TokenService tokens, HttpResponse response)
+        HttpResponse response)
     {
         var user = await users.FindByIdAsync(request.UserId.ToString());
         if (user is null || user.IsDeleted) return InvalidVerifyLink();
@@ -67,7 +68,7 @@ public static class AuthEndpoints
         if (FrontendLink(configuration, "/") is { } appUrl) email.Enqueue(EmailTemplates.Welcome(user.Email!, user.DisplayName, appUrl));
         // The single-use link proves ownership of the address, so the first confirmation also signs the user in
         // (browser-session cookie, as without Remember Me).
-        var session = await IssueToken(user, users, tokens, configuration, response);
+        var session = await IssueToken(user, users, configuration, response);
         return TypedResults.Ok(new ConfirmEmailResponse("Email ünvanınız təsdiqləndi.", session.User));
     }
 
@@ -116,7 +117,7 @@ public static class AuthEndpoints
     }
 
     private static async Task<IResult> Login(
-        LoginRequest request, UserManager<AppUser> users, SignInManager<AppUser> signIn, TokenService tokens, IConfiguration configuration, EmailQueue email, HttpResponse response)
+        LoginRequest request, UserManager<AppUser> users, SignInManager<AppUser> signIn, IConfiguration configuration, EmailQueue email, HttpResponse response)
     {
         var user = await users.FindByEmailAsync(request.Email);
         if (user is null || user.IsDeleted)
@@ -138,7 +139,7 @@ public static class AuthEndpoints
             return TypedResults.Problem("E-mail ünvanınız hələ təsdiqlənməyib. Gələnlər qutusundakı linkə keçin və ya yeni link istəyin.",
                 statusCode: StatusCodes.Status403Forbidden, extensions: new Dictionary<string, object?> { ["code"] = "email_not_confirmed" });
         await ConfiguredAdmins.SendConfirmationAsync(users, configuration, email, user);
-        return TypedResults.Ok(await IssueToken(user, users, tokens, configuration, response, request.RememberMe));
+        return TypedResults.Ok(await IssueToken(user, users, configuration, response, request.RememberMe));
     }
 
     private static async Task<IResult> ConfirmAdmin(Guid userId, string token, UserManager<AppUser> users, IConfiguration configuration)
@@ -154,13 +155,16 @@ public static class AuthEndpoints
         return TypedResults.Content("""<html lang="az"><meta charset="utf-8"><p>Email təsdiqləndi. Admin rolunu aktivləşdirmək üçün hesabdan çıxıb yenidən daxil olun.</p><a href="/">ExamR-ə qayıt</a></html>""", "text/html; charset=utf-8");
     }
 
-    /// <summary>JWTs cannot be deleted, so logout rotates the security stamp: every token issued before is rejected.</summary>
-    private static async Task<IResult> Logout(ClaimsPrincipal principal, UserManager<AppUser> users, HttpResponse response)
+    /// <summary>Ends only this browser's session; the account stays signed in on its other devices.</summary>
+    private static async Task<IResult> Logout(ClaimsPrincipal principal, AppDbContext db, TimeProvider clock, HttpResponse response, CancellationToken ct)
     {
         AuthCookie.Delete(response);
-        if (await users.GetUserAsync(principal) is { } user)
+        if (UserSessions.SessionIdOf(principal) is var (sessionId, _))
         {
-            await users.UpdateSecurityStampAsync(user);
+            var userId = principal.GetUserId();
+            var now = clock.GetUtcNow();
+            await db.UserSessions.Where(s => s.Id == sessionId && s.UserId == userId && s.RevokedAt == null)
+                .ExecuteUpdateAsync(set => set.SetProperty(s => s.RevokedAt, now).SetProperty(s => s.RevokedReason, SessionRevokeReasons.Logout), ct);
         }
 
         return TypedResults.NoContent();
@@ -248,13 +252,12 @@ public static class AuthEndpoints
         return TypedResults.NoContent();
     }
 
-    private static async Task<AuthResponse> IssueToken(AppUser user, UserManager<AppUser> users, TokenService tokens, IConfiguration configuration, HttpResponse response, bool rememberMe = false)
+    private static async Task<AuthResponse> IssueToken(AppUser user, UserManager<AppUser> users, IConfiguration configuration, HttpResponse response, bool rememberMe = false)
     {
         await ConfiguredAdmins.EnsureAsync(users, configuration, user);
         var roles = await users.GetRolesAsync(user);
-        var token = tokens.Create(user, roles, rememberMe);
         // The JWT travels only in the HttpOnly cookie; the body carries no token for scripts to read.
-        AuthCookie.Append(response, token, rememberMe);
+        var token = await UserSessions.SignInAsync(response.HttpContext, user, roles, rememberMe);
         return new AuthResponse(token.ExpiresAt, await ToUser(user, users));
     }
 

@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace ExamFlow.Api.Features.Auth;
 
@@ -21,6 +22,46 @@ public static class AccountEndpoints
         group.MapPost("/password", ChangePassword).Validate<ChangePasswordRequest>().RequireRateLimiting(AuthenticationSetup.PasswordResetRateLimit);
         group.MapPost("/deletion-link", DeletionLink).RequireRateLimiting(AuthenticationSetup.PasswordResetRateLimit);
         group.MapDelete("/", DeleteAccount).Validate<DeleteAccountRequest>().RequireRateLimiting(AuthenticationSetup.PasswordResetRateLimit);
+        group.MapGet("/sessions", ListSessions);
+        group.MapDelete("/sessions/{id:guid}", EndSession);
+        group.MapPost("/sessions/end-others", EndOtherSessions);
+    }
+
+    /// <summary>The account's signed-in devices, most recently used first.</summary>
+    private static async Task<IResult> ListSessions(ClaimsPrincipal principal, UserManager<AppUser> users, AppDbContext db,
+        IOptions<DeviceSessionOptions> options, TimeProvider clock, CancellationToken ct)
+    {
+        var user = await users.GetUserAsync(principal);
+        if (user is null) return TypedResults.Unauthorized();
+        var current = UserSessions.SessionIdOf(principal)?.Id;
+        var rows = await db.UserSessions.AsNoTracking().Active(user.Id, user.SecurityStamp ?? string.Empty, clock.GetUtcNow())
+            .OrderByDescending(s => s.LastSeenAt)
+            .Select(s => new { s.Id, s.UserAgent, s.CreatedAt, s.LastSeenAt })
+            .ToListAsync(ct);
+        var sessions = rows.Select(s => new SessionResponse(s.Id, UserSessions.DeviceLabel(s.UserAgent), s.CreatedAt, s.LastSeenAt, s.Id == current))
+            .OrderByDescending(s => s.Current).ToList();
+        return TypedResults.Ok(new SessionsResponse(options.Value.MaxActive, sessions));
+    }
+
+    private static async Task<IResult> EndSession(Guid id, ClaimsPrincipal principal, AppDbContext db, TimeProvider clock, HttpResponse response, CancellationToken ct)
+    {
+        var userId = principal.GetUserId();
+        var now = clock.GetUtcNow();
+        var ended = await db.UserSessions.Where(s => s.Id == id && s.UserId == userId && s.RevokedAt == null)
+            .ExecuteUpdateAsync(set => set.SetProperty(s => s.RevokedAt, now).SetProperty(s => s.RevokedReason, SessionRevokeReasons.User), ct);
+        if (ended == 0) return TypedResults.Problem("Sessiya tapılmadı.", statusCode: StatusCodes.Status404NotFound);
+        if (UserSessions.SessionIdOf(principal)?.Id == id) AuthCookie.Delete(response);
+        return TypedResults.NoContent();
+    }
+
+    private static async Task<IResult> EndOtherSessions(ClaimsPrincipal principal, AppDbContext db, TimeProvider clock, CancellationToken ct)
+    {
+        var userId = principal.GetUserId();
+        var current = UserSessions.SessionIdOf(principal)?.Id;
+        var now = clock.GetUtcNow();
+        await db.UserSessions.Where(s => s.UserId == userId && s.Id != current && s.RevokedAt == null)
+            .ExecuteUpdateAsync(set => set.SetProperty(s => s.RevokedAt, now).SetProperty(s => s.RevokedReason, SessionRevokeReasons.User), ct);
+        return TypedResults.NoContent();
     }
 
     private static async Task<IResult> ChangePassword(ChangePasswordRequest request, ClaimsPrincipal principal,

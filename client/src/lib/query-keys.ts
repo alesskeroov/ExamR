@@ -74,6 +74,7 @@ export const queryKeys = {
   },
   health: ['health'] as const,
   me: ['me'] as const,
+  sessions: ['account', 'sessions'] as const,
   social: {
     all: ['social'] as const,
     friends: (id: string) => ['social', id, 'friends'] as const,

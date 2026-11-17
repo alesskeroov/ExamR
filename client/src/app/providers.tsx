@@ -3,7 +3,7 @@ import { ConfirmProvider } from '../components/common/ConfirmProvider'
 import { ErrorBoundary } from '../components/common/ErrorBoundary'
 import { RouterProvider } from 'react-router'
 import { ApiError, wakeServer } from '../lib/api-client'
-import { clearToken } from '../lib/auth-token'
+import { clearToken, showSessionEnded } from '../lib/auth-token'
 import { pausePollingWhenIdle } from '../lib/idle-polling'
 import { queryKeys } from '../lib/query-keys'
 import { useTheme } from '../lib/use-theme'
@@ -14,6 +14,7 @@ function handleUnauthorized(error: unknown) {
   if (error instanceof ApiError && error.status === 401) {
     clearToken()
     queryClient.setQueryData(queryKeys.me, null)
+    showSessionEnded(error)
   }
 }
 

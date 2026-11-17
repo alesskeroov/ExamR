@@ -35,13 +35,14 @@ public class TokenServiceTests
     [Fact]
     public async Task Token_is_signed_and_carries_user_roles_and_security_stamp()
     {
-        var token = new TokenService(Microsoft.Extensions.Options.Options.Create(Options), TimeProvider.System).Create(User, ["User", "Admin"]);
+        var token = new TokenService(Microsoft.Extensions.Options.Options.Create(Options), TimeProvider.System).Create(User, ["User", "Admin"], Guid.NewGuid());
 
         var result = await new JsonWebTokenHandler().ValidateTokenAsync(token.Token, Validation(Options.Key()));
 
         Assert.True(result.IsValid, result.Exception?.Message);
         Assert.Equal(User.Id.ToString(), result.Claims[JwtClaims.UserId]);
         Assert.Equal("stamp-1", result.Claims[JwtClaims.SecurityStamp]);
+        Assert.True(Guid.TryParse(result.Claims[JwtClaims.SessionId] as string, out _));
         Assert.Equal(["User", "Admin"], result.ClaimsIdentity.FindAll(JwtClaims.Role).Select(c => c.Value));
     }
 
@@ -51,7 +52,7 @@ public class TokenServiceTests
         var now = DateTimeOffset.UtcNow;
         var clock = new FixedClock(now);
 
-        var token = new TokenService(Microsoft.Extensions.Options.Options.Create(Options), clock).Create(User, []);
+        var token = new TokenService(Microsoft.Extensions.Options.Options.Create(Options), clock).Create(User, [], Guid.NewGuid());
 
         Assert.Equal(now.AddMinutes(60), token.ExpiresAt);
         Assert.Equal(now.AddMinutes(60).ToUnixTimeSeconds(), new DateTimeOffset(new JsonWebToken(token.Token).ValidTo).ToUnixTimeSeconds());
@@ -60,7 +61,7 @@ public class TokenServiceTests
     [Fact]
     public async Task Token_signed_with_another_key_is_rejected()
     {
-        var token = new TokenService(Microsoft.Extensions.Options.Options.Create(Options), TimeProvider.System).Create(User, []);
+        var token = new TokenService(Microsoft.Extensions.Options.Options.Create(Options), TimeProvider.System).Create(User, [], Guid.NewGuid());
         var otherKey = new SymmetricSecurityKey(new byte[64]);
 
         var result = await new JsonWebTokenHandler().ValidateTokenAsync(token.Token, Validation(otherKey));

@@ -526,7 +526,9 @@
       "rules": "At least 8 characters, upper/lowercase letters and a number.",
       "requestNew": "Request a new link",
       "submit": "Update password"
-    }
+    },
+    "sessionLimit": "Your account was signed in on another device, so this device was signed out. An account can be open on only 2 devices at a time.",
+    "sessionEnded": "This device was signed out. Sign in again to continue."
   },
   "account": {
     "mismatch": "The new passwords don't match.",
@@ -558,7 +560,18 @@
     "typeDelete": "Type SİL to confirm",
     "delete": "Delete account",
     "deleteLink": "Delete account — send confirmation link",
-    "closeFailed": "The account wasn't closed"
+    "closeFailed": "The account wasn't closed",
+    "devices": "Devices",
+    "devicesText": "Your account can be open on at most {{max}} devices at a time. Signing in on a new device signs out the least recently used one.",
+    "thisDevice": "This device",
+    "signedInAt": "Signed in: {{time}}",
+    "lastSeen": "Last active: {{time}}",
+    "endSession": "Sign out",
+    "endOthers": "Sign out other devices",
+    "endOthersTitle": "Sign out other devices?",
+    "endOthersText": "Every device except this one will be signed out.",
+    "devicesFailed": "Devices couldn't be loaded",
+    "endFailed": "The session wasn't ended"
   },
   "profile": {
     "place": "Place #{{rank}}",

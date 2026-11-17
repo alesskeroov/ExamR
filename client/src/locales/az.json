@@ -524,7 +524,9 @@
       "rules": "Ən azı 8 simvol, böyük/kiçik hərf və rəqəm.",
       "requestNew": "Yeni link tələb et",
       "submit": "Şifrəni yenilə"
-    }
+    },
+    "sessionLimit": "Hesabınıza başqa cihazdan daxil olundu, ona görə bu cihazda sessiya bağlandı. Hesab eyni anda yalnız 2 cihazda açıq ola bilər.",
+    "sessionEnded": "Bu cihazda sessiya bağlandı. Davam etmək üçün yenidən daxil olun."
   },
   "account": {
     "mismatch": "Yeni şifrələr uyğun gəlmir.",
@@ -556,7 +558,18 @@
     "typeDelete": "Təsdiq üçün SİL yazın",
     "delete": "Hesabı sil",
     "deleteLink": "Hesabı sil — təsdiq linki göndər",
-    "closeFailed": "Hesab bağlanmadı"
+    "closeFailed": "Hesab bağlanmadı",
+    "devices": "Cihazlar",
+    "devicesText": "Hesabınız eyni anda ən çox {{max}} cihazda açıq ola bilər. Yeni cihazdan daxil olanda ən az istifadə olunan cihazda sessiya avtomatik bağlanır.",
+    "thisDevice": "Bu cihaz",
+    "signedInAt": "Giriş: {{time}}",
+    "lastSeen": "Son aktivlik: {{time}}",
+    "endSession": "Çıxış et",
+    "endOthers": "Digər cihazlardan çıx",
+    "endOthersTitle": "Digər cihazlardan çıxılsın?",
+    "endOthersText": "Bu cihazdan başqa bütün cihazlarda sessiya bağlanacaq.",
+    "devicesFailed": "Cihazlar yüklənmədi",
+    "endFailed": "Sessiya bağlanmadı"
   },
   "profile": {
     "place": "{{rank}}-ci yer",

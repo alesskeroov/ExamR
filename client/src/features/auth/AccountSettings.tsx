@@ -7,6 +7,7 @@ import { Button } from '../../components/common/Button'
 import { api } from '../../lib/api-client'
 import { queryKeys } from '../../lib/query-keys'
 import { useConfirm } from '../../lib/use-confirm'
+import { DeviceSessions } from './DeviceSessions'
 import { useCurrentUser, useForgotPassword, useResendConfirmation } from './api'
 import { useTranslation } from 'react-i18next'
 
@@ -91,6 +92,7 @@ export function AccountSettings() {
       {reset.isSuccess && <div role="status" className="mt-3"><Alert tone="info" title={reset.data.message} /></div>}{reset.isError && <Alert title={t('account.linkFailed')}>{reset.error.message}</Alert>}
       {notice && <Alert title={notice} />}{password.isError && <Alert title={t('account.passwordFailed')}>{password.error.message}</Alert>}
     </section>
+    <DeviceSessions />
     <section className="rounded-xl border border-rose-200 bg-white p-5"><h2 className="font-semibold text-rose-700">{t('account.danger')}</h2><p className="mt-3 text-sm text-slate-500">{t('account.dangerText')}</p>
       {params.get('deleteToken') && params.get('uid') === user.id ? <div className="mt-4 space-y-3"><label className="block text-sm">{t('account.typeDelete')}<input className={field} autoComplete="off" value={confirmation} onChange={e => setConfirmation(e.target.value)} maxLength={3} /></label><Button variant="secondary" disabled={confirmation !== 'SİL' || busy} loading={deletion.isPending} onClick={() => void remove()}>{t('account.delete')}</Button></div>
         : <Button className="mt-4" variant="secondary" loading={deletionLink.isPending} disabled={busy} onClick={() => deletionLink.mutate()}>{t('account.deleteLink')}</Button>}

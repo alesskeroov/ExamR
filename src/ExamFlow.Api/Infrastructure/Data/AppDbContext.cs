@@ -26,6 +26,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<UsageEvent> UsageEvents => Set<UsageEvent>();
     public DbSet<FeedbackMessage> FeedbackMessages => Set<FeedbackMessage>();
     public DbSet<UserUsageLimit> UserUsageLimits => Set<UserUsageLimit>();
+    public DbSet<UserSession> UserSessions => Set<UserSession>();
     public DbSet<Plan> Plans => Set<Plan>();
     public DbSet<Subscription> Subscriptions => Set<Subscription>();
     public DbSet<PaymentRequest> PaymentRequests => Set<PaymentRequest>();

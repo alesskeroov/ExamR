@@ -6,6 +6,8 @@ using ExamFlow.Api.Infrastructure.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 namespace ExamFlow.Api.Infrastructure.Security;
@@ -20,6 +22,7 @@ public static class AuthenticationSetup
     public const string LearningAiRateLimit = "learning-ai";
     public const string HubPathPrefix = "/hubs";
     public const string CsrfHeader = "X-ExamR-Request";
+    private const string SessionRevokedItem = "examr.session-revoked";
 
     /// <summary>ASP.NET Core Identity (users, password hashing, lockout, reset tokens) + JWT bearer authentication.</summary>
     public static IServiceCollection AddJwtIdentity(this IServiceCollection services, IConfiguration configuration)
@@ -34,6 +37,7 @@ public static class AuthenticationSetup
         }
 
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.Section));
+        services.Configure<DeviceSessionOptions>(configuration.GetSection(DeviceSessionOptions.Section));
         services.AddSingleton<TokenService>();
 
         services.AddIdentityCore<AppUser>(options =>
@@ -121,6 +125,22 @@ public static class AuthenticationSetup
                             return;
                         }
 
+                        // Each token belongs to one signed-in browser; a session ended by the device limit, the
+                        // devices list or logout rejects its token at once.
+                        var services = context.HttpContext.RequestServices;
+                        var now = services.GetRequiredService<TimeProvider>().GetUtcNow();
+                        var check = await UserSessions.ValidateAsync(services.GetRequiredService<AppDbContext>(), user, context.Principal!,
+                            context.SecurityToken.ValidTo, services.GetRequiredService<IOptions<DeviceSessionOptions>>().Value.MaxActive, now,
+                            context.HttpContext.Request.Headers.UserAgent.ToString(), context.HttpContext.RequestAborted);
+                        if (check.SessionId is not { } sessionId)
+                        {
+                            // A browser that logged itself out needs no explanation; one ended from elsewhere does.
+                            if (check.RevokedReason is { } reason && reason != SessionRevokeReasons.Logout)
+                                context.HttpContext.Items[SessionRevokedItem] = reason;
+                            context.Fail("Session has ended.");
+                            return;
+                        }
+
                         // Roles come from the database, not the token, so a granted or revoked Admin role applies immediately.
                         if (context.Principal!.Identity is ClaimsIdentity identity)
                         {
@@ -134,10 +154,25 @@ public static class AuthenticationSetup
                             && issued.ValidTo - DateTime.UtcNow < (issued.ValidTo - issued.ValidFrom) / 2)
                         {
                             var remember = context.Principal.FindFirst(JwtClaims.RememberMe) is not null;
-                            var fresh = context.HttpContext.RequestServices.GetRequiredService<TokenService>()
-                                .Create(user, await users.GetRolesAsync(user), remember);
+                            var fresh = services.GetRequiredService<TokenService>()
+                                .Create(user, await users.GetRolesAsync(user), sessionId, remember);
+                            await services.GetRequiredService<AppDbContext>().UserSessions.Where(s => s.Id == sessionId)
+                                .ExecuteUpdateAsync(set => set.SetProperty(s => s.ExpiresAt, fresh.ExpiresAt), context.HttpContext.RequestAborted);
                             AuthCookie.Append(context.HttpContext.Response, fresh, remember);
                         }
+                    },
+                    // A session ended by a sign-in elsewhere answers with a reason, so the UI can say why it signed out.
+                    OnChallenge = async context =>
+                    {
+                        if (context.HttpContext.Items[SessionRevokedItem] is not string reason) return;
+                        context.HandleResponse();
+                        AuthCookie.Delete(context.Response);
+                        var detail = reason == SessionRevokeReasons.Limit
+                            ? "Hesabınıza başqa cihazdan daxil olundu, bu cihazda sessiya bağlandı. Hesab eyni anda yalnız limitli sayda cihazda açıq ola bilər."
+                            : "Bu cihazda sessiya bağlandı. Yenidən daxil olun.";
+                        await TypedResults.Problem(detail, statusCode: StatusCodes.Status401Unauthorized,
+                                extensions: new Dictionary<string, object?> { ["code"] = "session_revoked", ["reason"] = reason })
+                            .ExecuteAsync(context.HttpContext);
                     },
                 };
             })

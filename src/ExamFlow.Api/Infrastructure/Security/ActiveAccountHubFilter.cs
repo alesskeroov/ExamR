@@ -1,4 +1,5 @@
 using ExamFlow.Api.Features.Auth;
+using ExamFlow.Api.Infrastructure.Data;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.SignalR;
 
@@ -11,7 +12,8 @@ public sealed class ActiveAccountHubFilter : IHubFilter
     {
         var users = context.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
         var user = context.Context.User is null ? null : await users.GetUserAsync(context.Context.User);
-        if (user is null || user.IsDeleted || user.SecurityStamp != context.Context.User?.FindFirst(JwtClaims.SecurityStamp)?.Value)
+        if (user is null || user.IsDeleted || user.SecurityStamp != context.Context.User?.FindFirst(JwtClaims.SecurityStamp)?.Value
+            || !await UserSessions.IsActiveAsync(context.ServiceProvider.GetRequiredService<AppDbContext>(), user.Id, context.Context.User!, context.Context.ConnectionAborted))
         {
             context.Context.Abort();
             throw new HubException("Sessiyanın müddəti bitib. Yenidən daxil olun.");

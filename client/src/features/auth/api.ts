@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '../../lib/api-client'
-import { clearToken } from '../../lib/auth-token'
+import { clearToken, showSessionEnded } from '../../lib/auth-token'
 import { markFreshLogin } from '../../lib/fresh-login'
 import { queryKeys } from '../../lib/query-keys'
 import i18n from '../../lib/i18n'
@@ -54,6 +54,7 @@ export function useCurrentUser() {
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
           clearToken()
+          showSessionEnded(error)
           return null
         }
         throw error
@@ -129,5 +130,38 @@ export function useConfirmEmail() {
         queryClient.setQueryData(queryKeys.me, normalizeUser(user))
       } else void queryClient.invalidateQueries({ queryKey: queryKeys.me })
     },
+  })
+}
+
+export interface DeviceSession {
+  id: string
+  device: string
+  createdAt: string
+  lastSeenAt: string
+  current: boolean
+}
+
+export interface DeviceSessions {
+  maxActive: number
+  sessions: DeviceSession[]
+}
+
+export function useDeviceSessions() {
+  return useQuery({ queryKey: queryKeys.sessions, queryFn: () => api.get<DeviceSessions>('/account/sessions') })
+}
+
+export function useEndSession() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/account/sessions/${id}`),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.sessions }),
+  })
+}
+
+export function useEndOtherSessions() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.post('/account/sessions/end-others'),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.sessions }),
   })
 }

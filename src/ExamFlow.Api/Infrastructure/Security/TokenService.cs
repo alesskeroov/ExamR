@@ -35,6 +35,9 @@ public static class JwtClaims
     /// <summary>Identity security stamp. Changing it (logout, password reset) revokes all earlier tokens.</summary>
     public const string SecurityStamp = "sst";
 
+    /// <summary>Id of the <see cref="UserSession"/> row; ending that session revokes the token.</summary>
+    public const string SessionId = "sid";
+
     /// <summary>"1" when the session was created with Remember Me (persistent cookie).</summary>
     public const string RememberMe = "rm";
 }
@@ -45,7 +48,7 @@ public sealed class TokenService(IOptions<JwtOptions> options, TimeProvider cloc
 {
     private readonly JsonWebTokenHandler _handler = new();
 
-    public AccessToken Create(AppUser user, IEnumerable<string> roles, bool rememberMe = false)
+    public AccessToken Create(AppUser user, IEnumerable<string> roles, Guid sessionId, bool rememberMe = false)
     {
         var settings = options.Value;
         var now = clock.GetUtcNow();
@@ -58,6 +61,7 @@ public sealed class TokenService(IOptions<JwtOptions> options, TimeProvider cloc
             new(JwtClaims.Name, user.DisplayName),
             new(JwtClaims.SecurityStamp, user.SecurityStamp ?? string.Empty),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new(JwtClaims.SessionId, sessionId.ToString()),
         };
         if (rememberMe) claims.Add(new Claim(JwtClaims.RememberMe, "1"));
         claims.AddRange(roles.Select(role => new Claim(JwtClaims.Role, role)));
